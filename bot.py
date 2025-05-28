@@ -1,8 +1,9 @@
 import discord
 import os
 import asyncio
+import random
 
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 from dotenv import load_dotenv
 
@@ -26,8 +27,10 @@ MODERATOR_CHANNEL_ID = 1026422525464424519
 CHANNEL_NAME_TEMPLATE = "{emoji}・{name}"
 ARCHIVE_NAME_TEMPLATE = "{archived_date}_{name}"
 ARCHIVE_EMOJI = "✅"
-REACTION_EMOJI = "<:3horky:1377264806905516053>"  # nahraď svoj custom emoji ID
-AUTO_REACT_CHANNELS = set()  # dynamicky upravovaný zoznam
+
+REACTION_EMOJI = os.getenv("DEFAULT_REACTION_EMOJI", "<:3horky:1377264806905516053>")
+AUTO_REACT_CHANNELS = set()
+THOUGHTS_FILE = "thoughts.txt"
 
 async def keep_alive_loop():  # Aby Google nevypol VM pre nečinnosť
     while True:
@@ -69,6 +72,16 @@ def only_in_command_channel():
     async def predicate(interaction: discord.Interaction):
         return interaction.channel.id == COMMAND_CHANNEL_ID
     return app_commands.check(predicate)
+    
+@bot.tree.command(name="nastav_reaction_emoji", description="Nastaví emoji, ktorý bude bot pridávať ako reakciu")
+@app_commands.describe(emoji="Emoji (napr. <:3horky:1377264806905516053>)")
+async def nastav_reaction_emoji(interaction: discord.Interaction, emoji: str):
+    global REACTION_EMOJI
+    if not discord.utils.get(interaction.user.roles, name=ADMIN_ROLE):
+        await interaction.response.send_message("Len admin môže meniť emoji reakcie.", ephemeral=True)
+        return
+    REACTION_EMOJI = emoji
+    await interaction.response.send_message(f"Emoji reakcie nastavené na {emoji}.", ephemeral=True)
 
 @bot.tree.command(name="pridaj_autoemoji_channel", description="Pridá channel do zoznamu, kde bot automaticky reaguje")
 @app_commands.describe(channel="Channely, kde sa majú pridávať automatické reakcie o prečítaní.")
@@ -100,6 +113,15 @@ async def zoznam_autoemoji_channelov(interaction: discord.Interaction):
     response = "\n".join(f"- {channel.mention}" for channel in channels)
     await interaction.response.send_message("Kanály s automatickými reakciami:\n" + response, ephemeral=True)
 
+@tasks.loop(minutes=10)
+async def update_status():
+    if not os.path.exists(THOUGHTS_FILE):
+        return
+    with open(THOUGHTS_FILE, "r", encoding="utf-8") as f:
+        thoughts = [line.strip() for line in f if line.strip()]
+    if thoughts:
+        await bot.change_presence(activity=discord.Game(name=random.choice(thoughts)))
+        
 @bot.event
 async def on_message(message):
     await bot.process_commands(message)
@@ -107,13 +129,18 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # Reaguj, ak je to v automatickom channeli
-    if message.channel.id in AUTO_REACT_CHANNELS:
-        await message.add_reaction(REACTION_EMOJI)
-
-    # Alebo ak bot bol otagovaný
-    elif bot.user.mentioned_in(message):
-        await message.add_reaction(REACTION_EMOJI)
+    if message.guild:
+        if message.channel.id in AUTO_REACT_CHANNELS:
+            await message.add_reaction(REACTION_EMOJI)
+        elif bot.user.mentioned_in(message):
+            await message.add_reaction(REACTION_EMOJI)
+    else:
+        # DM odpoveď
+        if os.path.exists(THOUGHTS_FILE):
+            with open(THOUGHTS_FILE, "r", encoding="utf-8") as f:
+                thoughts = [line.strip() for line in f if line.strip()]
+            if thoughts:
+                await message.channel.send(f"Ahoj {message.author.display_name}!\n\n{random.choice(thoughts)}")
 
 
 @bot.tree.command(name="vytvor_channel", description="Vytvorí súkromný kanál")
