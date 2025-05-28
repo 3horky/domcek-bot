@@ -44,9 +44,9 @@ async def on_ready():
         print(e)
 
 # Pomocná funkcia: kontrola, či sme v kanáli console
-def only_in_console():
+def only_in_command_channel():
     async def predicate(interaction: discord.Interaction):
-        return interaction.channel.id == CONSOLE_CHANNEL_ID
+        return interaction.channel.id == COMMAND_CHANNEL_ID
     return app_commands.check(predicate)
 
 @bot.tree.command(name="vytvor_channel", description="Vytvorí súkromný kanál")
