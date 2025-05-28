@@ -43,6 +43,25 @@ async def on_ready():
     except Exception as e:
         print(e)
 
+    # Odošli návod do how_to len ak tam ešte nie je
+    how_to_channel = bot.get_channel(HOW_TO_CHANNEL_ID)
+    if how_to_channel:
+        history = [msg async for msg in how_to_channel.history(limit=10)]
+        if not any("Používanie bota" in msg.content for msg in history if msg.author == bot.user):
+            await how_to_channel.send(
+                "📬 **Používanie bota**\n\n"
+                "**Vytvorenie kanála:**\n"
+                "Spusti príkaz `/vytvor_channel` v kanáli <#819184838274711582> a zadaj:\n"
+                "- `emoji`: napr. 🏫 alebo 📚\n"
+                "- `name`: vlastný názov\n"
+                "- `uzivatelia`: označ @mená všetkých, ktorých chceš pridať (oddelených medzerami)\n"
+                "- `rola`: voliteľná rola, ktorá má mať prístup\n\n"
+                "**Archivácia kanála:**\n"
+                "Spusti príkaz `/archivuj_channel` v tom kanáli, ktorý chceš archivovať.\n"
+                "Pridaj dôvod a dátum (napr. `2025_06`).\n"
+                "Tvoja požiadavka bude odoslaná administrátorom, ktorí ju schvália alebo zamietnu."
+            )
+
 # Pomocná funkcia: kontrola, či sme v kanáli console
 def only_in_command_channel():
     async def predicate(interaction: discord.Interaction):
