@@ -26,10 +26,10 @@ CHANNEL_NAME_TEMPLATE = "{emoji}・{name}"
 ARCHIVE_NAME_TEMPLATE = "{archived_date}_{name}"
 ARCHIVE_EMOJI = "✅"  # ✅ emoji pre potvrdenie archivácie
 
-async def keep_alive_loop(): # Aby Google nevypol VM pre nečinnosť
+async def keep_alive_loop():  # Aby Google nevypol VM pre nečinnosť
     while True:
         print("Heartbeat - bot je nažive")
-        await asyncio.sleep(300) # každých 5 minút
+        await asyncio.sleep(300)  # každých 5 minút
 
 @bot.event
 async def on_ready():
@@ -47,7 +47,6 @@ def only_in_console():
     async def predicate(interaction: discord.Interaction):
         return interaction.channel.id == CONSOLE_CHANNEL_ID
     return app_commands.check(predicate)
-
 
 @bot.tree.command(name="vytvor_channel", description="Vytvorí súkromný kanál")
 @app_commands.describe(emoji="Emoji pre názov kanála", name="Názov kanála", uzivatelia="Označ používateľov (oddelených medzerou)")
@@ -81,7 +80,7 @@ async def vytvor_channel(interaction: discord.Interaction, emoji: str, name: str
 
 @bot.tree.command(name="archivuj_channel", description="Archivuje aktuálny kanál")
 @app_commands.describe(datum="Dátum archivácie vo formáte RRRR_MM alebo RRRR_MM_DD", dovod="Krátky dôvod archivácie")
-async def archivuj_channel(interaction: discord.Interaction, datum: str):
+async def archivuj_channel(interaction: discord.Interaction, datum: str, dovod: str):
     author = interaction.user
     guild = interaction.guild
     channel = interaction.channel
@@ -95,7 +94,6 @@ async def archivuj_channel(interaction: discord.Interaction, datum: str):
         return
 
     if is_admin:
-        # Uskutočni archiváciu
         parts = channel.name.split("・", 1)
         base_name = parts[1] if len(parts) == 2 else channel.name
         new_name = f"{datum}_{base_name}"
@@ -120,7 +118,6 @@ async def archivuj_channel(interaction: discord.Interaction, datum: str):
         message = await mod_channel.send(embed=embed)
         await message.add_reaction(ARCHIVE_EMOJI)
 
-        # Pridaj listener na reakcie
         async def check(reaction, user):
             return (
                 str(reaction.emoji) == ARCHIVE_EMOJI and
@@ -130,8 +127,8 @@ async def archivuj_channel(interaction: discord.Interaction, datum: str):
 
         async def wait_for_reaction():
             try:
-                reaction, user = await bot.wait_for("reaction_add", check=check, timeout=86400)  # 24 hod
-                parts = channel.name.split("\u30fb", 1)
+                reaction, user = await bot.wait_for("reaction_add", check=check, timeout=86400)
+                parts = channel.name.split("・", 1)
                 base_name = parts[1] if len(parts) == 2 else channel.name
                 new_name = f"{datum}_{base_name}"
                 archive_category = guild.get_channel(ARCHIVE_CATEGORY_ID)
@@ -146,6 +143,4 @@ async def archivuj_channel(interaction: discord.Interaction, datum: str):
 
         bot.loop.create_task(wait_for_reaction())
 
-
-# Spusti bota
 bot.run(os.getenv("DISCORD_TOKEN"))
