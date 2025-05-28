@@ -116,12 +116,18 @@ async def zoznam_autoemoji_channelov(interaction: discord.Interaction):
 
 @tasks.loop(minutes=10)
 async def update_status():
+    print("🌀 update_status loop beží...")
     if not os.path.exists(THOUGHTS_FILE):
+        print("❌ Súbor thoughts.txt neexistuje.")
         return
     with open(THOUGHTS_FILE, "r", encoding="utf-8") as f:
         thoughts = [line.strip() for line in f if line.strip()]
     if thoughts:
-        await bot.change_presence(activity=discord.Game(name=random.choice(thoughts)))
+        chosen = random.choice(thoughts)
+        print(f"✅ Nastavujem status: \"{chosen}\"")
+        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=f'"{chosen}"'))
+    else:
+        print("⚠️ Súbor thoughts.txt je prázdny.")
         
 @bot.event
 async def on_message(message):
