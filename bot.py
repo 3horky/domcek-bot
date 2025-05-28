@@ -48,10 +48,98 @@ def only_in_console():
         return interaction.channel.id == CONSOLE_CHANNEL_ID
     return app_commands.check(predicate)
 
-@bot.tree.command(name="vytvor_channel", description="Vytvorí súkromný kanál")
-@app_commands.describe(emoji="Emoji pre názov kanála", name="Názov kanála", uzivatelia="Označ používateľov (oddelených medzerou)")
+class UserSelect(discord.ui.Select):
+    def __init__(self, guild: discord.Guild):
+        options = [
+            discord.SelectOption(label=member.display_name, value=str(member.id))
+            for member in guild.members if not member.bot
+        ][:25]
+
+        super().__init__(
+            placeholder="Vyber používateľov, ktorým sa má udeliť prístup",
+            min_values=1,
+            max_values=min(25, len(options)),
+            options=options,
+            custom_id="user_select"
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        view: UserSelectView = self.view
+        await view.store_users(interaction, self.values)
+
+class RoleSelect(discord.ui.Select):
+    def __init__(self, guild: discord.Guild):
+        options = [
+            discord.SelectOption(label=role.name, value=str(role.id))
+            for role in guild.roles if not role.is_default()
+        ][:25]
+
+        super().__init__(
+            placeholder="Vyber roly, ktorým sa má udeliť prístup",
+            min_values=0,
+            max_values=min(25, len(options)),
+            options=options,
+            custom_id="role_select"
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        view: UserSelectView = self.view
+        await view.finalize_channel(interaction, self.values)
+
+class UserSelectView(discord.ui.View):
+    def __init__(self, guild, emoji, name, author):
+        super().__init__(timeout=300)
+        self.guild = guild
+        self.emoji = emoji
+        self.name = name
+        self.author = author
+        self.selected_users = []
+        self.user_select = UserSelect(guild)
+        self.role_select = RoleSelect(guild)
+        self.add_item(self.user_select)
+        self.add_item(self.role_select)
+
+    async def store_users(self, interaction: discord.Interaction, user_ids):
+        self.selected_users = [self.guild.get_member(int(uid)) for uid in user_ids if self.guild.get_member(int(uid))]
+        await interaction.response.send_message("Používatelia vybraní. Teraz vyber roly.", ephemeral=True)
+
+    async def finalize_channel(self, interaction: discord.Interaction, role_ids):
+        selected_roles = [self.guild.get_role(int(rid)) for rid in role_ids if self.guild.get_role(int(rid))]
+
+        overwrites = {
+            self.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            self.author: discord.PermissionOverwrite(
+                read_messages=True,
+                manage_messages=True,
+                manage_channels=True,
+                manage_roles=True,
+                view_channel=True
+            ),
+        }
+
+        for member in self.selected_users:
+            overwrites[member] = discord.PermissionOverwrite(read_messages=True)
+
+        for role in selected_roles:
+            overwrites[role] = discord.PermissionOverwrite(read_messages=True)
+
+        category = self.guild.get_channel(CATEGORY_ID)
+        channel_name = CHANNEL_NAME_TEMPLATE.format(emoji=self.emoji, name=self.name)
+
+        channel = await self.guild.create_text_channel(channel_name, overwrites=overwrites, category=category)
+        await interaction.response.edit_message(content=f"Kanál {channel.mention} bol vytvorený.", view=None)
+
+@bot.tree.command(name="vytvor_channel", description="Vytvorí súkromný kanál s výberom používateľov a rolí")
+@app_commands.describe(
+    emoji="Emoji pre názov kanála",
+    name="Názov kanála"
+)
 @only_in_console()
-async def vytvor_channel(interaction: discord.Interaction, emoji: str, name: str, uzivatelia: str):
+async def vytvor_channel(
+    interaction: discord.Interaction,
+    emoji: str,
+    name: str
+):
     author = interaction.user
     guild = interaction.guild
 
@@ -59,24 +147,9 @@ async def vytvor_channel(interaction: discord.Interaction, emoji: str, name: str
         await interaction.response.send_message("Nemáš oprávnenie na vytváranie kanálov.", ephemeral=True)
         return
 
-    overwrites = {
-        guild.default_role: discord.PermissionOverwrite(read_messages=False),
-        author: discord.PermissionOverwrite(read_messages=True, manage_messages=True, manage_channels=True),
-    }
+    view = UserSelectView(guild=guild, emoji=emoji, name=name, author=author)
+    await interaction.response.send_message("Vyber používateľov a roly, ktorým chceš dať prístup:", view=view, ephemeral=True)
 
-    user_mentions = uzivatelia.split()
-    for mention in user_mentions:
-        if mention.startswith("<@") and mention.endswith(">"):
-            user_id = int(mention.strip("<@!>"))
-            user = guild.get_member(user_id)
-            if user:
-                overwrites[user] = discord.PermissionOverwrite(read_messages=True)
-
-    category = guild.get_channel(CATEGORY_ID)
-    channel_name = CHANNEL_NAME_TEMPLATE.format(emoji=emoji, name=name)
-
-    channel = await guild.create_text_channel(channel_name, overwrites=overwrites, category=category)
-    await interaction.response.send_message(f"Kanál {channel.mention} bol vytvorený.", ephemeral=True)
 
 @bot.tree.command(name="archivuj_channel", description="Archivuje aktuálny kanál")
 @app_commands.describe(datum="Dátum archivácie vo formáte RRRR_MM alebo RRRR_MM_DD", dovod="Krátky dôvod archivácie")
