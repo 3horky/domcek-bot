@@ -41,6 +41,7 @@ async def keep_alive_loop():  # Aby Google nevypol VM pre nečinnosť
 async def on_ready():
     print(f"Bot prihlásený ako {bot.user}")
     bot.loop.create_task(keep_alive_loop())
+    update_status.start()
 
     try:
         synced = await bot.tree.sync()
