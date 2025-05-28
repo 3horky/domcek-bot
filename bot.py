@@ -26,7 +26,7 @@ MODERATOR_CHANNEL_ID = 1026422525464424519
 CHANNEL_NAME_TEMPLATE = "{emoji}・{name}"
 ARCHIVE_NAME_TEMPLATE = "{archived_date}_{name}"
 ARCHIVE_EMOJI = "✅"
-REACTION_EMOJI = "<:3horky:1377258861735579709>"  # nahraď svoj custom emoji ID
+REACTION_EMOJI = "<:3horky:1377264806905516053>"  # nahraď svoj custom emoji ID
 AUTO_REACT_CHANNELS = set()  # dynamicky upravovaný zoznam
 
 async def keep_alive_loop():  # Aby Google nevypol VM pre nečinnosť
@@ -90,6 +90,16 @@ async def odober_autoemoji_channel(interaction: discord.Interaction, channel: di
     AUTO_REACT_CHANNELS.discard(channel.id)
     await interaction.response.send_message(f"Kanál {channel.mention} bol odstránený zo zoznamu.", ephemeral=True)
 
+@bot.tree.command(name="zoznam_autoemoji_channelov", description="Zobrazí zoznam channelov s automatickými reakciami")
+async def zoznam_autoemoji_channelov(interaction: discord.Interaction):
+    if not AUTO_REACT_CHANNELS:
+        await interaction.response.send_message("Nie je nastavený žiadny kanál na automatické reakcie.", ephemeral=True)
+        return
+    guild = interaction.guild
+    channels = [guild.get_channel(cid) for cid in AUTO_REACT_CHANNELS if guild.get_channel(cid)]
+    response = "\n".join(f"- {channel.mention}" for channel in channels)
+    await interaction.response.send_message("Kanály s automatickými reakciami:\n" + response, ephemeral=True)
+
 @bot.event
 async def on_message(message):
     await bot.process_commands(message)
@@ -97,9 +107,13 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    if message.channel.id in AUTO_REACT_CHANNELS and not message.content.startswith("!noreact"):
+    # Reaguj, ak je to v automatickom channeli
+    if message.channel.id in AUTO_REACT_CHANNELS:
         await message.add_reaction(REACTION_EMOJI)
-        await message.channel.send("\n\n*Daj " + REACTION_EMOJI + " ak si to prečítal.*")
+
+    # Alebo ak bot bol otagovaný
+    elif bot.user.mentioned_in(message):
+        await message.add_reaction(REACTION_EMOJI)
 
 
 @bot.tree.command(name="vytvor_channel", description="Vytvorí súkromný kanál")
