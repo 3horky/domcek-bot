@@ -26,6 +26,8 @@ MODERATOR_CHANNEL_ID = 1026422525464424519
 CHANNEL_NAME_TEMPLATE = "{emoji}・{name}"
 ARCHIVE_NAME_TEMPLATE = "{archived_date}_{name}"
 ARCHIVE_EMOJI = "✅"
+REACTION_EMOJI = "<:3horky:1377258861735579709>"  # nahraď svoj custom emoji ID
+AUTO_REACT_CHANNELS = set()  # dynamicky upravovaný zoznam
 
 async def keep_alive_loop():  # Aby Google nevypol VM pre nečinnosť
     while True:
@@ -67,6 +69,38 @@ def only_in_command_channel():
     async def predicate(interaction: discord.Interaction):
         return interaction.channel.id == COMMAND_CHANNEL_ID
     return app_commands.check(predicate)
+
+@bot.tree.command(name="pridaj_autoemoji_channel", description="Pridá channel do zoznamu, kde bot automaticky reaguje")
+@app_commands.describe(channel="Channely, kde sa majú pridávať automatické reakcie o prečítaní.")
+async def pridaj_autoemoji_channel(interaction: discord.Interaction, channel: discord.TextChannel):
+    author = interaction.user
+    if not discord.utils.get(author.roles, name=ADMIN_ROLE):
+        await interaction.response.send_message("Len admin môže meniť zoznam auto-emoji kanálov.", ephemeral=True)
+        return
+    AUTO_REACT_CHANNELS.add(channel.id)
+    await interaction.response.send_message(f"Kanál {channel.mention} bol pridaný do auto-emoji zoznamu.", ephemeral=True)
+
+@bot.tree.command(name="odober_autoemoji_channel", description="Odoberie channel zo zoznamu auto reakcií o prečítaní")
+@app_commands.describe(channel="Kanál, z ktorého sa majú automatické reakcie o prečítaní odstrániť")
+async def odober_autoemoji_channel(interaction: discord.Interaction, channel: discord.TextChannel):
+    author = interaction.user
+    if not discord.utils.get(author.roles, name=ADMIN_ROLE):
+        await interaction.response.send_message("Len admin môže meniť zoznam auto-emoji kanálov.", ephemeral=True)
+        return
+    AUTO_REACT_CHANNELS.discard(channel.id)
+    await interaction.response.send_message(f"Kanál {channel.mention} bol odstránený zo zoznamu.", ephemeral=True)
+
+@bot.event
+async def on_message(message):
+    await bot.process_commands(message)
+
+    if message.author.bot:
+        return
+
+    if message.channel.id in AUTO_REACT_CHANNELS and not message.content.startswith("!noreact"):
+        await message.add_reaction(REACTION_EMOJI)
+        await message.channel.send("\n\n*Daj " + REACTION_EMOJI + " ak si to prečítal.*")
+
 
 @bot.tree.command(name="vytvor_channel", description="Vytvorí súkromný kanál")
 @app_commands.describe(
