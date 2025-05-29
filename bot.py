@@ -2,12 +2,10 @@ import discord
 import os
 import asyncio
 import random
-
 from discord.ext import commands, tasks
 from discord import app_commands
 from dotenv import load_dotenv
 from oznamy_db import init_db
-from oznamy_db import add_announcement
 from discord.ui import View, Button, Modal, TextInput
 
 load_dotenv()
@@ -24,11 +22,10 @@ AUTHORIZED_ROLE = "Team Mod"
 ADMIN_ROLE = "Admin"
 CATEGORY_ID = 1231260260015149068
 ARCHIVE_CATEGORY_ID = 1077174157416087602
-COMMAND_CHANNEL_ID = 819184838274711582  # zadaj ID channelu kde sa používajú príkazy
-HOW_TO_CHANNEL_ID = 1278324331683778722  # pôvodný console channel, teraz how_to
+COMMAND_CHANNEL_ID = 819184838274711582
+HOW_TO_CHANNEL_ID = 1278324331683778722
 MODERATOR_CHANNEL_ID = 1026422525464424519
 CHANNEL_NAME_TEMPLATE = "{emoji}・{name}"
-ARCHIVE_NAME_TEMPLATE = "{archived_date}_{name}"
 ARCHIVE_EMOJI = "✅"
 OZNAMY_ROLE = "Oznamy"
 
@@ -54,36 +51,25 @@ class OznamModal(Modal, title="Pridaj oznam"):
         self.title = TextInput(label="Názov oznamu", required=True)
         self.description = TextInput(label="Popis oznamu", style=discord.TextStyle.paragraph, required=True)
         self.datetime = TextInput(label="Dátum a čas (len pre event)", placeholder="15.06. // 18:00", required=False)
-        self.link = TextInput(label="Link (voliteľné)", required=False)
-        # self.image = TextInput(label="Obrázok URL (povinné pre general)", required=False)
+        self.link = TextInput(label="Link (voliťelné)", required=False)
 
         self.add_item(self.typ)
         self.add_item(self.title)
         self.add_item(self.description)
         self.add_item(self.datetime)
         self.add_item(self.link)
-        # self.add_item(self.image)
 
     async def on_submit(self, interaction: discord.Interaction):
-        embed = self.bot.generate_oznam_embed(
-            typ=self.typ.value,
-            title=self.title.value,
-            description=self.description.value,
-            datetime=self.datetime.value,
-            link=self.link.value,
-            image=""
-        )
-
-        view = OznamConfirmView(self.bot, data={
+        data = {
             "typ": self.typ.value,
             "title": self.title.value,
             "description": self.description.value,
             "datetime": self.datetime.value,
             "link": self.link.value,
             "image": ""
-        })
-
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        }
+        embed = self.bot.generate_oznam_embed(**data)
+        await interaction.response.send_message(embed=embed, view=OznamConfirmView(self.bot, data=data), ephemeral=True)
 
 class OznamConfirmView(View):
     def __init__(self, bot, data):
@@ -93,7 +79,6 @@ class OznamConfirmView(View):
 
     @discord.ui.button(label="✅ Pridať", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: Button):
-        # Tu pridáš ukladanie do DB
         await interaction.response.edit_message(content="Oznam bol uložený ✅", embed=None, view=None)
 
     @discord.ui.button(label="❌ Zrušiť", style=discord.ButtonStyle.danger)
@@ -112,7 +97,6 @@ class OznamCog(commands.Cog):
     async def pridaj_oznam(self, interaction: discord.Interaction):
         await interaction.response.send_modal(OznamModal(self.bot))
 
-    # Príklad funkcie, ktorá generuje embed z údajov
     def generate_oznam_embed(self, typ, title, description, datetime, link, image):
         embed = discord.Embed(description=description)
         if typ.lower() == "event" and datetime:
@@ -127,18 +111,9 @@ class OznamCog(commands.Cog):
         return embed
 
     def get_day_icon(self, datetime_str):
-        emoji_map = {
-            "pondelok": "https://cdn3.emoji.gg/emojis/5712_monday.png",
-            "utorok": "https://cdn3.emoji.gg/emojis/6201_tuesday.png",
-            "streda": "https://cdn3.emoji.gg/emojis/4270_wednesday.png",
-            "štvrtok": "https://cdn3.emoji.gg/emojis/6285_thursday.png",
-            "piatok": "https://cdn3.emoji.gg/emojis/2064_friday.png",
-            "sobota": "https://cdn3.emoji.gg/emojis/4832_saturday.png",
-            "nedeľa": "https://cdn3.emoji.gg/emojis/8878_sunday.png"
-        }
-        for key in emoji_map:
+        for key, url in EMOJI_BY_DAY.items():
             if key in datetime_str.lower():
-                return emoji_map[key]
+                return url
         return ""
 
 async def keep_alive_loop():  # Aby Google nevypol VM pre nečinnosť
