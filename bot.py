@@ -71,7 +71,7 @@ class OznamModal(Modal, title="Pridaj oznam"):
             description=self.description.value,
             datetime=self.datetime.value,
             link=self.link.value,
-            image=self.image.value
+            image=""
         )
 
         view = OznamConfirmView(self.bot, data={
@@ -80,7 +80,7 @@ class OznamModal(Modal, title="Pridaj oznam"):
             "description": self.description.value,
             "datetime": self.datetime.value,
             "link": self.link.value,
-            "image": self.image.value
+            "image": ""
         })
 
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
