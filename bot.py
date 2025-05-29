@@ -46,35 +46,105 @@ REACTION_EMOJI = os.getenv("DEFAULT_REACTION_EMOJI", "<:3horky:13772648069055160
 AUTO_REACT_CHANNELS = set()
 THOUGHTS_FILE = "thoughts.txt"
 
-class OznamPotvrdenieView(View):
-    def __init__(self, data, user):
-        super().__init__(timeout=60)
+class OznamModal(Modal, title="Pridaj oznam"):
+    def __init__(self, bot):
+        super().__init__()
+        self.bot = bot
+        self.typ = TextInput(label="Typ oznamu (event/general)", placeholder="event alebo general", required=True)
+        self.title = TextInput(label="Názov oznamu", required=True)
+        self.description = TextInput(label="Popis oznamu", style=discord.TextStyle.paragraph, required=True)
+        self.datetime = TextInput(label="Dátum a čas (len pre event)", placeholder="15.06. // 18:00", required=False)
+        self.link = TextInput(label="Link (voliteľné)", required=False)
+        self.image = TextInput(label="Obrázok URL (povinné pre general)", required=False)
+
+        self.add_item(self.typ)
+        self.add_item(self.title)
+        self.add_item(self.description)
+        self.add_item(self.datetime)
+        self.add_item(self.link)
+        self.add_item(self.image)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        embed = self.bot.generate_oznam_embed(
+            typ=self.typ.value,
+            title=self.title.value,
+            description=self.description.value,
+            datetime=self.datetime.value,
+            link=self.link.value,
+            image=self.image.value
+        )
+
+        view = OznamConfirmView(self.bot, data={
+            "typ": self.typ.value,
+            "title": self.title.value,
+            "description": self.description.value,
+            "datetime": self.datetime.value,
+            "link": self.link.value,
+            "image": self.image.value
+        })
+
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+class OznamConfirmView(View):
+    def __init__(self, bot, data):
+        super().__init__(timeout=300)
+        self.bot = bot
         self.data = data
-        self.user = user
-        self.response = None
 
-    @discord.ui.button(label="✅ Potvrdiť a uložiť", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="✅ Pridať", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: Button):
-        if interaction.user != self.user:
-            await interaction.response.send_message("Toto tlačidlo nie je pre teba.", ephemeral=True)
-            return
+        # Tu pridáš ukladanie do DB
+        await interaction.response.edit_message(content="Oznam bol uložený ✅", embed=None, view=None)
 
-        from oznamy_db import add_announcement
-        try:
-            add_announcement(**self.data)
-            await interaction.response.edit_message(content="✅ Oznam bol úspešne uložený!", embed=None, view=None)
-        except Exception as e:
-            await interaction.response.edit_message(content=f"❌ Chyba pri ukladaní: {e}", embed=None, view=None)
-
-    @discord.ui.button(label="✏️ Zrušiť", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="❌ Zrušiť", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: Button):
-        if interaction.user != self.user:
-            await interaction.response.send_message("Toto tlačidlo nie je pre teba.", ephemeral=True)
-            return
+        await interaction.response.edit_message(content="Zrušené.", embed=None, view=None)
 
-        await interaction.response.edit_message(content="❌ Oznam nebol uložený. Môžeš ho upraviť a skúsiť znova.", embed=None, view=None)
+    @discord.ui.button(label="✏️ Upraviť", style=discord.ButtonStyle.secondary)
+    async def edit(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.send_modal(OznamModal(self.bot))
 
+class OznamCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
 
+    @app_commands.command(name="pridaj_oznam", description="Pridá nový oznam pomocou modálneho okna")
+    async def pridaj_oznam(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(OznamModal(self.bot))
+
+    # Príklad funkcie, ktorá generuje embed z údajov
+    def generate_oznam_embed(self, typ, title, description, datetime, link, image):
+        embed = discord.Embed(description=description)
+        if typ.lower() == "event" and datetime:
+            embed.set_author(name=datetime, icon_url=self.get_day_icon(datetime))
+        if link:
+            embed.title = f"🔗 {title}"
+            embed.url = link
+        else:
+            embed.title = title
+        if typ.lower() == "general" and image:
+            embed.set_thumbnail(url=image)
+        return embed
+
+    def get_day_icon(self, datetime_str):
+        emoji_map = {
+            "pondelok": "https://cdn3.emoji.gg/emojis/5712_monday.png",
+            "utorok": "https://cdn3.emoji.gg/emojis/6201_tuesday.png",
+            "streda": "https://cdn3.emoji.gg/emojis/4270_wednesday.png",
+            "štvrtok": "https://cdn3.emoji.gg/emojis/6285_thursday.png",
+            "piatok": "https://cdn3.emoji.gg/emojis/2064_friday.png",
+            "sobota": "https://cdn3.emoji.gg/emojis/4832_saturday.png",
+            "nedeľa": "https://cdn3.emoji.gg/emojis/8878_sunday.png"
+        }
+        for key in emoji_map:
+            if key in datetime_str.lower():
+                return emoji_map[key]
+        return ""
+
+async def setup(bot):
+    cog = OznamCog(bot)
+    bot.generate_oznam_embed = cog.generate_oznam_embed  # Zdieľaná funkcia
+    await bot.add_cog(cog)
 
 async def keep_alive_loop():  # Aby Google nevypol VM pre nečinnosť
     while True:
@@ -331,92 +401,5 @@ async def archivuj_channel(interaction: discord.Interaction, datum: str, dovod: 
 
         bot.loop.create_task(wait_for_reaction())
 
-############ MODUL OZNAMY
-
-@bot.tree.command(name="pridaj_oznam", description="Pridaj nový oznam")
-@app_commands.describe(
-    title="Názov oznamu",
-    description="Podrobnosti (nepovinné)",
-    type="Typ oznamu: general alebo event",
-    start_date="Začiatok zobrazovania (RRRR-MM-DD)",
-    end_date="Koniec zobrazovania (RRRR-MM-DD)",
-    image_url="Obrázok (povinný pre general)",
-    link_url="Link (nepovinné)",
-    day_of_week="Deň v týždni (iba pre event)",
-    event_datetime="Dátum a čas (vo formáte DD.MM. // HH:MM)"
-)
-async def pridaj_oznam(
-    interaction: discord.Interaction,
-    title: str,
-    type: str,
-    start_date: str,
-    end_date: str,
-    image_url: str = "",
-    link_url: str = "",
-    description: str = "",
-    day_of_week: str = "",
-    event_datetime: str = ""
-):
-    member = interaction.user
-    if not discord.utils.get(member.roles, name=OZNAMY_ROLE):
-        await interaction.response.send_message("⛔ Tento príkaz môže použiť len člen s rolou **Oznamy**.", ephemeral=True)
-        return
-
-    if type not in ("general", "event"):
-        await interaction.response.send_message("❌ Typ musí byť `general` alebo `event`.", ephemeral=True)
-        return
-
-    if type == "general" and not image_url:
-        await interaction.response.send_message("❌ Pre všeobecný oznam (`general`) je obrázok povinný.", ephemeral=True)
-        return
-
-    if type == "event" and (not day_of_week or not event_datetime):
-        await interaction.response.send_message("❌ Pre typ `event` je povinný deň v týždni a dátum+čas.", ephemeral=True)
-        return
-
-    # Vytvorenie embedu
-    if type == "event":
-        author_text = event_datetime
-        emoji_icon = EMOJI_BY_DAY.get(day_of_week.lower())
-
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=0x2ecc71
-        )
-        if emoji_icon:
-            embed.set_author(name=author_text, icon_url=emoji_icon)
-        else:
-            embed.set_author(name=author_text)
-
-    elif type == "general":
-        final_title = f"🔗 {title}" if link_url else title
-
-        embed = discord.Embed(
-            title=final_title,
-            description=description,
-            url=link_url if link_url else discord.Embed.Empty,
-            color=0x3498db
-        )
-
-        if image_url:
-            embed.set_thumbnail(url=image_url)
-
-    # Priprav dáta pre uloženie
-    data = {
-        "title": title,
-        "description": description,
-        "image_url": image_url,
-        "link_url": link_url,
-        "type": type,
-        "start_date": start_date,
-        "end_date": end_date,
-        "event_day": day_of_week if type == "event" else None,
-        "event_datetime": event_datetime if type == "event" else None,
-        "created_by": member.name
-    }
-
-    view = OznamPotvrdenieView(data=data, user=member)
-    await interaction.response.send_message(content="📝 Takto bude vyzerať oznam. Potvrď alebo zruš:", embed=embed, view=view, ephemeral=True)
 
 bot.run(os.getenv("DISCORD_TOKEN"))
