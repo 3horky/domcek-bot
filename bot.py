@@ -47,29 +47,40 @@ class OznamModal(Modal, title="Pridaj oznam"):
     def __init__(self, bot):
         super().__init__()
         self.bot = bot
-        self.typ = TextInput(label="Typ oznamu (event/general)", placeholder="event alebo general", required=True)
-        self.title = TextInput(label="Názov oznamu", required=True)
-        self.description = TextInput(label="Popis oznamu", style=discord.TextStyle.paragraph, required=True)
-        self.datetime = TextInput(label="Dátum a čas (len pre event)", placeholder="15.06. // 18:00", required=False)
-        self.link = TextInput(label="Link (voliťelné)", required=False)
 
-        self.add_item(self.typ)
-        self.add_item(self.title)
-        self.add_item(self.description)
-        self.add_item(self.datetime)
-        self.add_item(self.link)
+        self.add_item(TextInput(
+            custom_id="typ", label="Typ oznamu (event/general)",
+            placeholder="event alebo general", required=True
+        ))
+        self.add_item(TextInput(
+            custom_id="title", label="Názov oznamu",
+            required=True
+        ))
+        self.add_item(TextInput(
+            custom_id="description", label="Popis oznamu",
+            style=discord.TextStyle.paragraph, required=True
+        ))
+        self.add_item(TextInput(
+            custom_id="datetime", label="Dátum a čas (len pre event)",
+            placeholder="15.06. // 18:00", required=False
+        ))
+        self.add_item(TextInput(
+            custom_id="link", label="Link (voliteľné)",
+            required=False
+        ))
 
     async def on_submit(self, interaction: discord.Interaction):
-        data = {
-            "typ": self.typ.value,
-            "title": self.title.value,
-            "description": self.description.value,
-            "datetime": self.datetime.value,
-            "link": self.link.value,
-            "image": ""
-        }
-        embed = self.bot.generate_oznam_embed(**data)
-        await interaction.response.send_message(embed=embed, view=OznamConfirmView(self.bot, data=data), ephemeral=True)
+        data = {child.custom_id: child.value for child in self.children}
+        embed = self.bot.generate_oznam_embed(
+            typ=data.get("typ", ""),
+            title=data.get("title", ""),
+            description=data.get("description", ""),
+            datetime=data.get("datetime", ""),
+            link=data.get("link", ""),
+            image=data.get("image", "")
+        )
+        view = OznamConfirmView(self.bot, data)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 class OznamConfirmView(View):
     def __init__(self, bot, data):
