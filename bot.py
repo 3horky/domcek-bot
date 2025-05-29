@@ -8,6 +8,7 @@ from discord import app_commands
 from dotenv import load_dotenv
 from oznamy_db import init_db
 from oznamy_db import add_announcement
+from discord.ui import View, Button
 
 load_dotenv()
 
@@ -31,9 +32,49 @@ ARCHIVE_NAME_TEMPLATE = "{archived_date}_{name}"
 ARCHIVE_EMOJI = "✅"
 OZNAMY_ROLE = "Oznamy"
 
+EMOJI_BY_DAY = {
+    "pondelok": "https://cdn3.emoji.gg/emojis/5712_monday.png",
+    "utorok": "https://cdn3.emoji.gg/emojis/6201_tuesday.png",
+    "streda": "https://cdn3.emoji.gg/emojis/4270_wednesday.png",
+    "štvrtok": "https://cdn3.emoji.gg/emojis/6285_thursday.png",
+    "piatok": "https://cdn3.emoji.gg/emojis/2064_friday.png",
+    "sobota": "https://cdn3.emoji.gg/emojis/4832_saturday.png",
+    "nedeľa": "https://cdn3.emoji.gg/emojis/8878_sunday.png"
+}
+
 REACTION_EMOJI = os.getenv("DEFAULT_REACTION_EMOJI", "<:3horky:1377264806905516053>")
 AUTO_REACT_CHANNELS = set()
 THOUGHTS_FILE = "thoughts.txt"
+
+class OznamPotvrdenieView(View):
+    def __init__(self, data, user):
+        super().__init__(timeout=60)
+        self.data = data
+        self.user = user
+        self.response = None
+
+    @discord.ui.button(label="✅ Potvrdiť a uložiť", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction: discord.Interaction, button: Button):
+        if interaction.user != self.user:
+            await interaction.response.send_message("Toto tlačidlo nie je pre teba.", ephemeral=True)
+            return
+
+        from oznamy_db import add_announcement
+        try:
+            add_announcement(**self.data)
+            await interaction.response.edit_message(content="✅ Oznam bol úspešne uložený!", embed=None, view=None)
+        except Exception as e:
+            await interaction.response.edit_message(content=f"❌ Chyba pri ukladaní: {e}", embed=None, view=None)
+
+    @discord.ui.button(label="✏️ Zrušiť", style=discord.ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: Button):
+        if interaction.user != self.user:
+            await interaction.response.send_message("Toto tlačidlo nie je pre teba.", ephemeral=True)
+            return
+
+        await interaction.response.edit_message(content="❌ Oznam nebol uložený. Môžeš ho upraviť a skúsiť znova.", embed=None, view=None)
+
+
 
 async def keep_alive_loop():  # Aby Google nevypol VM pre nečinnosť
     while True:
@@ -291,15 +332,15 @@ async def archivuj_channel(interaction: discord.Interaction, datum: str, dovod: 
 
 @bot.tree.command(name="pridaj_oznam", description="Pridaj nový oznam")
 @app_commands.describe(
-    title="Titulok oznamu",
-    description="Popis: používaj Discord markdown",
+    title="Názov oznamu",
+    description="Podrobnosti (nepovinné)",
     type="Typ oznamu: general alebo event",
     start_date="Začiatok zobrazovania (RRRR-MM-DD)",
     end_date="Koniec zobrazovania (RRRR-MM-DD)",
-    image_url="Obrázok (povinné pre general)",
-    link_url="Link v titulku (nepovinné)",
+    image_url="Obrázok (povinný pre general)",
+    link_url="Link (nepovinné)",
     day_of_week="Deň v týždni (iba pre event)",
-    event_datetime="Dátum a čas udalosti (DD.MM. // HH:MM) – iba pre event"
+    event_datetime="Dátum a čas (vo formáte DD.MM. // HH:MM)"
 )
 async def pridaj_oznam(
     interaction: discord.Interaction,
@@ -330,21 +371,49 @@ async def pridaj_oznam(
         await interaction.response.send_message("❌ Pre typ `event` je povinný deň v týždni a dátum+čas.", ephemeral=True)
         return
 
-    try:
-        add_announcement(
+    # Vytvorenie embedu
+    if type == "event":
+        author_text = event_datetime
+        emoji_icon = EMOJI_BY_DAY.get(day_of_week.lower())
+
+        embed = discord.Embed(
             title=title,
             description=description,
-            image_url=image_url,
-            link_url=link_url,
-            type=type,
-            start_date=start_date,
-            end_date=end_date,
-            event_day=day_of_week if type == "event" else None,
-            event_datetime=event_datetime if type == "event" else None,
-            created_by=interaction.user.name
+            color=0x2ecc71
         )
-        await interaction.response.send_message(f"✅ Oznam **{title}** bol úspešne pridaný.", ephemeral=True)
-    except Exception as e:
-        await interaction.response.send_message(f"❌ Chyba pri ukladaní: {e}", ephemeral=True)
+        if emoji_icon:
+            embed.set_author(name=author_text, icon_url=emoji_icon)
+        else:
+            embed.set_author(name=author_text)
+
+    elif type == "general":
+        final_title = f"🔗 {title}" if link_url else title
+
+        embed = discord.Embed(
+            title=final_title,
+            description=description,
+            url=link_url if link_url else discord.Embed.Empty,
+            color=0x3498db
+        )
+
+        if image_url:
+            embed.set_thumbnail(url=image_url)
+
+    # Priprav dáta pre uloženie
+    data = {
+        "title": title,
+        "description": description,
+        "image_url": image_url,
+        "link_url": link_url,
+        "type": type,
+        "start_date": start_date,
+        "end_date": end_date,
+        "event_day": day_of_week if type == "event" else None,
+        "event_datetime": event_datetime if type == "event" else None,
+        "created_by": member.name
+    }
+
+    view = OznamPotvrdenieView(data=data, user=member)
+    await interaction.response.send_message(content="📝 Takto bude vyzerať oznam. Potvrď alebo zruš:", embed=embed, view=view, ephemeral=True)
 
 bot.run(os.getenv("DISCORD_TOKEN"))
