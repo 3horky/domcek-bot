@@ -43,6 +43,34 @@ REACTION_EMOJI = os.getenv("DEFAULT_REACTION_EMOJI", "<:3horky:13772648069055160
 AUTO_REACT_CHANNELS = set()
 THOUGHTS_FILE = "thoughts.txt"
 
+def generate_oznam_embed(typ, title, description, datetime, link, image):
+    embed = discord.Embed(description=description)
+    if typ.lower() == "event" and datetime:
+        embed.set_author(name=datetime, icon_url=get_day_icon(datetime))
+    if link:
+        embed.title = f"🔗 {title}"
+        embed.url = link
+    else:
+        embed.title = title
+    if typ.lower() == "general" and image:
+        embed.set_thumbnail(url=image)
+    return embed
+
+def get_day_icon(datetime_str):
+    emoji_map = {
+        "pondelok": "https://cdn3.emoji.gg/emojis/5712_monday.png",
+        "utorok": "https://cdn3.emoji.gg/emojis/6201_tuesday.png",
+        "streda": "https://cdn3.emoji.gg/emojis/4270_wednesday.png",
+        "štvrtok": "https://cdn3.emoji.gg/emojis/6285_thursday.png",
+        "piatok": "https://cdn3.emoji.gg/emojis/2064_friday.png",
+        "sobota": "https://cdn3.emoji.gg/emojis/4832_saturday.png",
+        "nedeľa": "https://cdn3.emoji.gg/emojis/8878_sunday.png"
+    }
+    for key in emoji_map:
+        if key in datetime_str.lower():
+            return emoji_map[key]
+    return ""
+
 class OznamModal(Modal, title="Pridaj oznam"):
     def __init__(self, bot):
         super().__init__()
@@ -71,7 +99,7 @@ class OznamModal(Modal, title="Pridaj oznam"):
 
     async def on_submit(self, interaction: discord.Interaction):
         data = {child.custom_id: child.value for child in self.children}
-        embed = self.bot.generate_oznam_embed(
+        embed = generate_oznam_embed(
             typ=data.get("typ", ""),
             title=data.get("title", ""),
             description=data.get("description", ""),
