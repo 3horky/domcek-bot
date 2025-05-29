@@ -118,7 +118,7 @@ class InfoOznamModal(Modal, title="Nový info oznam"):
         image = self.children[2].value
         link = self.children[3].value
 
-        embed = generate_oznam_embed("info", title, description, None, None, link, image)
+        embed = generate_oznam_embed("info", title, description, None, link, image, None)
 
         view = OznamConfirmView(self.bot, data={
             "typ": "info",
