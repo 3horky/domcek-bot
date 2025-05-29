@@ -55,14 +55,14 @@ class OznamModal(Modal, title="Pridaj oznam"):
         self.description = TextInput(label="Popis oznamu", style=discord.TextStyle.paragraph, required=True)
         self.datetime = TextInput(label="Dátum a čas (len pre event)", placeholder="15.06. // 18:00", required=False)
         self.link = TextInput(label="Link (voliteľné)", required=False)
-        self.image = TextInput(label="Obrázok URL (povinné pre general)", required=False)
+        # self.image = TextInput(label="Obrázok URL (povinné pre general)", required=False)
 
         self.add_item(self.typ)
         self.add_item(self.title)
         self.add_item(self.description)
         self.add_item(self.datetime)
         self.add_item(self.link)
-        self.add_item(self.image)
+        # self.add_item(self.image)
 
     async def on_submit(self, interaction: discord.Interaction):
         embed = self.bot.generate_oznam_embed(
