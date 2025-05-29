@@ -6,6 +6,8 @@ import random
 from discord.ext import commands, tasks
 from discord import app_commands
 from dotenv import load_dotenv
+from oznamy_db import init_db
+from oznamy_db import add_announcement
 
 load_dotenv()
 
@@ -27,6 +29,7 @@ MODERATOR_CHANNEL_ID = 1026422525464424519
 CHANNEL_NAME_TEMPLATE = "{emoji}・{name}"
 ARCHIVE_NAME_TEMPLATE = "{archived_date}_{name}"
 ARCHIVE_EMOJI = "✅"
+OZNAMY_ROLE = "Oznamy"
 
 REACTION_EMOJI = os.getenv("DEFAULT_REACTION_EMOJI", "<:3horky:1377264806905516053>")
 AUTO_REACT_CHANNELS = set()
@@ -42,6 +45,7 @@ async def on_ready():
     print(f"Bot prihlásený ako {bot.user}")
     bot.loop.create_task(keep_alive_loop())
     update_status.start()
+    init_db()
 
     try:
         synced = await bot.tree.sync()
@@ -282,5 +286,51 @@ async def archivuj_channel(interaction: discord.Interaction, datum: str, dovod: 
                 pass
 
         bot.loop.create_task(wait_for_reaction())
+
+############ MODUL OZNAMY
+
+@bot.tree.command(name="pridaj_oznam", description="Pridaj nový oznam")
+@app_commands.describe(
+    title="Titulok oznamu",
+    description="Popis. Discord markdown povolený.",
+    type="Typ oznamu: general alebo event",
+    start_date="Od kedy sa zobrazuje (RRRR-MM-DD)",
+    end_date="Do kedy sa zobrazuje (RRRR-MM-DD)",
+    link_url="Link v titulku (nepovinné)",
+    image_url="Obrázok (povinné pre typ general)"
+)
+async def pridaj_oznam(
+    interaction: discord.Interaction,
+    title: str,
+    type: str,
+    start_date: str,
+    end_date: str,
+    description: str = "",
+    link_url: str = "",
+    image_url: str = ""
+):
+    member = interaction.user
+    if not discord.utils.get(member.roles, name=OZNAMY_ROLE):
+        await interaction.response.send_message("⛔ Tento príkaz môže použiť len člen s rolou **Oznamy**.", ephemeral=True)
+        return
+
+    if type not in ("general", "event"):
+        await interaction.response.send_message("❌ Typ musí byť `general` alebo `event`.", ephemeral=True)
+        return
+
+    try:
+        add_announcement(
+            title=title,
+            description=description,
+            image_url=image_url,
+            link_url=link_url,
+            type=type,
+            start_date=start_date,
+            end_date=end_date,
+            created_by=interaction.user.name
+        )
+        await interaction.response.send_message(f"✅ Oznam **{title}** bol úspešne pridaný.", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Chyba pri ukladaní: {e}", ephemeral=True)
 
 bot.run(os.getenv("DISCORD_TOKEN"))
