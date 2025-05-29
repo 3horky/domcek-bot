@@ -8,7 +8,7 @@ from discord import app_commands
 from dotenv import load_dotenv
 from oznamy_db import init_db
 from oznamy_db import add_announcement
-from discord.ui import View, Button
+from discord.ui import View, Button, Modal, TextInput
 
 load_dotenv()
 
