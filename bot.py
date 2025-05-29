@@ -43,21 +43,18 @@ REACTION_EMOJI = os.getenv("DEFAULT_REACTION_EMOJI", "<:3horky:13772648069055160
 AUTO_REACT_CHANNELS = set()
 THOUGHTS_FILE = "thoughts.txt"
 
-def generate_oznam_embed(typ, title, description, datetime=None, day=None, link=None, image=None):
-    embed = discord.Embed(description=description)
-
-    if typ == "event" and datetime and day:
-        embed.set_author(name=datetime, icon_url=EMOJI_BY_DAY.get(day.lower(), ""))
+def generate_oznam_embed(typ, title, description, datetime, link, image, day):
+    embed = discord.Embed(description=description, color=discord.Color.blue())
+    if typ == "event" and datetime:
+        icon_url = EMOJI_BY_DAY.get(day.lower(), "") if day else ""
+        embed.set_author(name=datetime, icon_url=icon_url)
+    if link:
+        embed.title = f"🔗 {title}"
+        embed.url = link
+    else:
         embed.title = title
-        embed.color = discord.Color.blue()
-
-    elif typ == "info" and image:
+    if typ == "info" and image:
         embed.set_thumbnail(url=image)
-        embed.title = f"🔗 {title}" if link else title
-        if link:
-            embed.url = link
-        embed.color = discord.Color.green()
-
     return embed
 
 def get_day_icon(datetime_str):
@@ -170,40 +167,17 @@ class OznamConfirmView(View):
                 link_default=self.data.get("link", "")
             ))
 
-class OznamCog(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
 
-    @app_commands.command(name="pridaj_oznam", description="Pridá nový oznam (event alebo info)")
-    @app_commands.describe(typ="Typ oznamu: event alebo info")
-    async def pridaj_oznam(self, interaction: discord.Interaction, typ: str):
-        if typ.lower() not in ["event", "info"]:
-            await interaction.response.send_message("Typ musí byť `event` alebo `info`.", ephemeral=True)
-            return
+@bot.tree.command(name="pridaj_oznam", description="Pridá nový oznam pomocou modálneho okna")
+@app_commands.describe(typ="Zadaj typ: event alebo info")
+async def pridaj_oznam(interaction: discord.Interaction, typ: str):
+    if typ == "event":
+        await interaction.response.send_modal(EventOznamModal(bot))
+    elif typ == "info":
+        await interaction.response.send_modal(InfoOznamModal(bot))
+    else:
+        await interaction.response.send_message("Typ musí byť `event` alebo `info`.", ephemeral=True)
 
-        if typ.lower() == "event":
-            await interaction.response.send_modal(EventOznamModal(self.bot))
-        else:
-            await interaction.response.send_modal(InfoOznamModal(self.bot))
-
-    def generate_oznam_embed(self, typ, title, description, datetime, link, image):
-        embed = discord.Embed(description=description)
-        if typ.lower() == "event" and datetime:
-            embed.set_author(name=datetime, icon_url=self.get_day_icon(datetime))
-        if link:
-            embed.title = f"🔗 {title}"
-            embed.url = link
-        else:
-            embed.title = title
-        if typ.lower() == "general" and image:
-            embed.set_thumbnail(url=image)
-        return embed
-
-    def get_day_icon(self, datetime_str):
-        for key, url in EMOJI_BY_DAY.items():
-            if key in datetime_str.lower():
-                return url
-        return ""
 
 async def keep_alive_loop():  # Aby Google nevypol VM pre nečinnosť
     while True:
