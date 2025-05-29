@@ -89,8 +89,11 @@ async def on_ready():
     init_db()
 
     try:
+        print("====== on_ready() spustený ======")
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} command(s)")
+        for cmd in synced:
+            print(f"- {cmd.name}: {cmd.description}")
     except Exception as e:
         print(e)
 
