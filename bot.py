@@ -80,63 +80,60 @@ class EventOznamModal(Modal, title="Nový event oznam"):
         super().__init__()
         self.bot = bot
 
-        self.title = TextInput(label="Názov", default=title_default)
-        self.description = TextInput(label="Popis", style=discord.TextStyle.paragraph, default=description_default)
-        self.datetime = TextInput(label="Dátum a čas", placeholder="15.06. // 18:00", default=datetime_default)
-        self.day = TextInput(label="Deň v týždni", placeholder="napr. piatok", default=day_default)
-
-        self.add_item(self.title)
-        self.add_item(self.description)
-        self.add_item(self.datetime)
-        self.add_item(self.day)
+        self.add_item(TextInput(label="Názov", default=title_default))
+        self.add_item(TextInput(label="Popis", style=discord.TextStyle.paragraph, default=description_default))
+        self.add_item(TextInput(label="Dátum a čas", placeholder="15.06. // 18:00", default=datetime_default))
+        self.add_item(TextInput(label="Deň v týždni", placeholder="napr. piatok", default=day_default))
 
     async def on_submit(self, interaction: discord.Interaction):
-        embed = generate_oznam_embed(
-            typ="event",
-            title=self.title.value,
-            description=self.description.value,
-            datetime=self.datetime.value,
-            day=self.day.value,
-            link=None,
-            image=None
-        )
+        title = self.children[0].value
+        description = self.children[1].value
+        datetime = self.children[2].value
+        day = self.children[3].value
+
+        embed = generate_oznam_embed("event", title, description, datetime, None, None, day)
+
         view = OznamConfirmView(self.bot, data={
             "typ": "event",
-            "title": self.title.value,
-            "description": self.description.value,
-            "datetime": self.datetime.value,
-            "day": self.day.value,
+            "title": title,
+            "description": description,
+            "datetime": datetime,
+            "day": day,
             "link": None,
             "image": None
         })
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 class InfoOznamModal(Modal, title="Nový info oznam"):
     def __init__(self, bot, title_default="", description_default="", image_default="", link_default=""):
         super().__init__()
         self.bot = bot
 
-        self.title = TextInput(label="Názov", default=title_default)
-        self.description = TextInput(label="Popis", style=discord.TextStyle.paragraph, default=description_default)
-        self.image = TextInput(label="URL obrázka", default=image_default)
-        self.link = TextInput(label="Link (voliteľný)", required=False, default=link_default)
-
-        self.add_item(self.title)
-        self.add_item(self.description)
-        self.add_item(self.image)
-        self.add_item(self.link)
+        self.add_item(TextInput(label="Názov", default=title_default))
+        self.add_item(TextInput(label="Popis", style=discord.TextStyle.paragraph, default=description_default))
+        self.add_item(TextInput(label="URL obrázka", default=image_default))
+        self.add_item(TextInput(label="Link (voliteľný)", required=False, default=link_default))
 
     async def on_submit(self, interaction: discord.Interaction):
-        embed = generate_oznam_embed(
-            typ="info",
-            title=self.title.value,
-            description=self.description.value,
-            datetime=None,
-            day=None,
-            link=self.link.value or None,
-            image=self.image.value
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        title = self.children[0].value
+        description = self.children[1].value
+        image = self.children[2].value
+        link = self.children[3].value
+
+        embed = generate_oznam_embed("info", title, description, None, link, image)
+
+        view = OznamConfirmView(self.bot, data={
+            "typ": "info",
+            "title": title,
+            "description": description,
+            "datetime": None,
+            "day": None,
+            "link": link,
+            "image": image
+        })
+
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 class OznamConfirmView(View):
     def __init__(self, bot, data):
