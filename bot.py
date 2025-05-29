@@ -141,11 +141,6 @@ class OznamCog(commands.Cog):
                 return emoji_map[key]
         return ""
 
-async def setup(bot):
-    cog = OznamCog(bot)
-    bot.generate_oznam_embed = cog.generate_oznam_embed  # Zdieľaná funkcia
-    await bot.add_cog(cog)
-
 async def keep_alive_loop():  # Aby Google nevypol VM pre nečinnosť
     while True:
         print("Heartbeat - bot je nažive")
@@ -157,7 +152,9 @@ async def on_ready():
     bot.loop.create_task(keep_alive_loop())
     update_status.start()
     init_db()
+    await bot.add_cog(OznamCog(bot))
 
+    
     try:
         print("====== on_ready() spustený ======")
         synced = await bot.tree.sync()
