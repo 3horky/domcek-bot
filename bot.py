@@ -43,17 +43,21 @@ REACTION_EMOJI = os.getenv("DEFAULT_REACTION_EMOJI", "<:3horky:13772648069055160
 AUTO_REACT_CHANNELS = set()
 THOUGHTS_FILE = "thoughts.txt"
 
-def generate_oznam_embed(typ, title, description, datetime, link, image):
+def generate_oznam_embed(typ, title, description, datetime=None, day=None, link=None, image=None):
     embed = discord.Embed(description=description)
-    if typ.lower() == "event" and datetime:
-        embed.set_author(name=datetime, icon_url=get_day_icon(datetime))
-    if link:
-        embed.title = f"🔗 {title}"
-        embed.url = link
-    else:
+
+    if typ == "event" and datetime and day:
+        embed.set_author(name=datetime, icon_url=EMOJI_BY_DAY.get(day.lower(), ""))
         embed.title = title
-    if typ.lower() == "general" and image:
+        embed.color = discord.Color.blue()
+
+    elif typ == "info" and image:
         embed.set_thumbnail(url=image)
+        embed.title = f"🔗 {title}" if link else title
+        if link:
+            embed.url = link
+        embed.color = discord.Color.green()
+
     return embed
 
 def get_day_icon(datetime_str):
@@ -71,44 +75,68 @@ def get_day_icon(datetime_str):
             return emoji_map[key]
     return ""
 
-class OznamModal(Modal, title="Pridaj oznam"):
-    def __init__(self, bot):
+class EventOznamModal(Modal, title="Nový event oznam"):
+    def __init__(self, bot, title_default="", description_default="", datetime_default="", day_default=""):
         super().__init__()
         self.bot = bot
 
-        self.add_item(TextInput(
-            custom_id="typ", label="Typ oznamu (event/general)",
-            placeholder="event alebo general", required=True
-        ))
-        self.add_item(TextInput(
-            custom_id="title", label="Názov oznamu",
-            required=True
-        ))
-        self.add_item(TextInput(
-            custom_id="description", label="Popis oznamu",
-            style=discord.TextStyle.paragraph, required=True
-        ))
-        self.add_item(TextInput(
-            custom_id="datetime", label="Dátum a čas (len pre event)",
-            placeholder="15.06. // 18:00", required=False
-        ))
-        self.add_item(TextInput(
-            custom_id="link", label="Link (voliteľné)",
-            required=False
-        ))
+        self.title = TextInput(label="Názov", default=title_default)
+        self.description = TextInput(label="Popis", style=discord.TextStyle.paragraph, default=description_default)
+        self.datetime = TextInput(label="Dátum a čas", placeholder="15.06. // 18:00", default=datetime_default)
+        self.day = TextInput(label="Deň v týždni", placeholder="napr. piatok", default=day_default)
+
+        self.add_item(self.title)
+        self.add_item(self.description)
+        self.add_item(self.datetime)
+        self.add_item(self.day)
 
     async def on_submit(self, interaction: discord.Interaction):
-        data = {child.custom_id: child.value for child in self.children}
         embed = generate_oznam_embed(
-            typ=data.get("typ", ""),
-            title=data.get("title", ""),
-            description=data.get("description", ""),
-            datetime=data.get("datetime", ""),
-            link=data.get("link", ""),
-            image=data.get("image", "")
+            typ="event",
+            title=self.title.value,
+            description=self.description.value,
+            datetime=self.datetime.value,
+            day=self.day.value,
+            link=None,
+            image=None
         )
-        view = OznamConfirmView(self.bot, data)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        view = OznamConfirmView(self.bot, data={
+            "typ": "event",
+            "title": self.title.value,
+            "description": self.description.value,
+            "datetime": self.datetime.value,
+            "day": self.day.value,
+            "link": None,
+            "image": None
+        })
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+class InfoOznamModal(Modal, title="Nový info oznam"):
+    def __init__(self, bot, title_default="", description_default="", image_default="", link_default=""):
+        super().__init__()
+        self.bot = bot
+
+        self.title = TextInput(label="Názov", default=title_default)
+        self.description = TextInput(label="Popis", style=discord.TextStyle.paragraph, default=description_default)
+        self.image = TextInput(label="URL obrázka", default=image_default)
+        self.link = TextInput(label="Link (voliteľný)", required=False, default=link_default)
+
+        self.add_item(self.title)
+        self.add_item(self.description)
+        self.add_item(self.image)
+        self.add_item(self.link)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        embed = generate_oznam_embed(
+            typ="info",
+            title=self.title.value,
+            description=self.description.value,
+            datetime=None,
+            day=None,
+            link=self.link.value or None,
+            image=self.image.value
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 class OznamConfirmView(View):
     def __init__(self, bot, data):
@@ -126,15 +154,40 @@ class OznamConfirmView(View):
 
     @discord.ui.button(label="✏️ Upraviť", style=discord.ButtonStyle.secondary)
     async def edit(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_modal(OznamModal(self.bot))
+        typ = self.data.get("typ", "event")
+
+        if typ == "event":
+            await interaction.response.send_modal(EventOznamModal(
+                bot=self.bot,
+                title_default=self.data.get("title", ""),
+                description_default=self.data.get("description", ""),
+                datetime_default=self.data.get("datetime", ""),
+                day_default=self.data.get("day", "")
+            ))
+        else:
+            await interaction.response.send_modal(InfoOznamModal(
+                bot=self.bot,
+                title_default=self.data.get("title", ""),
+                description_default=self.data.get("description", ""),
+                image_default=self.data.get("image", ""),
+                link_default=self.data.get("link", "")
+            ))
 
 class OznamCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="pridaj_oznam", description="Pridá nový oznam pomocou modálneho okna")
-    async def pridaj_oznam(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(OznamModal(self.bot))
+    @app_commands.command(name="pridaj_oznam", description="Pridá nový oznam (event alebo info)")
+    @app_commands.describe(typ="Typ oznamu: event alebo info")
+    async def pridaj_oznam(self, interaction: discord.Interaction, typ: str):
+        if typ.lower() not in ["event", "info"]:
+            await interaction.response.send_message("Typ musí byť `event` alebo `info`.", ephemeral=True)
+            return
+
+        if typ.lower() == "event":
+            await interaction.response.send_modal(EventOznamModal(self.bot))
+        else:
+            await interaction.response.send_modal(InfoOznamModal(self.bot))
 
     def generate_oznam_embed(self, typ, title, description, datetime, link, image):
         embed = discord.Embed(description=description)
