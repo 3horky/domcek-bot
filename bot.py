@@ -292,12 +292,14 @@ async def archivuj_channel(interaction: discord.Interaction, datum: str, dovod: 
 @bot.tree.command(name="pridaj_oznam", description="Pridaj nový oznam")
 @app_commands.describe(
     title="Titulok oznamu",
-    description="Popis. Discord markdown povolený.",
+    description="Popis: používaj Discord markdown",
     type="Typ oznamu: general alebo event",
-    start_date="Od kedy sa zobrazuje (RRRR-MM-DD)",
-    end_date="Do kedy sa zobrazuje (RRRR-MM-DD)",
+    start_date="Začiatok zobrazovania (RRRR-MM-DD)",
+    end_date="Koniec zobrazovania (RRRR-MM-DD)",
+    image_url="Obrázok (povinné pre general)",
     link_url="Link v titulku (nepovinné)",
-    image_url="Obrázok (povinné pre typ general)"
+    day_of_week="Deň v týždni (iba pre event)",
+    event_datetime="Dátum a čas udalosti (DD.MM. // HH:MM) – iba pre event"
 )
 async def pridaj_oznam(
     interaction: discord.Interaction,
@@ -305,9 +307,11 @@ async def pridaj_oznam(
     type: str,
     start_date: str,
     end_date: str,
-    description: str = "",
+    image_url: str = "",
     link_url: str = "",
-    image_url: str = ""
+    description: str = "",
+    day_of_week: str = "",
+    event_datetime: str = ""
 ):
     member = interaction.user
     if not discord.utils.get(member.roles, name=OZNAMY_ROLE):
@@ -316,6 +320,14 @@ async def pridaj_oznam(
 
     if type not in ("general", "event"):
         await interaction.response.send_message("❌ Typ musí byť `general` alebo `event`.", ephemeral=True)
+        return
+
+    if type == "general" and not image_url:
+        await interaction.response.send_message("❌ Pre všeobecný oznam (`general`) je obrázok povinný.", ephemeral=True)
+        return
+
+    if type == "event" and (not day_of_week or not event_datetime):
+        await interaction.response.send_message("❌ Pre typ `event` je povinný deň v týždni a dátum+čas.", ephemeral=True)
         return
 
     try:
@@ -327,6 +339,8 @@ async def pridaj_oznam(
             type=type,
             start_date=start_date,
             end_date=end_date,
+            event_day=day_of_week if type == "event" else None,
+            event_datetime=event_datetime if type == "event" else None,
             created_by=interaction.user.name
         )
         await interaction.response.send_message(f"✅ Oznam **{title}** bol úspešne pridaný.", ephemeral=True)
