@@ -188,7 +188,18 @@ class OznamConfirmView(View):
 
     @discord.ui.button(label="✅ Pridať", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: Button):
-        # ✅ Tu by sa normálne uložil oznam do DB
+        # 1. Uloženie do databázy
+        add_announcement(
+            typ=self.data.get("typ", ""),
+            title=self.data.get("title", ""),
+            description=self.data.get("description", ""),
+            datetime_str=self.data.get("datetime", ""),
+            day=self.data.get("day", ""),
+            link=self.data.get("link", ""),
+            image=self.data.get("image", ""),
+            visible_from=self.data.get("visible_dates", "").split(" - ")[0],
+            visible_to=self.data.get("visible_dates", "").split(" - ")[1]
+        )
         await interaction.response.edit_message(content="✅ Oznam bol pridaný!", embed=None, view=None)
 
         # 💾 Po uložení – načítaj všetky oznamy z DB
