@@ -43,6 +43,16 @@ REACTION_EMOJI = os.getenv("DEFAULT_REACTION_EMOJI", "<:3horky:13772648069055160
 AUTO_REACT_CHANNELS = set()
 THOUGHTS_FILE = "thoughts.txt"
 
+def get_next_friday_and_thursday():
+    today = datetime.today()
+    friday_offset = (4 - today.weekday()) % 7  # 4 = Friday
+    next_friday = today + timedelta(days=friday_offset)
+    next_thursday = next_friday + timedelta(days=6)
+    return next_friday, next_thursday
+
+def format_date(date):
+    return f"{date.day}.{date.month}.{date.year}"
+
 def generate_oznam_embed(typ, title, description, datetime, link, image, day):
     embed = discord.Embed(description=description, color=discord.Color.blue())
     if typ == "event" and datetime:
@@ -73,64 +83,65 @@ def get_day_icon(datetime_str):
     return ""
 
 class EventOznamModal(Modal, title="Nový event oznam"):
-    def __init__(self, bot, title_default="", description_default="", datetime_default="", day_default=""):
+    def __init__(self, bot, title="", description="", datetime="", day="", visible_dates=""):
         super().__init__()
         self.bot = bot
+        self.add_item(TextInput(label="Názov oznamu", default=title))
+        self.add_item(TextInput(label="Popis oznamu", style=discord.TextStyle.paragraph, default=description))
+        self.add_item(TextInput(label="Dátum a čas (napr. 15.06. // 18:00)", default=datetime))
+        self.add_item(TextInput(label="Deň v týždni (napr. piatok)", default=day))
+        default_range = visible_dates or self._default_visible_range()
+        self.add_item(TextInput(label="Zobrazovať od kedy - do kedy", default=default_range))
 
-        self.add_item(TextInput(label="Názov", default=title_default))
-        self.add_item(TextInput(label="Popis", style=discord.TextStyle.paragraph, default=description_default))
-        self.add_item(TextInput(label="Dátum a čas", placeholder="15.06. // 18:00", default=datetime_default))
-        self.add_item(TextInput(label="Deň v týždni", placeholder="napr. piatok", default=day_default))
+    def _default_visible_range(self):
+        start, end = get_next_friday_and_thursday()
+        return f"{format_date(start)} - {format_date(end)}"
 
     async def on_submit(self, interaction: discord.Interaction):
-        title = self.children[0].value
-        description = self.children[1].value
-        datetime = self.children[2].value
-        day = self.children[3].value
-
-        embed = generate_oznam_embed("event", title, description, datetime, None, None, day)
-
-        view = OznamConfirmView(self.bot, data={
+        children = [c.value for c in self.children]
+        title, description, datetime_str, day, visible_range = children
+        embed = generate_oznam_embed("event", title, description, datetime_str, None, None, day)
+        await interaction.response.send_message(embed=embed, view=OznamConfirmView(self.bot, {
             "typ": "event",
             "title": title,
             "description": description,
-            "datetime": datetime,
+            "datetime": datetime_str,
             "day": day,
+            "visible_dates": visible_range,
             "link": None,
             "image": None
-        })
-
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        }), ephemeral=True)
 
 class InfoOznamModal(Modal, title="Nový info oznam"):
-    def __init__(self, bot, title_default="", description_default="", image_default="", link_default=""):
+    def __init__(self, bot, title="", description="", image="", link="", visible_dates=""):
         super().__init__()
         self.bot = bot
+        self.add_item(TextInput(label="Názov oznamu", default=title))
+        self.add_item(TextInput(label="Popis oznamu", style=discord.TextStyle.paragraph, default=description))
+        self.add_item(TextInput(label="URL obrázka", default=image))
+        self.add_item(TextInput(label="Link (voliteľné)", default=link))
+        default_range = visible_dates or self._default_visible_range()
+        self.add_item(TextInput(label="Zobrazovať od kedy - do kedy", default=default_range))
 
-        self.add_item(TextInput(label="Názov", default=title_default))
-        self.add_item(TextInput(label="Popis", style=discord.TextStyle.paragraph, default=description_default))
-        self.add_item(TextInput(label="URL obrázka", default=image_default))
-        self.add_item(TextInput(label="Link (voliteľný)", required=False, default=link_default))
+    def _default_visible_range(self):
+        start, end = get_next_friday_and_thursday()
+        return f"{format_date(start)} - {format_date(end)}"
 
     async def on_submit(self, interaction: discord.Interaction):
-        title = self.children[0].value
-        description = self.children[1].value
-        image = self.children[2].value
-        link = self.children[3].value
-
+        children = [c.value for c in self.children]
+        title, description, image, link, visible_range = children
         embed = generate_oznam_embed("info", title, description, None, link, image, None)
-
-        view = OznamConfirmView(self.bot, data={
+        await interaction.response.send_message(embed=embed, view=OznamConfirmView(self.bot, {
             "typ": "info",
             "title": title,
             "description": description,
-            "datetime": None,
-            "day": None,
+            "image": image,
             "link": link,
-            "image": image
-        })
+            "visible_dates": visible_range,
+            "datetime": None,
+            "day": None
+        }), ephemeral=True)
 
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 class OznamConfirmView(View):
     def __init__(self, bot, data):
