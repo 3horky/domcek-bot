@@ -5,7 +5,7 @@ import random
 from discord.ext import commands, tasks
 from discord import app_commands
 from dotenv import load_dotenv
-from oznamy_db import init_db
+from oznamy_db import init_db, add_announcement, get_all_announcements
 from discord.ui import View, Button, Modal, TextInput
 from datetime import datetime, timedelta
 
