@@ -165,18 +165,20 @@ class OznamConfirmView(View):
         if typ == "event":
             await interaction.response.send_modal(EventOznamModal(
                 bot=self.bot,
-                title_default=self.data.get("title", ""),
-                description_default=self.data.get("description", ""),
-                datetime_default=self.data.get("datetime", ""),
-                day_default=self.data.get("day", "")
+                title=self.data.get("title", ""),
+                description=self.data.get("description", ""),
+                datetime=self.data.get("datetime", ""),
+                day=self.data.get("day", ""),
+                visible_dates=self.data.get("visible_dates", "")
             ))
         else:
             await interaction.response.send_modal(InfoOznamModal(
                 bot=self.bot,
-                title_default=self.data.get("title", ""),
-                description_default=self.data.get("description", ""),
-                image_default=self.data.get("image", ""),
-                link_default=self.data.get("link", "")
+                title=self.data.get("title", ""),
+                description=self.data.get("description", ""),
+                image=self.data.get("image", ""),
+                link=self.data.get("link", ""),
+                visible_dates=self.data.get("visible_dates", "")
             ))
 
 
