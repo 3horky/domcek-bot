@@ -44,6 +44,42 @@ REACTION_EMOJI = os.getenv("DEFAULT_REACTION_EMOJI", "<:3horky:13772648069055160
 AUTO_REACT_CHANNELS = set()
 THOUGHTS_FILE = "thoughts.txt"
 
+def format_announcement_preview(announcements):
+    """Formátuje zoznam oznamov pre výpis po pridaní."""
+    now = datetime.now()
+    lines = []
+    for ann in announcements:
+        typ = ann.get("typ", "").upper()
+        title = ann.get("title", "Neznámy")
+        description = ann.get("description", "")
+        visible_from_str = ann.get("visible_from", "")
+        visible_to_str = ann.get("visible_to", "")
+
+        try:
+            visible_from = datetime.strptime(visible_from_str, "%d.%m.%Y")
+            visible_to = datetime.strptime(visible_to_str, "%d.%m.%Y")
+        except Exception:
+            visible_from = visible_to = None
+
+        # Vyber farbu podľa toho, kde sa nachádzame v čase
+        if visible_from and visible_to:
+            if visible_from <= now <= visible_to:
+                emoji = "🟩"  # aktuálne zobrazovaný
+            elif now < visible_from:
+                emoji = "🟦"  # plánovaný
+            else:
+                emoji = "⬜"  # expirovaný
+        else:
+            emoji = "⬜"  # neplatný dátum
+
+        # Skráť popis (prvých 5-6 slov)
+        short_desc = " ".join(description.split()[:6]) + ("..." if len(description.split()) > 6 else "")
+
+        # Výpis
+        lines.append(f"{emoji} **[{typ}] {title}**\n_{short_desc}_\n📅 {visible_from_str} - {visible_to_str}\n")
+
+    return "\n".join(lines)
+
 def get_next_friday_and_thursday():
     today = datetime.today()
     friday_offset = (4 - today.weekday()) % 7  # 4 = Friday
@@ -152,7 +188,17 @@ class OznamConfirmView(View):
 
     @discord.ui.button(label="✅ Pridať", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.edit_message(content="Oznam bol uložený ✅", embed=None, view=None)
+        # ✅ Tu by sa normálne uložil oznam do DB
+        await interaction.response.edit_message(content="✅ Oznam bol pridaný!", embed=None, view=None)
+
+        # 💾 Po uložení – načítaj všetky oznamy z DB
+        from oznamy_db import get_all_announcements  # Uisti sa, že táto funkcia existuje
+        all_announcements = get_all_announcements()
+
+        preview_text = format_announcement_preview(all_announcements)
+
+        # 📬 Odošli výpis
+        await interaction.followup.send(content="**📋 Aktuálne oznamy:**\n\n" + preview_text, ephemeral=True)
 
     @discord.ui.button(label="❌ Zrušiť", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: Button):
