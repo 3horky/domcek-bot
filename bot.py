@@ -44,6 +44,19 @@ REACTION_EMOJI = os.getenv("DEFAULT_REACTION_EMOJI", "<:3horky:13772648069055160
 AUTO_REACT_CHANNELS = set()
 THOUGHTS_FILE = "thoughts.txt"
 
+async def cron_clean_expired_announcements():
+    while True:
+        now = datetime.now()
+        next_run = (now + timedelta(days=1)).replace(hour=1, minute=0, second=0, microsecond=0)
+        sleep_duration = (next_run - now).total_seconds()
+
+        print(f"[🕐] Čistenie databázy sa spustí o {sleep_duration / 3600:.2f} hodín ({next_run})")
+        await asyncio.sleep(sleep_duration)
+
+        from oznamy_db import delete_expired_announcements
+        delete_expired_announcements()
+        print("[✅] V databáze boli vymazané expirované oznamy.")
+
 def parse_date(date_str):
     try:
         return datetime.strptime(date_str.strip(), "%d.%m.%Y")
@@ -325,6 +338,7 @@ async def on_ready():
     bot.loop.create_task(keep_alive_loop())
     update_status.start()
     init_db()
+    bot.loop.create_task(cron_clean_expired_announcements())
     # await bot.add_cog(OznamCog(bot))
 
     
