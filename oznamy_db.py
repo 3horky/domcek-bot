@@ -48,7 +48,7 @@ def get_all_announcements():
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT typ, title, description, datetime, day, link, image, visible_from, visible_to
+            SELECT id, typ, title, description, datetime, day, link, image, visible_from, visible_to
             FROM announcements
             ORDER BY datetime(created_at) DESC
         """)
@@ -57,14 +57,15 @@ def get_all_announcements():
         announcements = []
         for row in rows:
             announcements.append({
-                "typ": row[0],
-                "title": row[1],
-                "description": row[2],
-                "datetime": row[3],
-                "day": row[4],
-                "link": row[5],
-                "image": row[6],
-                "visible_from": row[7],
-                "visible_to": row[8]
+                "id": row[0],
+                "typ": row[1],
+                "title": row[2],
+                "description": row[3],
+                "datetime": row[4],
+                "day": row[5],
+                "link": row[6],
+                "image": row[7],
+                "visible_from": row[8],
+                "visible_to": row[9]
             })
         return announcements
