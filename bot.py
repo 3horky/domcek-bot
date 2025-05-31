@@ -44,16 +44,74 @@ REACTION_EMOJI = os.getenv("DEFAULT_REACTION_EMOJI", "<:3horky:13772648069055160
 AUTO_REACT_CHANNELS = set()
 THOUGHTS_FILE = "thoughts.txt"
 
+def parse_date(date_str):
+    try:
+        return datetime.strptime(date_str.strip(), "%d.%m.%Y")
+    except ValueError:
+        return None
+
+def parse_event_date(event_str):
+    try:
+        # Ignorujeme čas, berieme len deň a mesiac
+        day_month = event_str.strip().split("//")[0].strip()
+        return datetime.strptime(day_month, "%d.%m.")
+    except Exception:
+        return None
+
+def is_december(date):
+    return date.month == 12
+
+def is_january(date):
+    return date.month == 1
+
+def sort_announcements(announcements):
+    def announcement_sort_key(a):
+        typ = a.get("typ", "info")
+        created_at = a.get("created_at", "")
+        created_dt = datetime.fromisoformat(created_at) if created_at else datetime.min
+        visible_from = parse_date(a.get("visible_from", "01.01.1970")) or datetime.min
+
+        if typ == "event":
+            event_date = parse_event_date(a.get("datetime", "")) or datetime.max
+            # Upravíme dátum roka na 2000 kvôli porovnávaniu dec-jan
+            try:
+                event_date = event_date.replace(year=2000)
+            except Exception:
+                pass
+            return (1, 1, event_date, created_dt)  # typ 1 = event
+        else:
+            return (0, 0, visible_from, created_dt)  # typ 0 = info
+
+    def announcement_group(a):
+        now = datetime.now()
+        visible_from = parse_date(a.get("visible_from", "01.01.1970"))
+        visible_to = parse_date(a.get("visible_to", "31.12.9999"))
+        if visible_from and visible_to:
+            if visible_from <= now <= visible_to:
+                return 0  # Aktuálne
+        return 1  # Plánované
+
+    # Najprv rozdelíme na aktuálne a plánované
+    announcements.sort(key=lambda a: (
+        announcement_group(a),         # aktuálne/plánované
+        a["typ"] != "info",            # info < event
+        announcement_sort_key(a)       # podľa typu
+    ))
+    return announcements
+
 def format_announcement_preview(announcements):
-    """Formátuje zoznam oznamov pre výpis po pridaní."""
+    """Formátuje zoradený zoznam oznamov po pridaní do prehľadného výpisu."""
     now = datetime.now()
+    announcements = sort_announcements(announcements)  # Zoradíme podľa požiadaviek
     lines = []
+
     for ann in announcements:
         typ = ann.get("typ", "").upper()
         title = ann.get("title", "Neznámy")
         description = ann.get("description", "")
         visible_from_str = ann.get("visible_from", "")
         visible_to_str = ann.get("visible_to", "")
+        ann_id = ann.get("id", "???")
 
         try:
             visible_from = datetime.strptime(visible_from_str, "%d.%m.%Y")
@@ -61,7 +119,6 @@ def format_announcement_preview(announcements):
         except Exception:
             visible_from = visible_to = None
 
-        # Vyber farbu podľa toho, kde sa nachádzame v čase
         if visible_from and visible_to:
             if visible_from <= now <= visible_to:
                 emoji = "🟩"  # aktuálne zobrazovaný
@@ -76,7 +133,11 @@ def format_announcement_preview(announcements):
         short_desc = " ".join(description.split()[:6]) + ("..." if len(description.split()) > 6 else "")
 
         # Výpis
-        lines.append(f"{emoji} **[{typ}] {title}**\n_{short_desc}_\n📅 {visible_from_str} - {visible_to_str}\n")
+        lines.append(
+            f"{emoji} **[{typ}] {title}** (ID: `{ann_id}`)\n"
+            f"_{short_desc}_\n"
+            f"📅 {visible_from_str} – {visible_to_str}\n"
+        )
 
     return "\n".join(lines)
 
