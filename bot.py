@@ -147,7 +147,7 @@ class EventOznamModal(Modal, title="Nový event oznam"):
             "visible_dates": visible_range,
             "link": None,
             "image": None
-        }), ephemeral=True)
+        }), ephemeral=False)
 
 class InfoOznamModal(Modal, title="Nový info oznam"):
     def __init__(self, bot, title="", description="", image="", link="", visible_dates=""):
@@ -177,7 +177,7 @@ class InfoOznamModal(Modal, title="Nový info oznam"):
             "visible_dates": visible_range,
             "datetime": None,
             "day": None
-        }), ephemeral=True)
+        }), ephemeral=False)
 
 
 class OznamConfirmView(View):
@@ -209,7 +209,7 @@ class OznamConfirmView(View):
         preview_text = format_announcement_preview(all_announcements)
 
         # 📬 Odošli výpis
-        await interaction.followup.send(content="**📋 Aktuálne oznamy:**\n\n" + preview_text, ephemeral=True)
+        await interaction.followup.send(content="**📋 Aktuálne oznamy:**\n\n" + preview_text, ephemeral=False)
 
     @discord.ui.button(label="❌ Zrušiť", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: Button):
