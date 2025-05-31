@@ -219,6 +219,9 @@ class OznamConfirmView(View):
     async def edit(self, interaction: discord.Interaction, button: Button):
         typ = self.data.get("typ", "event")
 
+        # Prepíš pôvodnú správu, aby neplietla
+        await interaction.message.edit(content="📝 Vybral(a) si možnosť upraviť oznam.", embed=None, view=None)
+
         if typ == "event":
             await interaction.response.send_modal(EventOznamModal(
                 bot=self.bot,
