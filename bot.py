@@ -356,6 +356,12 @@ async def on_ready():
                 "Tvoja požiadavka bude odoslaná administrátorom, ktorí ju schvália alebo zamietnu."
             )
 
+@bot.tree.command(name="zoznam_oznamov", description="Zobrazí všetky oznamy v databáze")
+async def zoznam_oznamov(interaction: discord.Interaction):
+    all_announcements = get_all_announcements()
+    formatted = format_announcement_preview(all_announcements)
+    await interaction.response.send_message(formatted if formatted else "Žiadne oznamy v databáze.")
+
 # Pomocná funkcia: kontrola, či sme v kanáli console
 def only_in_command_channel():
     async def predicate(interaction: discord.Interaction):
