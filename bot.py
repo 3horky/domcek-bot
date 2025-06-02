@@ -212,8 +212,8 @@ def get_next_friday_and_thursday():
 def format_date(date):
     return f"{date.day}.{date.month}.{date.year}"
 
-def generate_oznam_embed(typ, title, description, datetime, link, image, day):
-    embed = discord.Embed(description=description, color=discord.Color.blue())
+def generate_oznam_embed(typ, title, description, datetime, link, image, day, oznam_color):
+    embed = discord.Embed(description=description, color=oznam_color)
     if typ == "event" and datetime:
         icon_url = EMOJI_BY_DAY.get(day.lower(), "") if day else ""
         embed.set_author(name=datetime, icon_url=icon_url)
@@ -242,7 +242,7 @@ def generate_announcement_embeds_for_date(target_date: datetime):
             continue
 
         light_color, dark_color = MONTH_COLORS.get(target_date.month, (0xDDDDDD, 0x999999))
-        color = light_color if ann["typ"] == "info" else dark_color
+        embed_color = light_color if ann["typ"] == "info" else dark_color
 
         embed = generate_oznam_embed(
             typ=ann["typ"],
@@ -251,7 +251,8 @@ def generate_announcement_embeds_for_date(target_date: datetime):
             datetime=ann.get("datetime"),
             link=ann.get("link"),
             image=ann.get("image"),
-            day=ann.get("day")
+            day=ann.get("day"),
+            oznam_color=embed_color
         )
         embeds.append(embed)
 
@@ -548,6 +549,10 @@ async def preview_oznam(interaction: Interaction, announcement_id: int):
     if not ann:
         await interaction.response.send_message(f"⚠️ Oznam ID `{announcement_id}` neexistuje.", ephemeral=True)
         return
+
+    light_color, dark_color = MONTH_COLORS.get(datetime.now().month, (0xDDDDDD, 0x999999))
+    embed_color = light_color if ann["typ"] == "info" else dark_color
+    
     embed = generate_oznam_embed(
         typ=ann["typ"],
         title=ann["title"],
@@ -555,7 +560,8 @@ async def preview_oznam(interaction: Interaction, announcement_id: int):
         datetime=ann.get("datetime"),
         link=ann.get("link"),
         image=ann.get("image"),
-        day=ann.get("day")
+        day=ann.get("day"),
+        oznam_color=embed_color
     )
     await interaction.response.send_message(embed=embed)
 
