@@ -235,6 +235,7 @@ class EditOznamModal(Modal, title="Uprav oznam"):
 
     async def on_submit(self, interaction: Interaction):
         data = {
+            "typ": self.typ,
             "title": self.title_input.value,
             "description": self.description_input.value,
             "visible_from": self.visible_input.value.split(" - ")[0].strip(),
