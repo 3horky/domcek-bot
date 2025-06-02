@@ -383,6 +383,9 @@ class EditOznamModal(Modal, title="Uprav oznam"):
 
         update_announcement_by_id(self.announcement_id, data)
 
+        light_color, dark_color = MONTH_COLORS.get(target_date.month, (0xDDDDDD, 0x999999))
+        embed_color = light_color if self["typ"] == "info" else dark_color
+
         embed = generate_oznam_embed(
             typ=self.typ,
             title=data["title"],
@@ -390,7 +393,8 @@ class EditOznamModal(Modal, title="Uprav oznam"):
             datetime=data.get("datetime"),
             link=data.get("link"),
             image=data.get("image"),
-            day=data.get("day")
+            day=data.get("day"),
+            oznam_color=embed_color
         )
         await interaction.response.send_message(f"✅ Oznam bol upravený.", embed=embed)
 
@@ -412,7 +416,10 @@ class EventOznamModal(Modal, title="Nový event oznam"):
     async def on_submit(self, interaction: discord.Interaction):
         children = [c.value for c in self.children]
         title, description, datetime_str, day, visible_range = children
-        embed = generate_oznam_embed("event", title, description, datetime_str, None, None, day)
+
+        light_color, dark_color = MONTH_COLORS.get(target_date.month, (0xDDDDDD, 0x999999))
+        
+        embed = generate_oznam_embed("event", title, description, datetime_str, None, None, day, dark_color)
         await interaction.response.send_message(embed=embed, view=OznamConfirmView(self.bot, {
             "typ": "event",
             "title": title,
@@ -431,7 +438,7 @@ class InfoOznamModal(Modal, title="Nový info oznam"):
         self.add_item(TextInput(label="Názov oznamu", default=title))
         self.add_item(TextInput(label="Popis oznamu", style=discord.TextStyle.paragraph, default=description))
         self.add_item(TextInput(label="URL obrázka", default=image))
-        self.add_item(TextInput(label="Link (voliteľné)", default=link))
+        self.add_item(TextInput(label="Link (voliteľné)", default=link, required=False))
         default_range = visible_dates or self._default_visible_range()
         self.add_item(TextInput(label="Zobrazovať od kedy - do kedy", default=default_range))
 
@@ -442,7 +449,10 @@ class InfoOznamModal(Modal, title="Nový info oznam"):
     async def on_submit(self, interaction: discord.Interaction):
         children = [c.value for c in self.children]
         title, description, image, link, visible_range = children
-        embed = generate_oznam_embed("info", title, description, None, link, image, None)
+
+        light_color, dark_color = MONTH_COLORS.get(target_date.month, (0xDDDDDD, 0x999999))
+        
+        embed = generate_oznam_embed("info", title, description, None, link, image, None, light_color)
         await interaction.response.send_message(embed=embed, view=OznamConfirmView(self.bot, {
             "typ": "info",
             "title": title,
