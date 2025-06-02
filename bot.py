@@ -25,6 +25,8 @@ CATEGORY_ID = 1231260260015149068
 ARCHIVE_CATEGORY_ID = 1077174157416087602
 COMMAND_CHANNEL_ID = 819184838274711582
 HOW_TO_CHANNEL_ID = 1278324331683778722
+# OZNAMY_CHANNEL_ID = 1043629695150850048 # ID channelu oznamy
+OZNAMY_CHANNEL_ID = 1377646305119047690 # ID channelu oznamy_admin, pre testovacie účely
 MODERATOR_CHANNEL_ID = 1026422525464424519
 CHANNEL_NAME_TEMPLATE = "{emoji}・{name}"
 ARCHIVE_EMOJI = "✅"
@@ -272,6 +274,47 @@ def get_day_icon(datetime_str):
         if key in datetime_str.lower():
             return emoji_map[key]
     return ""
+
+class ConfirmPostNowView(View):
+    def __init__(self, bot):
+        super().__init__(timeout=60)
+        self.bot = bot
+
+    @discord.ui.button(label="✅ Uverejniť oznamy", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.edit_message(content="Uverejňujem oznamy...", view=None)
+
+        # Získaj dátum a embedy
+        today = datetime.now()
+        embeds = generate_announcement_embeds_for_date(today)
+
+        if not embeds:
+            await interaction.followup.send("⚠️ Dnes nemáme žiadne oznamy na zverejnenie.")
+            return
+
+        # Posledný embed so správou o reakcii
+        light_color, _ = MONTH_COLORS.get(today.month, (0xDDDDDD, 0x999999))
+        closing_embed = discord.Embed(
+            title=f"Ak si si prečítal(a) oznamy, nezabudni dať {REACTION_EMOJI}",
+            color=light_color
+        )
+
+        channel = bot.get_channel(OZNAMY_CHANNEL_ID)
+        if not channel:
+            await interaction.followup.send("❌ Kanál #oznamy neexistuje.")
+            return
+
+        header = "Ahojte @everyone,\nmáme tu niekoľko oznamov na dnešný deň! ☀️\n\n⇙"
+        message = await channel.send(content=header, embeds=embeds + [closing_embed])
+
+        # Reakcia
+        await message.add_reaction(REACTION_EMOJI)
+
+        await interaction.followup.send("✅ Oznamy boli uverejnené.", ephemeral=True)
+
+    @discord.ui.button(label="❌ Zrušiť", style=discord.ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.edit_message(content="Zverejnenie oznamov zrušené.", view=None)
 
 class DeleteConfirmView(View):
     def __init__(self, announcement_id):
@@ -593,6 +636,16 @@ async def vygeneruj_oznamy(interaction: discord.Interaction, datum: str = None):
     # Hlavička v textovej správe
     message = f"{intro_message}\n\n⇣"
     await interaction.response.send_message(content=message, embeds=embeds)
+
+@bot.tree.command(name="uverejni_oznamy_teraz", description="Uverejní oznamy k dnešnému dňu do kanála #oznamy")
+async def uverejni_oznamy_teraz(interaction: discord.Interaction):
+    today = datetime.now().strftime("%d.%m.%Y")
+    message = (
+        f"⚠️ Tento krok uverejní všetky aktívne oznamy k dnešnému dňu (**{today}**) "
+        f"do kanála <#{OZNAMY_CHANNEL_ID}>.\n"
+        "Naozaj ich chceš teraz zverejniť?"
+    )
+    await interaction.response.send_message(content=message, view=ConfirmPostNowView(bot), ephemeral=False)
 
 # Pomocná funkcia: kontrola, či sme v kanáli console
 def only_in_command_channel():
