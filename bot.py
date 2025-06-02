@@ -8,8 +8,10 @@ from dotenv import load_dotenv
 from oznamy_db import init_db, add_announcement, get_all_announcements, get_announcement_by_id, delete_announcement_by_id, update_announcement_by_id
 from discord.ui import View, Button, Modal, TextInput
 from datetime import datetime, timedelta
+from google import genai
 
 load_dotenv()
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 intents = discord.Intents.default()
 intents.members = True
@@ -34,18 +36,18 @@ OZNAMY_ROLE = "Oznamy"
 
 # Farby pre každý mesiac (jemná pre INFO, sýta pre EVENT)
 MONTH_COLORS = {
-    1: (0xCFE2F3, 0x3C78D8),   # Január
-    2: (0xD9EAD3, 0x6AA84F),   # Február
-    3: (0xFFF2CC, 0xF1C232),   # Marec
-    4: (0xFCE5CD, 0xE69138),   # Apríl
-    5: (0xF4CCCC, 0xCC0000),   # Máj
-    6: (0xD9D2E9, 0x674EA7),   # Jún
-    7: (0xD0E0E3, 0x3D85C6),   # Júl
-    8: (0xEAD1DC, 0xA64D79),   # August
-    9: (0xD9EAD3, 0x38761D),   # September
-    10: (0xF9CB9C, 0xE69138),  # Október
-    11: (0xCFE2F3, 0x6D9EEB),  # November
-    12: (0xFCE5CD, 0xB45F06),  # December
+    1: (0xD6EAF8, 0x21618C),   # Január – ľadová modrá, tmavomodrá
+    2: (0xCCD1D1, 0x2E4053),   # Február – šedá, zimná modrošedá
+    3: (0xEAD1DC, 0x8E44AD),   # Marec – pôstna fialová
+    4: (0xFCF3CF, 0xF4D03F),   # Apríl – jarná svetložltá
+    5: (0xD5F5E3, 0x27AE60),   # Máj – zelená, rozkvitnutá príroda
+    6: (0xFDEBD0, 0xE67E22),   # Jún – letná oranžová
+    7: (0xFADBD8, 0xC0392B),   # Júl – horúca červenooranžová
+    8: (0xF9E79F, 0xD68910),   # August – dozrievajúca, pomarančová
+    9: (0xFCF3CF, 0xB7950B),   # September – babie leto
+    10: (0xF6DDCC, 0xCA6F1E),  # Október – jesenné lístie
+    11: (0xD5DBDB, 0x566573),  # November – sychravá šedá
+    12: (0xFBEEE6, 0xB03A2E),  # December – vianočná, teplá červenozlatá
 }
 
 EMOJI_BY_DAY = {
@@ -295,7 +297,7 @@ class ConfirmPostNowView(View):
         # Posledný embed so správou o reakcii
         light_color, _ = MONTH_COLORS.get(today.month, (0xDDDDDD, 0x999999))
         closing_embed = discord.Embed(
-            title=f"Ak si si prečítal(a) oznamy, nezabudni dať {REACTION_EMOJI}",
+            title=f"Ak si si prečítal(a) oznamy, nezabudni dať  {REACTION_EMOJI}",
             color=light_color
         )
 
@@ -304,7 +306,13 @@ class ConfirmPostNowView(View):
             await interaction.followup.send("❌ Kanál #oznamy neexistuje.")
             return
 
-        header = "Ahojte @everyone,\nmáme tu niekoľko oznamov na dnešný deň! ☀️\n\n⇙"
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents="Napíš 3-5 vetový pozdrav a úvod k správe plnej informácii a aktuálnych oznamov. Prihováraš sa 200 mladým ľuďom. Ak by ti to bolo treba kvôli správnej formulácii, si mužského rodu. Namiesto 'všetci' a ekvivalentov oslovuj @everyone. Po oslovení urob nový riadok. Na každý ďalší takýto prompt odpovedz originálnou správou. Môžeš používať emoji."
+        )
+        print(response.text)
+        
+        header = response.text + "\n⇣"
         message = await channel.send(content=header, embeds=embeds + [closing_embed])
 
         # Reakcia
