@@ -443,7 +443,7 @@ async def zoznam_oznamov(interaction: discord.Interaction):
     formatted = format_announcement_preview(all_announcements)
     await interaction.response.send_message(formatted if formatted else "Žiadne oznamy v databáze.")
 
-@app_commands.command(name="uprav_oznam", description="Upraví oznam podľa ID")
+@bot.tree.command(name="uprav_oznam", description="Upraví oznam podľa ID")
 @app_commands.describe(announcement_id="ID oznamu, ktorý chceš upraviť")
 async def uprav_oznam(interaction: Interaction, announcement_id: int):
     ann = get_announcement_by_id(announcement_id)
@@ -452,7 +452,7 @@ async def uprav_oznam(interaction: Interaction, announcement_id: int):
         return
     await interaction.response.send_modal(EditOznamModal(interaction.client, announcement_id, ann))
 
-@app_commands.command(name="vymaz_oznam", description="Vymaže oznam podľa ID")
+@bot.tree.command(name="vymaz_oznam", description="Vymaže oznam podľa ID")
 @app_commands.describe(announcement_id="ID oznamu, ktorý chceš vymazať")
 async def vymaz_oznam(interaction: Interaction, announcement_id: int):
     ann = get_announcement_by_id(announcement_id)
@@ -461,7 +461,7 @@ async def vymaz_oznam(interaction: Interaction, announcement_id: int):
         return
     await interaction.response.send_message(f"Naozaj chceš vymazať oznam ID `{announcement_id}`?", view=DeleteConfirmView(announcement_id))
 
-@app_commands.command(name="preview_oznam", description="Zobrazí náhľad oznamu podľa ID")
+@bot.tree.command(name="preview_oznam", description="Zobrazí náhľad oznamu podľa ID")
 @app_commands.describe(announcement_id="ID oznamu na zobrazenie")
 async def preview_oznam(interaction: Interaction, announcement_id: int):
     ann = get_announcement_by_id(announcement_id)
