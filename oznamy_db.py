@@ -101,6 +101,28 @@ def delete_announcement_by_id(announcement_id):
         cursor.execute("DELETE FROM announcements WHERE id = ?", (announcement_id,))
         conn.commit()
 
+def update_announcement_by_id(announcement_id, data):
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE announcements
+            SET typ = ?, title = ?, description = ?, datetime = ?, day = ?, link = ?, image = ?, visible_from = ?, visible_to = ?
+            WHERE id = ?
+        """, (
+            data.get("typ"),
+            data.get("title"),
+            data.get("description"),
+            data.get("datetime"),
+            data.get("day"),
+            data.get("link"),
+            data.get("image"),
+            data.get("visible_from"),
+            data.get("visible_to"),
+            announcement_id
+        ))
+        conn.commit()
+        return cursor.rowcount > 0
+
 def delete_expired_announcements():
     today = datetime.now().date()
     with sqlite3.connect(DB_FILE) as conn:
