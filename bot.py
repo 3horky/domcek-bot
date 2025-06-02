@@ -3,9 +3,9 @@ import os
 import asyncio
 import random
 from discord.ext import commands, tasks
-from discord import app_commands
+from discord import app_commands, Interaction
 from dotenv import load_dotenv
-from oznamy_db import init_db, add_announcement, get_all_announcements
+from oznamy_db import init_db, add_announcement, get_all_announcements, get_announcement_by_id, delete_announcement_by_id, update_announcement_by_id
 from discord.ui import View, Button, Modal, TextInput
 from datetime import datetime, timedelta
 
@@ -193,6 +193,73 @@ def get_day_icon(datetime_str):
             return emoji_map[key]
     return ""
 
+class DeleteConfirmView(View):
+    def __init__(self, announcement_id):
+        super().__init__(timeout=60)
+        self.announcement_id = announcement_id
+
+    @discord.ui.button(label="✅ Potvrdiť vymazanie", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: Interaction, button: Button):
+        delete_announcement_by_id(self.announcement_id)
+        await interaction.response.edit_message(content=f"✅ Oznam ID `{self.announcement_id}` bol vymazaný.", view=None)
+
+    @discord.ui.button(label="❌ Zrušiť", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: Interaction, button: Button):
+        await interaction.response.edit_message(content="Vymazanie zrušené.", view=None)
+
+class EditOznamModal(Modal, title="Uprav oznam"):
+    def __init__(self, bot, announcement_id, announcement):
+        super().__init__()
+        self.bot = bot
+        self.announcement_id = announcement_id
+        self.typ = announcement["typ"]
+        self.title_input = TextInput(label="Názov", default=announcement["title"])
+        self.description_input = TextInput(label="Popis", style=discord.TextStyle.paragraph, default=announcement["description"])
+        self.visible_input = TextInput(label="Zobrazovať od - do", default=f"{announcement['visible_from']} - {announcement['visible_to']}")
+        if self.typ == "event":
+            self.datetime_input = TextInput(label="Dátum a čas", default=announcement.get("datetime", ""))
+            self.day_input = TextInput(label="Deň", default=announcement.get("day", ""))
+        else:
+            self.image_input = TextInput(label="Obrázok URL", default=announcement.get("image", ""))
+            self.link_input = TextInput(label="Link", default=announcement.get("link", ""))
+
+        self.add_item(self.title_input)
+        self.add_item(self.description_input)
+        self.add_item(self.visible_input)
+        if self.typ == "event":
+            self.add_item(self.datetime_input)
+            self.add_item(self.day_input)
+        else:
+            self.add_item(self.image_input)
+            self.add_item(self.link_input)
+
+    async def on_submit(self, interaction: Interaction):
+        data = {
+            "title": self.title_input.value,
+            "description": self.description_input.value,
+            "visible_from": self.visible_input.value.split(" - ")[0].strip(),
+            "visible_to": self.visible_input.value.split(" - ")[1].strip(),
+        }
+        if self.typ == "event":
+            data["datetime"] = self.datetime_input.value
+            data["day"] = self.day_input.value
+        else:
+            data["image"] = self.image_input.value
+            data["link"] = self.link_input.value
+
+        update_announcement_by_id(self.announcement_id, data)
+
+        embed = generate_oznam_embed(
+            typ=self.typ,
+            title=data["title"],
+            description=data["description"],
+            datetime=data.get("datetime"),
+            link=data.get("link"),
+            image=data.get("image"),
+            day=data.get("day")
+        )
+        await interaction.response.send_message(f"✅ Oznam bol upravený.", embed=embed)
+
 class EventOznamModal(Modal, title="Nový event oznam"):
     def __init__(self, bot, title="", description="", datetime="", day="", visible_dates=""):
         super().__init__()
@@ -375,6 +442,42 @@ async def zoznam_oznamov(interaction: discord.Interaction):
     all_announcements = get_all_announcements()
     formatted = format_announcement_preview(all_announcements)
     await interaction.response.send_message(formatted if formatted else "Žiadne oznamy v databáze.")
+
+@app_commands.command(name="uprav_oznam", description="Upraví oznam podľa ID")
+@app_commands.describe(announcement_id="ID oznamu, ktorý chceš upraviť")
+async def uprav_oznam(interaction: Interaction, announcement_id: int):
+    ann = get_announcement_by_id(announcement_id)
+    if not ann:
+        await interaction.response.send_message(f"⚠️ Oznam ID `{announcement_id}` neexistuje.", ephemeral=True)
+        return
+    await interaction.response.send_modal(EditOznamModal(interaction.client, announcement_id, ann))
+
+@app_commands.command(name="vymaz_oznam", description="Vymaže oznam podľa ID")
+@app_commands.describe(announcement_id="ID oznamu, ktorý chceš vymazať")
+async def vymaz_oznam(interaction: Interaction, announcement_id: int):
+    ann = get_announcement_by_id(announcement_id)
+    if not ann:
+        await interaction.response.send_message(f"⚠️ Oznam ID `{announcement_id}` neexistuje.", ephemeral=True)
+        return
+    await interaction.response.send_message(f"Naozaj chceš vymazať oznam ID `{announcement_id}`?", view=DeleteConfirmView(announcement_id))
+
+@app_commands.command(name="preview_oznam", description="Zobrazí náhľad oznamu podľa ID")
+@app_commands.describe(announcement_id="ID oznamu na zobrazenie")
+async def preview_oznam(interaction: Interaction, announcement_id: int):
+    ann = get_announcement_by_id(announcement_id)
+    if not ann:
+        await interaction.response.send_message(f"⚠️ Oznam ID `{announcement_id}` neexistuje.", ephemeral=True)
+        return
+    embed = generate_oznam_embed(
+        typ=ann["typ"],
+        title=ann["title"],
+        description=ann["description"],
+        datetime=ann.get("datetime"),
+        link=ann.get("link"),
+        image=ann.get("image"),
+        day=ann.get("day")
+    )
+    await interaction.response.send_message(embed=embed)
 
 # Pomocná funkcia: kontrola, či sme v kanáli console
 def only_in_command_channel():
