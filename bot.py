@@ -383,7 +383,7 @@ class EditOznamModal(Modal, title="Uprav oznam"):
 
         update_announcement_by_id(self.announcement_id, data)
 
-        light_color, dark_color = MONTH_COLORS.get(target_date.month, (0xDDDDDD, 0x999999))
+        light_color, dark_color = MONTH_COLORS.get(datetime.now().month, (0xDDDDDD, 0x999999))
         embed_color = light_color if self["typ"] == "info" else dark_color
 
         embed = generate_oznam_embed(
@@ -417,7 +417,7 @@ class EventOznamModal(Modal, title="Nový event oznam"):
         children = [c.value for c in self.children]
         title, description, datetime_str, day, visible_range = children
 
-        light_color, dark_color = MONTH_COLORS.get(target_date.month, (0xDDDDDD, 0x999999))
+        light_color, dark_color = MONTH_COLORS.get(datetime.now().month, (0xDDDDDD, 0x999999))
         
         embed = generate_oznam_embed("event", title, description, datetime_str, None, None, day, dark_color)
         await interaction.response.send_message(embed=embed, view=OznamConfirmView(self.bot, {
@@ -450,7 +450,7 @@ class InfoOznamModal(Modal, title="Nový info oznam"):
         children = [c.value for c in self.children]
         title, description, image, link, visible_range = children
 
-        light_color, dark_color = MONTH_COLORS.get(target_date.month, (0xDDDDDD, 0x999999))
+        light_color, dark_color = MONTH_COLORS.get(datetime.now().month, (0xDDDDDD, 0x999999))
         
         embed = generate_oznam_embed("info", title, description, None, link, image, None, light_color)
         await interaction.response.send_message(embed=embed, view=OznamConfirmView(self.bot, {
