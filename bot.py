@@ -2,6 +2,7 @@ import discord
 import os
 import asyncio
 import random
+import requests
 from discord.ext import commands, tasks
 from discord import app_commands, Interaction
 from dotenv import load_dotenv
@@ -227,7 +228,8 @@ def generate_oznam_embed(typ, title, description, datetime, link, image, day, oz
     else:
         embed.title = title
     if typ == "info" and image:
-        embed.set_thumbnail(url=image)
+        encoded_url = requests.utils.quote(image, safe='')
+        embed.set_thumbnail(url=f"http://217.154.124.73:8080/thumbnail?url={encoded_url}")
     return embed
 
 # Formátovanie jedinečných embedov ako oznamov
