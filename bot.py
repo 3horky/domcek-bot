@@ -44,6 +44,13 @@ REACTION_EMOJI = os.getenv("DEFAULT_REACTION_EMOJI", "<:3horky:13772648069055160
 AUTO_REACT_CHANNELS = set()
 THOUGHTS_FILE = "thoughts.txt"
 
+# Pomocná funkcia na zistenie najbližšej soboty o 10:00
+def get_next_saturday_at_10():
+    today = datetime.now()
+    days_until_saturday = (5 - today.weekday()) % 7  # sobota = 5
+    next_saturday = today + timedelta(days=days_until_saturday)
+    return next_saturday.replace(hour=10, minute=0, second=0, microsecond=0)
+
 async def cron_clean_expired_announcements():
     while True:
         now = datetime.now()
@@ -177,6 +184,34 @@ def generate_oznam_embed(typ, title, description, datetime, link, image, day):
     if typ == "info" and image:
         embed.set_thumbnail(url=image)
     return embed
+
+# Formátovanie jedinečných embedov ako oznamov
+def generate_announcement_embeds_for_date(target_date: datetime):
+    all_announcements = get_all_announcements()
+    embeds = []
+
+    for ann in sort_announcements(all_announcements):
+        try:
+            visible_from = datetime.strptime(ann["visible_from"], "%d.%m.%Y")
+            visible_to = datetime.strptime(ann["visible_to"], "%d.%m.%Y")
+        except Exception:
+            continue
+
+        if not (visible_from <= target_date <= visible_to):
+            continue
+
+        embed = generate_oznam_embed(
+            typ=ann["typ"],
+            title=ann["title"],
+            description=ann["description"],
+            datetime=ann.get("datetime"),
+            link=ann.get("link"),
+            image=ann.get("image"),
+            day=ann.get("day")
+        )
+        embeds.append(embed)
+
+    return embeds
 
 def get_day_icon(datetime_str):
     emoji_map = {
@@ -479,6 +514,35 @@ async def preview_oznam(interaction: Interaction, announcement_id: int):
         day=ann.get("day")
     )
     await interaction.response.send_message(embed=embed)
+
+# Slash príkaz na generovanie oznamov pre určený deň
+@bot.tree.command(name="vygeneruj_oznamy", description="Vygeneruje oznamy pre zadaný deň alebo najbližší sobotu.")
+@app_commands.describe(
+    datum="Dátum v tvare DD.MM alebo DD.MM.YYYY. Ak nie je zadaný, použije sa najbližšia sobota."
+)
+async def vygeneruj_oznamy(interaction: discord.Interaction, datum: str = None):
+    if datum is None:
+        target_datetime = get_next_saturday_at_10()
+        intro_message = f"Zobrazujem oznamy k dátumu najbližšieho zverejnenia: **{target_datetime.strftime('%d.%m.%Y %H:%M')}**"
+    else:
+        try:
+            if len(datum) <= 5:
+                datum += f".{datetime.now().year}"
+            target_datetime = datetime.strptime(datum, "%d.%m.%Y")
+            intro_message = f"Zobrazujem oznamy k **{target_datetime.strftime('%d.%m.%Y')}**"
+        except ValueError:
+            await interaction.response.send_message("Neplatný formát dátumu. Použite DD.MM alebo DD.MM.YYYY.", ephemeral=True)
+            return
+
+    embeds = generate_announcement_embeds_for_date(target_datetime)
+
+    if not embeds:
+        await interaction.response.send_message(f"{intro_message}\n\n❤\ufe0f Žiadne oznamy nie sú k dispozícii pre tento deň.")
+        return
+
+    await interaction.response.send_message(intro_message)
+    for embed in embeds:
+        await interaction.channel.send(embed=embed)
 
 # Pomocná funkcia: kontrola, či sme v kanáli console
 def only_in_command_channel():
