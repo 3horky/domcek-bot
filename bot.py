@@ -30,6 +30,22 @@ CHANNEL_NAME_TEMPLATE = "{emoji}・{name}"
 ARCHIVE_EMOJI = "✅"
 OZNAMY_ROLE = "Oznamy"
 
+# Farby pre každý mesiac (jemná pre INFO, sýta pre EVENT)
+MONTH_COLORS = {
+    1: (0xCFE2F3, 0x3C78D8),   # Január
+    2: (0xD9EAD3, 0x6AA84F),   # Február
+    3: (0xFFF2CC, 0xF1C232),   # Marec
+    4: (0xFCE5CD, 0xE69138),   # Apríl
+    5: (0xF4CCCC, 0xCC0000),   # Máj
+    6: (0xD9D2E9, 0x674EA7),   # Jún
+    7: (0xD0E0E3, 0x3D85C6),   # Júl
+    8: (0xEAD1DC, 0xA64D79),   # August
+    9: (0xD9EAD3, 0x38761D),   # September
+    10: (0xF9CB9C, 0xE69138),  # Október
+    11: (0xCFE2F3, 0x6D9EEB),  # November
+    12: (0xFCE5CD, 0xB45F06),  # December
+}
+
 EMOJI_BY_DAY = {
     "pondelok": "https://cdn3.emoji.gg/emojis/5712_monday.png",
     "utorok": "https://cdn3.emoji.gg/emojis/6201_tuesday.png",
@@ -84,39 +100,64 @@ def is_december(date):
 def is_january(date):
     return date.month == 1
 
-def sort_announcements(announcements):
+def sort_announcements(announcements, publish_date=None):
+    def parse_date_flexible(date_str):
+        try:
+            return datetime.strptime(date_str.strip(), "%d.%m.%Y")
+        except Exception:
+            return None
+
+    def parse_event_date(event_str):
+        try:
+            date_part = event_str.strip().split("//")[0].strip()
+            return datetime.strptime(date_part, "%d.%m.")
+        except Exception:
+            return None
+
     def announcement_sort_key(a):
         typ = a.get("typ", "info")
         created_at = a.get("created_at", "")
         created_dt = datetime.fromisoformat(created_at) if created_at else datetime.min
-        visible_from = parse_date(a.get("visible_from", "01.01.1970")) or datetime.min
+        visible_from = parse_date_flexible(a.get("visible_from", "01.01.1970")) or datetime.min
 
         if typ == "event":
             event_date = parse_event_date(a.get("datetime", "")) or datetime.max
-            # Upravíme dátum roka na 2000 kvôli porovnávaniu dec-jan
             try:
-                event_date = event_date.replace(year=2000)
+                event_date = event_date.replace(year=2000)  # jednotné porovnanie pre dec/jan
             except Exception:
                 pass
-            return (1, 1, event_date, created_dt)  # typ 1 = event
+            return (1, 1, event_date, created_dt)
         else:
-            return (0, 0, visible_from, created_dt)  # typ 0 = info
+            return (0, 0, visible_from, created_dt)
 
     def announcement_group(a):
-        now = datetime.now()
-        visible_from = parse_date(a.get("visible_from", "01.01.1970"))
-        visible_to = parse_date(a.get("visible_to", "31.12.9999"))
+        now = datetime.now() if publish_date is None else publish_date
+        visible_from = parse_date_flexible(a.get("visible_from", "01.01.1970"))
+        visible_to = parse_date_flexible(a.get("visible_to", "31.12.9999"))
         if visible_from and visible_to:
             if visible_from <= now <= visible_to:
                 return 0  # Aktuálne
         return 1  # Plánované
 
-    # Najprv rozdelíme na aktuálne a plánované
-    announcements.sort(key=lambda a: (
-        announcement_group(a),         # aktuálne/plánované
-        a["typ"] != "info",            # info < event
-        announcement_sort_key(a)       # podľa typu
-    ))
+    if publish_date:
+        # Vyfiltruj len aktuálne k danému dátumu
+        announcements = [
+            a for a in announcements
+            if announcement_group(a) == 0
+        ]
+        # Zoradenie: INFO pred EVENT, potom podľa sort key
+        announcements.sort(key=lambda a: (
+            a["typ"] != "info",          # INFO skôr ako EVENT
+            announcement_sort_key(a)     # ďalšie triedenie
+        ))
+    else:
+        # Klasické delenie na aktuálne / plánované
+        announcements.sort(key=lambda a: (
+            announcement_group(a),
+            a["typ"] != "info",
+            announcement_sort_key(a)
+        ))
+
     return announcements
 
 def format_announcement_preview(announcements):
@@ -190,7 +231,7 @@ def generate_announcement_embeds_for_date(target_date: datetime):
     all_announcements = get_all_announcements()
     embeds = []
 
-    for ann in sort_announcements(all_announcements):
+    for ann in sort_announcements(all_announcements, publish_date=target_date):
         try:
             visible_from = datetime.strptime(ann["visible_from"], "%d.%m.%Y")
             visible_to = datetime.strptime(ann["visible_to"], "%d.%m.%Y")
@@ -199,6 +240,9 @@ def generate_announcement_embeds_for_date(target_date: datetime):
 
         if not (visible_from <= target_date <= visible_to):
             continue
+
+        light_color, dark_color = MONTH_COLORS.get(target_date.month, (0xDDDDDD, 0x999999))
+        color = light_color if ann["typ"] == "info" else dark_color
 
         embed = generate_oznam_embed(
             typ=ann["typ"],
@@ -540,9 +584,9 @@ async def vygeneruj_oznamy(interaction: discord.Interaction, datum: str = None):
         await interaction.response.send_message(f"{intro_message}\n\n❤\ufe0f Žiadne oznamy nie sú k dispozícii pre tento deň.")
         return
 
-    await interaction.response.send_message(intro_message)
-    for embed in embeds:
-        await interaction.channel.send(embed=embed)
+    # Hlavička v textovej správe
+    message = f"{intro_message}\n\n⇣"
+    await interaction.response.send_message(content=message, embeds=embeds)
 
 # Pomocná funkcia: kontrola, či sme v kanáli console
 def only_in_command_channel():
