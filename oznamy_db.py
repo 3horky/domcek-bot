@@ -124,11 +124,25 @@ def update_announcement_by_id(announcement_id, data):
         return cursor.rowcount > 0
 
 def delete_expired_announcements():
-    today = datetime.now().date()
+    from datetime import datetime, date
+    today = date.today()
     with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            DELETE FROM announcements
-            WHERE DATE(substr(visible_to, 7, 4) || '-' || substr(visible_to, 4, 2) || '-' || substr(visible_to, 1, 2)) < DATE(?)
-        """, (today.isoformat(),))
-        conn.commit()
+        cur = conn.cursor()
+        cur.execute("SELECT id, visible_to FROM announcements")
+        rows = cur.fetchall()
+
+        to_delete = []
+        for _id, vis_to in rows:
+            if not vis_to:
+                continue
+            try:
+                d = datetime.strptime(vis_to.strip(), "%d.%m.%Y").date()
+                if d < today:
+                    to_delete.append((_id,))
+            except Exception:
+                # ak je hodnota poškodená, môžeš ju buď vynechať, zalogovať, alebo tiež zmazať
+                pass
+
+        if to_delete:
+            cur.executemany("DELETE FROM announcements WHERE id = ?", to_delete)
+            conn.commit()
