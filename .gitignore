@@ -1,0 +1,23 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtualenv
+venv/
+.env/
+.env.* 
+
+# Databazy
+*.db
+*.sqlite3
+
+# Logs
+*.log
+
+# Thumbnails cache
+thumbnails/
+
+# IDE / editor
+.vscode/
+.idea/
