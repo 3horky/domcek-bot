@@ -1,4 +1,5 @@
 import sqlite3
+import json
 from datetime import datetime
 
 DB_FILE = "oznamy.db"
@@ -19,6 +20,12 @@ def init_db():
                 visible_from TEXT,
                 visible_to TEXT,
                 created_at TEXT NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
             )
         """)
         conn.commit()
@@ -146,3 +153,28 @@ def delete_expired_announcements():
         if to_delete:
             cur.executemany("DELETE FROM announcements WHERE id = ?", to_delete)
             conn.commit()
+
+def get_setting(key, default=None):
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM bot_settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        if row:
+            try:
+                return json.loads(row[0])
+            except json.JSONDecodeError:
+                return row[0]
+        return default
+
+def set_setting(key, value):
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        if not isinstance(value, str):
+            value = json.dumps(value)
+            
+        cursor.execute("""
+            INSERT INTO bot_settings (key, value)
+            VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """, (key, value))
+        conn.commit()

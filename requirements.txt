@@ -8,10 +8,8 @@ blinker==1.9.0
 cachetools==5.5.2
 certifi==2025.4.26
 charset-normalizer==3.4.2
-click==8.2.1
-discord==2.3.2
+click
 discord.py==2.5.2
-dotenv==0.9.9
 Flask==3.1.1
 frozenlist==1.6.0
 google-auth==2.40.2
@@ -24,9 +22,8 @@ itsdangerous==2.2.0
 Jinja2==3.1.6
 MarkupSafe==3.0.2
 multidict==6.4.4
-numpy==2.2.6
-opencv-contrib-python-headless==4.11.0.86
-opencv-python-headless==4.11.0.86
+numpy
+opencv-contrib-python-headless
 propcache==0.3.1
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
