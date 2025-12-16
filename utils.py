@@ -1,9 +1,20 @@
 import discord
 import requests
 import urllib.parse
+import subprocess
 from datetime import datetime, timedelta
 from config import MONTH_COLORS, EMOJI_BY_DAY
 from oznamy_db import get_all_announcements
+
+def get_bot_version():
+    try:
+        # Get the commit hash (short)
+        commit_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode("utf-8").strip()
+        # Get the commit date
+        commit_date = subprocess.check_output(["git", "show", "-s", "--format=%cd", "--date=format:%d.%m.%Y %H:%M", "HEAD"]).decode("utf-8").strip()
+        return f"{commit_date} ({commit_hash})"
+    except Exception:
+        return "Neznáma verzia"
 
 def get_next_saturday_at_10():
     now = datetime.now()

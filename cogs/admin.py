@@ -4,6 +4,7 @@ from discord import app_commands
 from discord.ui import View, Button, Select, Modal, TextInput, UserSelect, ChannelSelect
 from config import ADMIN_ROLE
 from oznamy_db import get_setting, set_setting
+from utils import get_bot_version
 
 class Admin(commands.Cog):
     def __init__(self, bot):
@@ -45,6 +46,7 @@ def get_main_embed(bot):
     
     embed.add_field(name="Všeobecné nastavenia", value=f"Emoji: {emoji}\nRozvrh: {schedule.get('day')} o {schedule.get('time')}\nStav: {status_icon} {status_text}", inline=False)
     
+    embed.set_footer(text=f"Verzia: {get_bot_version()}")
     return embed
 
 class MainAdminView(View):
