@@ -21,6 +21,8 @@ class DomcekBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
         self.reaction_emoji = REACTION_EMOJI
         self.auto_react_channels = set()
+        # Initialize database
+        init_db()
 
     async def setup_hook(self):
         self.tree.on_error = self.on_tree_error

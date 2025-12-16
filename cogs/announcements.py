@@ -281,22 +281,21 @@ class Announcements(commands.Cog):
         if schedule["day"] == "Not set" or schedule["time"] == "Not set":
             return
 
+        days_map = {
+            "Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, 
+            "Friday": 4, "Saturday": 5, "Sunday": 6
+        }
+        target_day_int = days_map.get(schedule["day"])
+
         # --- Publishing Logic ---
         # Check if today is the day and time matches
-        # Assuming schedule["day"] is English day name (e.g. "Friday")
-        if now.strftime("%A") == schedule["day"] and now.strftime("%H:%M") == schedule["time"]:
+        # Use weekday() (0-6) instead of strftime("%A") to avoid locale issues
+        if target_day_int is not None and now.weekday() == target_day_int and now.strftime("%H:%M") == schedule["time"]:
             print(f"[📅] Auto-publishing announcements (Schedule: {schedule['day']} {schedule['time']})")
             await self.publish_announcements()
 
         # --- Reminder Logic ---
         # Reminder is sent the day BEFORE at 20:00
-        # Calculate day before
-        days_map = {
-            "Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, 
-            "Friday": 4, "Saturday": 5, "Sunday": 6
-        }
-        
-        target_day_int = days_map.get(schedule["day"])
         if target_day_int is not None:
             reminder_day_int = (target_day_int - 1) % 7
             

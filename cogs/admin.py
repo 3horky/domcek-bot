@@ -448,9 +448,10 @@ class DaySelect(Select):
         set_setting("publish_schedule", schedule)
         
         # Refresh view
-        embed = interaction.message.embeds[0]
-        embed.set_field_at(0, name="Aktuálne nastavenie", value=f"{schedule.get('day')} o {schedule.get('time')}")
-        await interaction.response.edit_message(embed=embed, view=ScheduleConfigView(self.bot))
+        if interaction.message:
+            embed = interaction.message.embeds[0]
+            embed.set_field_at(0, name="Aktuálne nastavenie", value=f"{schedule.get('day')} o {schedule.get('time')}")
+            await interaction.response.edit_message(embed=embed, view=ScheduleConfigView(self.bot))
 
 class SetTimeModal(Modal):
     def __init__(self, bot):

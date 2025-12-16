@@ -5,11 +5,9 @@ import os
 DB_FILE = "oznamy.db"
 
 def migrate():
-    if not os.path.exists(DB_FILE):
-        print(f"Database file {DB_FILE} not found. Nothing to migrate.")
-        # If the DB doesn't exist, running the bot will create it with the correct schema via init_db()
-        # But we can also just initialize it here.
-        return
+    # if not os.path.exists(DB_FILE):
+    #     print(f"Database file {DB_FILE} not found. Nothing to migrate.")
+    #     return
 
     print(f"Migrating database {DB_FILE}...")
     
