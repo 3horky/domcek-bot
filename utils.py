@@ -3,8 +3,13 @@ import requests
 import urllib.parse
 import subprocess
 from datetime import datetime, timedelta
-from config import MONTH_COLORS, EMOJI_BY_DAY
+from config import MONTH_COLORS, EMOJI_BY_DAY, THUMB_BASE_URL
 from oznamy_db import get_all_announcements
+
+def proxied_thumb_url(original_url: str) -> str:
+    if not original_url:
+        return ""
+    return f"{THUMB_BASE_URL}?url={urllib.parse.quote_plus(original_url)}"
 
 def get_bot_version():
     try:
@@ -169,8 +174,11 @@ def generate_oznam_embed(typ, title, description, datetime_str, link, image, day
     else:
         embed.title = title
     if typ == "info" and image:
-        encoded_url = urllib.parse.quote(image, safe='')
-        embed.set_thumbnail(url=f"http://217.154.124.73:8080/thumbnail?url={encoded_url}")
+        thumb = proxied_thumb_url(image)
+        embed.set_thumbnail(url=thumb)
+        
+        # encoded_url = urllib.parse.quote(image, safe='')
+        # embed.set_thumbnail(url=f"http://217.154.124.73:8080/thumbnail?url={encoded_url}")
     return embed
 
 # Formátovanie jedinečných embedov ako oznamov

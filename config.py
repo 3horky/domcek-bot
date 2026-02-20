@@ -8,6 +8,7 @@ load_dotenv()
 AUTHORIZED_ROLE = os.getenv("AUTHORIZED_ROLE", "Team Mod")
 ADMIN_ROLE = os.getenv("ADMIN_ROLE", "Admin")
 OZNAMY_ROLE = os.getenv("OZNAMY_ROLE", "Oznamy")
+THUMB_BASE_URL = os.getenv("THUMB_BASE_URL", "https://thumbserver.3horky.sk/thumbnail")
 
 # ID kanálov a kategórií (musia byť int)
 def get_int_env(name, default):

@@ -330,7 +330,7 @@ class Announcements(commands.Cog):
 
         try:
             client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-            response = client.models.generate_content(
+            response = await client.aio.models.generate_content(
                 model="gemini-flash-lite-latest",
                 contents="Napíš 3-5 vetový pozdrav a úvod k správe plnej informácii a aktuálnych oznamov. Prihováraš sa 200 mladým ľuďom. Ak by ti to bolo treba kvôli správnej formulácii, si mužského rodu. Namiesto 'všetci' a ekvivalentov oslovuj @everyone. Po oslovení urob nový riadok. Na každý ďalší takýto prompt odpovedz originálnou správou. Môžeš používať emoji. Ak sa v správe odkazuješ k aktuálnemu obdobiu (sviatky, mesiace, výročia, dni), ubezpeč sa, že to zodpovedá aktuálnemu dátumu."
             )
