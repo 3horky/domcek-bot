@@ -1,0 +1,13 @@
+[Unit]
+Description=Carlo production PostgreSQL and media backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=carlo
+Group=carlo
+EnvironmentFile=/etc/carlo/backup.env
+WorkingDirectory=/opt/carlo/v2
+UMask=0077
+ExecStart=/opt/carlo/v2/scripts/backup_production.sh ${CARLO_BACKUP_DIR}

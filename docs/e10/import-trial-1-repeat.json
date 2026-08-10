@@ -1,0 +1,81 @@
+{
+  "as_of": "2026-08-10",
+  "format_version": 1,
+  "inventory": {
+    "active_as_of": 0,
+    "announcements_total": 2,
+    "duplicates": 0,
+    "event_total": 1,
+    "expired_as_of": 2,
+    "future_as_of": 0,
+    "info_total": 1,
+    "invalid": 0
+  },
+  "issues": [],
+  "items": [
+    {
+      "action": "import_manual_inactive",
+      "active": false,
+      "ends_at": "2025-12-12T20:00:00+01:00",
+      "ends_on": null,
+      "kind": "event",
+      "legacy_id": 1,
+      "match_candidates": [],
+      "migration_key": "legacy-announcement:1",
+      "starts_at": "2025-12-12T19:00:00+01:00",
+      "starts_on": null,
+      "target_id": "0fb25ab8-707d-588e-afc7-0f89a3f57928",
+      "title": "Predvianočná čajovňa",
+      "valid_from": null,
+      "valid_until": null,
+      "warnings": [
+        "legacy_event_end_inferred_60_minutes"
+      ]
+    },
+    {
+      "action": "import_info_inactive",
+      "active": false,
+      "ends_at": null,
+      "ends_on": null,
+      "kind": "info",
+      "legacy_id": 2,
+      "match_candidates": [],
+      "migration_key": "legacy-announcement:2",
+      "starts_at": null,
+      "starts_on": null,
+      "target_id": "1b304c8d-b44f-57db-bb04-87bca2087907",
+      "title": "Advent v našom stredisku",
+      "valid_from": "2025-12-10",
+      "valid_until": "2025-12-23",
+      "warnings": []
+    }
+  ],
+  "result": {
+    "inserted_info": 0,
+    "inserted_manual": 0,
+    "inserted_overrides": 0,
+    "needs_review": 0,
+    "settings_changed": 0,
+    "skipped_existing": 2
+  },
+  "settings": {
+    "publication": {
+      "active": true,
+      "time": "09:00",
+      "weekday": 4
+    },
+    "reaction": {
+      "channel_ids": [
+        1448319121132490894
+      ],
+      "emoji_id": 1448575722774855681,
+      "emoji_unicode": null
+    },
+    "unsupported": {
+      "error_notification_users": [
+        713075588155441243
+      ]
+    }
+  },
+  "source_sha256": "5ef992e08ae66fecad23764b0dcd5bb0c709fa399c15de1c1d299bd514481c02"
+}

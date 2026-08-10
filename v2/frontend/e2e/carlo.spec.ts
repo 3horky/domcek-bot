@@ -1,0 +1,621 @@
+import { expect, test, type Page, type Route } from '@playwright/test'
+
+type Role = 'admin' | 'team_mod' | 'publisher' | 'none'
+
+interface MockState {
+  role: Role
+  eventDescription: string
+  includedStop: boolean
+  manualEvents: Record<string, unknown>[]
+  infoAnnouncements: Record<string, unknown>[]
+  calls: Array<{ path: string; method: string; body: unknown }>
+  published: boolean
+  archives: Record<string, unknown>[]
+  memberRoles: string[]
+  extraEvents: number
+}
+
+const normalEvent = {
+  kind: 'external_event',
+  source_id: 'event-1',
+  title: 'Otvorený Domček',
+  description: 'Príďte medzi nás.',
+  included: true,
+  exclusion_reason: null,
+  display_time: '12.08. // 18:00–20:00',
+  day_name: 'streda',
+  day_emoji: null,
+  is_all_day: false,
+  source_title: 'Otvorený Domček',
+  source_description: 'Text priamo z Google kalendára.',
+  is_recurring: true,
+  instance_override_version: 0,
+  instance_public_title: null,
+  instance_description_state: 'inherit',
+  instance_public_description: null,
+  inclusion_decision: 'auto',
+  series_override_version: 0,
+  series_public_title: null,
+  series_description_state: 'inherit',
+  series_public_description: null,
+}
+
+const stopEvent = {
+  ...normalEvent,
+  source_id: 'event-stop',
+  title: 'Interná porada',
+  source_title: 'Interná porada',
+  description: null,
+  source_description: 'stop carlo',
+  included: false,
+  exclusion_reason: 'source_stop_phrase',
+  is_recurring: false,
+}
+
+function capabilities(role: Role) {
+  if (role === 'admin')
+    return [
+      'view_admin',
+      'edit_content',
+      'force_inclusion',
+      'manual_publish',
+      'manage_channels',
+      'approve_archive',
+      'manage_settings',
+      'manage_roles',
+      'view_full_audit',
+    ]
+  if (role === 'team_mod') return ['view_admin', 'edit_content', 'manage_channels']
+  if (role === 'publisher') return ['view_admin', 'manual_publish']
+  return []
+}
+
+async function mockCarlo(page: Page, role: Role = 'admin'): Promise<MockState> {
+  const state: MockState = {
+    role,
+    eventDescription: 'Príďte medzi nás.',
+    includedStop: false,
+    manualEvents: [],
+    infoAnnouncements: [],
+    calls: [],
+    published: false,
+    archives: [],
+    memberRoles: [],
+    extraEvents: 0,
+  }
+  await page
+    .context()
+    .addCookies([{ name: 'domcek_csrf', value: 'e2e-csrf', url: 'http://127.0.0.1:4174' }])
+  await page.route('**/api/v1/**', async (route) => handleApi(route, state))
+  return state
+}
+
+async function handleApi(route: Route, state: MockState) {
+  const role = state.role
+  const request = route.request()
+  const path = new URL(request.url()).pathname
+  const method = request.method()
+  const contentType = request.headers()['content-type'] ?? ''
+  const body = contentType.includes('application/json') ? request.postDataJSON() : null
+  state.calls.push({ path, method, body })
+  const json = (value: unknown, status = 200) =>
+    route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(value) })
+
+  if (path === '/api/v1/session') {
+    if (role === 'none') return json({ code: 'authentication_required' }, 401)
+    return json({
+      authenticated: true,
+      user: { id: '123', username: role, display_name: roleLabel(role), avatar_url: null },
+      guild_id: '456',
+      roles: [role],
+      capabilities: capabilities(role),
+      expires_at: '2026-08-11T12:00:00Z',
+    })
+  }
+  if (role === 'none') return json({ code: 'authentication_required' }, 401)
+  if (path === '/api/v1/publication/draft') return json(draft(state))
+  if (path === '/api/v1/publication/dashboard')
+    return json({
+      automatic_publication_enabled: true,
+      last_calendar_sync_at: '2026-08-10T18:00:00Z',
+      pending_archive_count: state.archives.length,
+      last_publication: state.published
+        ? {
+            id: 'run-1',
+            scheduled_for: '2026-08-10T18:00:00Z',
+            completed_at: '2026-08-10T18:01:00Z',
+            state: 'succeeded_manual',
+            mode: 'manual',
+          }
+        : null,
+    })
+  if (path === '/api/v1/manual-events' && method === 'GET') return json(state.manualEvents)
+  if (path === '/api/v1/manual-events' && method === 'POST') {
+    const values = body as Record<string, unknown>
+    const record = {
+      id: 'manual-1',
+      guild_id: '456',
+      title: values.title,
+      description: values.description ?? null,
+      is_all_day: values.is_all_day,
+      starts_at: values.starts_at ?? null,
+      ends_at: values.ends_at ?? null,
+      starts_on: values.starts_on ?? null,
+      ends_on: values.ends_on ?? null,
+      timezone: 'Europe/Bratislava',
+      link_url: null,
+      active: true,
+      deleted_at: null,
+      version: 1,
+    }
+    state.manualEvents = [record]
+    return json(record, 201)
+  }
+  if (path === '/api/v1/info-announcements' && method === 'GET')
+    return json(state.infoAnnouncements)
+  if (path === '/api/v1/info-announcements' && method === 'POST') {
+    const values = body as Record<string, unknown>
+    const record = {
+      id: 'info-1',
+      guild_id: '456',
+      title: values.title,
+      description: values.description,
+      valid_from: values.valid_from,
+      valid_until: values.valid_until,
+      link_url: null,
+      image_url: values.image_url ?? null,
+      active: true,
+      deleted_at: null,
+      version: 1,
+    }
+    state.infoAnnouncements = [record]
+    return json(record, 201)
+  }
+  if (path === '/api/v1/uploads/info-images')
+    return json({ image_url: '/media/info/e2e.webp', width: 320, height: 180 }, 201)
+  if (path.includes('/override') || path.includes('/series-override')) {
+    const values = body as Record<string, unknown>
+    if (path.includes('event-stop'))
+      state.includedStop = values.inclusion_decision === 'force_include'
+    else if (values.public_description) state.eventDescription = String(values.public_description)
+    return json({ version: 1 })
+  }
+  if (path === '/api/v1/publication/manual/preview') {
+    if (!capabilities(role).includes('manual_publish')) return json({ code: 'forbidden' }, 403)
+    return json({
+      confirmation_token: 'confirmation',
+      scheduled_for: '2026-08-10T18:00:00Z',
+      slot_key: 'slot-1',
+      announcement_count: draft(state).public_items.length,
+      message_count: 1,
+      draft: draft(state),
+    })
+  }
+  if (path === '/api/v1/publication/manual/confirm') {
+    if (!capabilities(role).includes('manual_publish')) return json({ code: 'forbidden' }, 403)
+    state.published = true
+    return json({ run_id: 'run-1', state: 'succeeded_manual', slot_key: 'slot-1' })
+  }
+  if (path === '/api/v1/admin/settings') return json(adminSettings())
+  if (path === '/api/v1/admin/discord/directory') return json(directory())
+  if (path === '/api/v1/admin/archives' && method === 'GET') return json(state.archives)
+  if (path === '/api/v1/admin/archives' && method === 'POST') {
+    const record = archiveRecord()
+    state.archives = [record]
+    return json(record, 201)
+  }
+  if (path.includes('/api/v1/admin/archives/') && path.endsWith('/decision')) {
+    state.archives = []
+    return json({ ...archiveRecord(), state: 'executed' })
+  }
+  if (path === '/api/v1/admin/channels' && method === 'POST')
+    return json(
+      { channel_id: '777', name: 'e2e-projekt', jump_url: 'https://discord.test/777' },
+      201,
+    )
+  if (path === '/api/v1/admin/discord/members')
+    return json([
+      {
+        id: '999',
+        username: 'tester',
+        display_name: 'Testovací člen',
+        avatar_url: null,
+        role_ids: state.memberRoles,
+      },
+    ])
+  if (path === '/api/v1/admin/discord/roles' && method === 'PUT') {
+    const values = body as Record<string, unknown>
+    state.memberRoles = values.enabled ? ['901'] : []
+    return json({
+      id: '999',
+      username: 'tester',
+      display_name: 'Testovací člen',
+      avatar_url: null,
+      role_ids: state.memberRoles,
+    })
+  }
+  if (path === '/api/v1/publication/history' || path === '/api/v1/publication/shadow-history')
+    return json([])
+  if (path === '/api/v1/audit') return json([])
+  if (path === '/api/v1/operations/summary') return json({ processes: [], calendars: [] })
+  return json({})
+}
+
+function draft(state: MockState) {
+  const editorEvents = [
+    { ...normalEvent, description: state.eventDescription },
+    { ...stopEvent, included: state.includedStop },
+  ]
+  for (let index = 0; index < state.extraEvents; index += 1) {
+    editorEvents.push({
+      ...normalEvent,
+      source_id: `event-extra-${index}`,
+      title: `Programová udalosť ${index + 1}`,
+      source_title: `Programová udalosť ${index + 1}`,
+      description: `Redakčný popis ${index + 1}`,
+      is_recurring: false,
+    })
+  }
+  const publicItems: Record<string, unknown>[] = [editorEvents[0]]
+  publicItems.push(...editorEvents.slice(2))
+  if (state.includedStop) publicItems.push(editorEvents[1])
+  for (const item of state.manualEvents) {
+    publicItems.push({
+      kind: 'manual_event',
+      source_id: item.id,
+      title: item.title,
+      description: item.description,
+      included: true,
+      display_time: '15.–21.08. // celý deň',
+      is_all_day: true,
+    })
+  }
+  for (const item of state.infoAnnouncements) {
+    publicItems.push({
+      kind: 'info',
+      source_id: item.id,
+      title: item.title,
+      description: item.description,
+      included: true,
+      display_time: null,
+      is_all_day: null,
+    })
+  }
+  return {
+    composer_version: 'e4-v2',
+    guild_id: 456,
+    slot_key: 'slot-1',
+    scheduled_for: '2026-08-10T18:00:00Z',
+    scheduled_local: '2026-08-10T20:00:00+02:00',
+    timezone: 'Europe/Bratislava',
+    window_starts_at: '2026-08-10T18:00:00Z',
+    window_ends_at: '2026-08-24T18:00:00Z',
+    intro_text: 'Ahojte!',
+    outro_text: null,
+    editor_events: editorEvents,
+    public_items: publicItems,
+    warnings: [],
+    messages: [
+      {
+        position: 0,
+        part_key: 'part-1',
+        content: '@everyone Ahojte!',
+        embeds: publicItems.map((item) => ({
+          item_kind: item.kind,
+          source_id: item.source_id,
+          color: item.kind === 'info' ? 0xf9e79f : 0xd68910,
+          title: item.title,
+          description: item.description,
+          author_name: item.kind === 'info' ? null : 'streda',
+          author_icon_url: null,
+          link_url: null,
+          thumbnail_url: null,
+        })),
+        allowed_mentions: ['everyone'],
+        seen_target: true,
+      },
+    ],
+  }
+}
+
+function adminSettings() {
+  return {
+    publication: {
+      guild_id: '456',
+      timezone: 'Europe/Bratislava',
+      publication_weekday: 0,
+      publication_time: '20:00:00',
+      automatic_publication_enabled: true,
+      publish_google_descriptions: false,
+      generated_intro_enabled: true,
+      everyone_mention_enabled: true,
+      allow_stale_calendar_cache: false,
+      alert_calendar_sync_enabled: true,
+      alert_publication_enabled: true,
+      alert_channel_operations_enabled: true,
+      alert_role_operations_enabled: true,
+      alert_publication_reminder_enabled: false,
+      admin_role_id: '900',
+      team_mod_role_id: '901',
+      publisher_role_id: '902',
+      announcement_channel_id: '700',
+      command_channel_id: '701',
+      moderator_channel_id: '701',
+      projects_category_id: '800',
+      archive_category_id: '801',
+      closing_message: null,
+      version: 1,
+    },
+    calendars: [],
+    reactions: {
+      guild_id: '456',
+      seen_enabled: true,
+      seen_emoji_id: null,
+      seen_emoji_unicode: '✅',
+      auto_reaction_enabled: false,
+      auto_reaction_emoji_id: null,
+      auto_reaction_emoji_unicode: null,
+      mention_reaction_enabled: false,
+      mention_reaction_emoji_id: null,
+      mention_reaction_emoji_unicode: null,
+      auto_reaction_channel_ids: [],
+      version: 1,
+    },
+  }
+}
+
+function directory() {
+  return {
+    channels: [
+      { id: '700', name: 'oznamy', kind: 'text', category_id: '800' },
+      { id: '701', name: 'moderatori', kind: 'text', category_id: null },
+    ],
+    categories: [
+      { id: '800', name: 'projekty', kind: 'category', category_id: null },
+      { id: '801', name: 'archiv', kind: 'category', category_id: null },
+    ],
+    roles: [{ id: '901', name: 'Team Mod', position: 2, managed: false }],
+    emojis: [],
+  }
+}
+
+function archiveRecord() {
+  return {
+    id: 'archive-1',
+    guild_id: '456',
+    discord_channel_id: '700',
+    archive_category_id: '801',
+    original_channel_name: 'oznamy',
+    reason: 'Projekt skončil',
+    state: 'pending',
+    requested_by_user_id: '123',
+    expires_at: '2026-08-12T12:00:00Z',
+    decided_by_user_id: null,
+    decided_at: null,
+    discord_approval_message_id: null,
+  }
+}
+
+function roleLabel(role: Role) {
+  if (role === 'admin') return 'Domček Admin'
+  if (role === 'team_mod') return 'Team Mod Tester'
+  if (role === 'publisher') return 'SDB / FMA Tester'
+  return 'Člen'
+}
+
+test('01 Admin sa prihlási a otvorí najbližší balík', async ({ page }) => {
+  await mockCarlo(page)
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Prehľad', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: /Skontrolovať oznamy/ }).click()
+  await expect(page.getByRole('heading', { name: 'Redakčný pult' })).toBeVisible()
+})
+
+test('02 Team Mod upraví popis kalendárovej udalosti', async ({ page }) => {
+  const state = await mockCarlo(page, 'team_mod')
+  await page.goto('/oznamy')
+  await page.getByRole('button', { name: 'Upraviť Otvorený Domček' }).click()
+  await page.getByRole('textbox', { name: /Redakčný popis/ }).fill('Nový redakčný text')
+  await page.getByRole('button', { name: 'Uložiť zmenu' }).click()
+  await expect(page.getByText('Nový redakčný text').first()).toBeVisible()
+  expect(state.eventDescription).toBe('Nový redakčný text')
+})
+
+test('03 úprava zostane po opätovnom načítaní dát', async ({ page }) => {
+  const state = await mockCarlo(page, 'team_mod')
+  state.eventDescription = 'Trvalá úprava po syncu'
+  await page.goto('/oznamy')
+  await page.getByRole('button', { name: /Načítať aktuálne údaje/ }).click()
+  await expect(page.getByText('Trvalá úprava po syncu').first()).toBeVisible()
+})
+
+test('04 rovnaká udalosť používa úpravu aj pri ďalšom týždennom náhľade', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.eventDescription = 'Text zdieľaný do ďalšieho týždňa'
+  await page.goto('/oznamy')
+  await page.reload()
+  await expect(page.getByText('Text zdieľaný do ďalšieho týždňa').first()).toBeVisible()
+})
+
+test('05 používateľ vytvorí viacdňovú manuálnu udalosť', async ({ page }) => {
+  const state = await mockCarlo(page, 'team_mod')
+  await page.goto('/oznamy')
+  await page.getByRole('button', { name: 'Manuálnu udalosť' }).click()
+  await page.getByLabel('Názov').fill('Letný tábor')
+  await page.getByText('Celodenná udalosť', { exact: true }).click()
+  await page.getByLabel('Prvý deň').fill('2026-08-15')
+  await page.getByLabel('Posledný deň').fill('2026-08-21')
+  await page.getByRole('button', { name: 'Uložiť udalosť' }).click()
+  await expect(page.getByText('Letný tábor').first()).toBeVisible()
+  expect(state.manualEvents).toHaveLength(1)
+})
+
+test('06 používateľ vytvorí INFO oznam s inkluzívnou expiráciou', async ({ page }) => {
+  const state = await mockCarlo(page, 'team_mod')
+  await page.goto('/oznamy')
+  await page.getByRole('button', { name: 'INFO oznam' }).click()
+  await page.getByLabel('Názov').fill('Dôležité INFO')
+  await page.getByLabel('Popis').fill('Platí vrátane posledného dňa.')
+  await page.getByLabel('Platí od').fill('2026-08-10')
+  await page.getByLabel('Platí do').fill('2026-08-20')
+  await page.getByRole('button', { name: 'Uložiť oznam' }).click()
+  await expect(page.getByText('Dôležité INFO').first()).toBeVisible()
+  expect(state.infoAnnouncements[0]?.valid_until).toBe('2026-08-20')
+})
+
+test('07 Admin ručne publikuje dvojkrokovo', async ({ page }) => {
+  const state = await mockCarlo(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Pripraviť ručné zverejnenie' }).click()
+  await page.getByRole('button', { name: 'Potvrdiť a zverejniť' }).click()
+  await expect(page.getByText(/Publikovanie skončilo stavom succeeded_manual/)).toBeVisible()
+  expect(state.published).toBe(true)
+})
+
+test('08 Admin vytvorí súkromný kanál', async ({ page }) => {
+  const state = await mockCarlo(page)
+  await page.goto('/nastavenia')
+  await page.getByRole('tab', { name: /Kanály/ }).click()
+  await page.getByLabel('Názov kanála').fill('e2e-projekt')
+  await page.getByRole('button', { name: 'Vytvoriť kanál' }).click()
+  await expect(page.getByText(/Kanál #e2e-projekt bol vytvorený/)).toBeVisible()
+  expect(state.calls.some((call) => call.path === '/api/v1/admin/channels')).toBe(true)
+})
+
+test('09 Team Mod požiada o archiváciu a Admin schváli konkrétnu žiadosť', async ({ page }) => {
+  const state = await mockCarlo(page, 'team_mod')
+  await page.goto('/nastavenia')
+  await page.getByRole('tab', { name: /Kanály/ }).click()
+  await page.getByLabel('Kanál', { exact: true }).selectOption('700')
+  await page.getByLabel('Dôvod').fill('Projekt skončil')
+  await page.getByRole('button', { name: 'Odoslať žiadosť' }).click()
+  await expect(page.getByText('Žiadosť čaká na rozhodnutie Admina.')).toBeVisible()
+  expect(state.archives).toHaveLength(1)
+
+  state.role = 'admin'
+  await page.reload()
+  await page.getByRole('tab', { name: /Kanály/ }).click()
+  await page.getByRole('button', { name: 'Schváliť' }).click()
+  await page.getByRole('button', { name: 'Potvrdiť' }).click()
+  await expect(page.getByText('Kanál bol archivovaný.')).toBeVisible()
+  expect(state.archives).toHaveLength(0)
+})
+
+test('10 Admin udelí a odoberie Team Mod rolu', async ({ page }) => {
+  const state = await mockCarlo(page)
+  await page.goto('/nastavenia')
+  await page.getByRole('tab', { name: /Roly/ }).click()
+  await page.getByPlaceholder('Meno člena servera').fill('tester')
+  await page.getByRole('button', { name: 'Vyhľadať' }).click()
+  await page.getByRole('switch', { name: 'Team Mod' }).click()
+  await page.getByRole('button', { name: 'Potvrdiť zmenu' }).click()
+  await expect(page.getByText(/Team Mod oprávnenie bolo udelené/)).toBeVisible()
+  expect(state.memberRoles).toEqual(['901'])
+
+  await page.getByRole('switch', { name: 'Team Mod' }).click()
+  await page.getByRole('button', { name: 'Potvrdiť zmenu' }).click()
+  await expect(page.getByText(/Team Mod oprávnenie bolo odobrané/)).toBeVisible()
+  expect(state.memberRoles).toEqual([])
+  expect(
+    state.calls
+      .filter((call) => call.path === '/api/v1/admin/discord/roles')
+      .map((call) => (call.body as Record<string, unknown>).enabled),
+  ).toEqual([true, false])
+})
+
+test('11 neoprávnený používateľ neobíde Admin API', async ({ page }) => {
+  await mockCarlo(page, 'none')
+  await page.goto('/')
+  await expect(page.getByRole('link', { name: 'Prihlásiť cez Discord' })).toBeVisible()
+  const status = await page.evaluate(async () =>
+    fetch('/api/v1/admin/settings/publication', { method: 'PUT', body: '{}' }).then(
+      (response) => response.status,
+    ),
+  )
+  expect(status).toBe(401)
+})
+
+test('12 stop carlo je viditeľné mimo preview a Admin ho vie zaradiť', async ({ page }) => {
+  const state = await mockCarlo(page)
+  await page.goto('/oznamy')
+  await expect(page.getByText('Interná porada')).toHaveCount(0)
+  await page.getByRole('button', { name: /Google kalendár/ }).click()
+  await page.getByRole('button', { name: 'Upraviť Interná porada' }).click()
+  await page
+    .locator('fieldset')
+    .filter({ hasText: 'Zaradenie do oznamov' })
+    .locator('select')
+    .selectOption('force_include')
+  await page.getByRole('button', { name: 'Uložiť zmenu' }).click()
+  await page.getByRole('button', { name: /Najbližší prehľad/ }).click()
+  await expect(page.getByText('Interná porada').first()).toBeVisible()
+  expect(state.includedStop).toBe(true)
+})
+
+test('13 instance a budúca séria používajú odlišné endpointy', async ({ page }) => {
+  const state = await mockCarlo(page, 'team_mod')
+  await page.goto('/oznamy')
+  await page.getByRole('button', { name: 'Upraviť Otvorený Domček' }).click()
+  await page.getByText('Tento a všetky budúce', { exact: true }).click()
+  await page.getByLabel('Redakčný popis').fill('Odteraz pre sériu')
+  await page.getByRole('button', { name: 'Uložiť pre sériu' }).click()
+  expect(state.calls.some((call) => call.path.endsWith('/series-override'))).toBe(true)
+  expect(state.calls.some((call) => call.path === '/api/v1/events/event-1/override')).toBe(false)
+})
+
+test('14 SDB FMA vidí balík a publikuje, ale nemá ostatnú administráciu', async ({ page }) => {
+  const state = await mockCarlo(page, 'publisher')
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Ručné zverejnenie' })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Nastavenia/ })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: /Audit/ })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Pripraviť ručné zverejnenie' }).click()
+  await page.getByRole('button', { name: 'Potvrdiť a zverejniť' }).click()
+  expect(state.published).toBe(true)
+})
+
+test('15 rozhranie zvládne veľký balík bez horizontálneho pretečenia', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.extraEvents = 60
+  await page.goto('/oznamy')
+  await expect(page.getByText('Programová udalosť 60').first()).toBeVisible()
+  const fitsViewport = await page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+  )
+  expect(fitsViewport).toBe(true)
+})
+
+test('16 klávesnica preskočí na obsah a modal vráti fokus', async ({ page }) => {
+  await mockCarlo(page, 'team_mod')
+  await page.goto('/oznamy')
+  await expect(page.getByRole('heading', { name: 'Redakčný pult' })).toBeVisible()
+  await page.keyboard.press('Tab')
+  const skipLink = page.getByRole('link', { name: 'Preskočiť na obsah' })
+  await expect(skipLink).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('#main-content')).toBeFocused()
+
+  const opener = page.getByRole('button', { name: 'Manuálnu udalosť' })
+  await opener.click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(opener).toBeFocused()
+})
+
+test('17 rešpektuje systémové nastavenie obmedzeného pohybu', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await mockCarlo(page)
+  await page.goto('/')
+  const timing = await page
+    .getByRole('link', { name: /Skontrolovať oznamy/ })
+    .evaluate((element) => {
+      const style = getComputedStyle(element)
+      return {
+        animationDuration: style.animationDuration,
+        transitionDuration: style.transitionDuration,
+      }
+    })
+  expect(Number.parseFloat(timing.animationDuration)).toBeLessThanOrEqual(0.00001)
+  expect(Number.parseFloat(timing.transitionDuration)).toBeLessThanOrEqual(0.00001)
+})

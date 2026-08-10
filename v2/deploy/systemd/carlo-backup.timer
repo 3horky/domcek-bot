@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Carlo production backup
+
+[Timer]
+OnCalendar=*-*-* 03:20:00 Europe/Bratislava
+Persistent=true
+RandomizedDelaySec=20m
+Unit=carlo-backup.service
+
+[Install]
+WantedBy=timers.target

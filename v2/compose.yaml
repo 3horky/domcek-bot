@@ -1,0 +1,117 @@
+x-backend: &backend
+  build:
+    context: ./backend
+  env_file:
+    - ${DOMCEK_ENV_FILE:-.env}
+  environment:
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+  volumes:
+    - ./backend:/app
+    - backend-venv:/opt/domcek-venv
+    - ../secrets:/run/project-secrets:ro
+    - ../thoughts.txt:/run/project-assets/thoughts.txt:ro
+    - ./.local-secrets:/run/local-secrets:ro
+    - media-data:/var/lib/domcek/media
+  depends_on:
+    db:
+      condition: service_healthy
+  restart: unless-stopped
+  init: true
+
+services:
+  db:
+    image: postgres:18.4-alpine
+    env_file:
+      - ${DOMCEK_ENV_FILE:-.env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    <<: *backend
+    command: ["domcek-api"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live', timeout=2)"
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  bot:
+    <<: *backend
+    command: ["domcek-bot"]
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-m", "domcek_bot.ops.healthcheck", "--process", "bot"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  worker:
+    <<: *backend
+    command: ["domcek-worker"]
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-m", "domcek_bot.ops.healthcheck", "--process", "worker"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    command:
+      - sh
+      - -c
+      - npm install --prefer-offline --no-audit --no-fund && exec npm run dev -- --host 0.0.0.0
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+
+volumes:
+  backend-venv:
+  frontend-node-modules:
+  postgres-data:
+  media-data:

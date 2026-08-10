@@ -1,0 +1,3 @@
+Alembic migrations for Domček Bot 2.0.
+
+The E1 baseline is intentionally schema-empty. Domain tables begin in E2.

@@ -1,0 +1,15 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Domcek Bot//V2 Secondary Calendar Fixture//SK
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Domcek Bot v2 Test Secondary
+X-WR-TIMEZONE:Europe/Bratislava
+BEGIN:VEVENT
+UID:same-time-secondary@domcek-v2.test
+DTSTAMP:20260808T120000Z
+DTSTART;TZID=Europe/Bratislava:20261106T180000
+DTEND;TZID=Europe/Bratislava:20261106T190000
+SUMMARY:[DOMCEK V2] B – sekundárny kalendár
+END:VEVENT
+END:VCALENDAR

@@ -1,0 +1,123 @@
+x-backend: &backend
+  image: ${CARLO_BACKEND_IMAGE:?CARLO_BACKEND_IMAGE must contain an immutable image reference}
+  env_file:
+    - ${CARLO_ENV_FILE:-.env.production}
+  volumes:
+    - ${CARLO_SECRETS_DIR:?CARLO_SECRETS_DIR is required}:/run/project-secrets:ro
+    - ${CARLO_THOUGHTS_FILE:?CARLO_THOUGHTS_FILE is required}:/run/project-assets/thoughts.txt:ro
+    - media-data:/var/lib/domcek/media
+  depends_on:
+    db:
+      condition: service_healthy
+  restart: unless-stopped
+  init: true
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  db:
+    image: ${CARLO_POSTGRES_IMAGE:-postgres:18.4-alpine}
+    env_file:
+      - ${CARLO_ENV_FILE:-.env.production}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    <<: *backend
+    command: ["domcek-api"]
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=2)"
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  bot:
+    <<: *backend
+    command: ["domcek-bot"]
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "domcek-runtime-healthcheck", "--process", "bot"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  worker:
+    <<: *backend
+    command: ["domcek-worker"]
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "domcek-runtime-healthcheck", "--process", "worker"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    image: ${CARLO_FRONTEND_IMAGE:?CARLO_FRONTEND_IMAGE must contain an immutable image reference}
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  proxy:
+    image: ${CARLO_CADDY_IMAGE:-caddy:2-alpine}
+    environment:
+      CARLO_PUBLIC_HOST: ${CARLO_PUBLIC_HOST:?CARLO_PUBLIC_HOST is required}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres-data:
+  media-data:
+  caddy-data:
+  caddy-config:

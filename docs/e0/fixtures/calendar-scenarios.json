@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "timezone": "Europe/Bratislava",
+  "publication_windows": [
+    {
+      "id": "autumn-reference",
+      "scheduled_for": "2026-10-26T20:00:00+01:00",
+      "window_end_exclusive": "2026-11-09T20:00:00+01:00"
+    },
+    {
+      "id": "spring-dst-reference",
+      "scheduled_for": "2027-03-22T20:00:00+01:00",
+      "window_end_exclusive": "2027-04-05T20:00:00+02:00"
+    }
+  ],
+  "calendar_sources": [
+    {
+      "id": "primary-test-calendar",
+      "priority": 10
+    },
+    {
+      "id": "secondary-test-calendar",
+      "priority": 20
+    }
+  ],
+  "events": [
+    {
+      "scenario_id": "window-start",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-window-start",
+      "title": "Presný začiatok okna",
+      "start": "2026-10-26T20:00:00+01:00",
+      "end": "2026-10-26T21:00:00+01:00",
+      "expected_in_autumn_window": true
+    },
+    {
+      "scenario_id": "before-window",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-before-window",
+      "title": "Tesne pred oknom",
+      "start": "2026-10-26T18:59:00+01:00",
+      "end": "2026-10-26T19:59:00+01:00",
+      "expected_in_autumn_window": false
+    },
+    {
+      "scenario_id": "timed-basic",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-timed-basic",
+      "title": "Večerné stretnutie",
+      "description": "Zdrojový popis večerného stretnutia.",
+      "start": "2026-10-27T18:00:00+01:00",
+      "end": "2026-10-27T19:30:00+01:00",
+      "expected_in_autumn_window": true,
+      "expected_day_sk": "utorok",
+      "expected_default_public_description": null,
+      "expected_editor_prefill": "Zdrojový popis večerného stretnutia."
+    },
+    {
+      "scenario_id": "all-day",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-all-day",
+      "title": "Celodenná aktivita",
+      "all_day": true,
+      "start_date": "2026-10-28",
+      "end_date_exclusive": "2026-10-29",
+      "expected_in_autumn_window": true,
+      "expected_day_sk": "streda"
+    },
+    {
+      "scenario_id": "multi-overlap",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-multi-overlap",
+      "title": "Viacdňová aktivita",
+      "all_day": true,
+      "start_date": "2026-10-25",
+      "end_date_exclusive": "2026-10-29",
+      "expected_in_autumn_window": true
+    },
+    {
+      "scenario_id": "google-description",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-google-description",
+      "title": "Udalosť s Google popisom",
+      "description": "Tento text je viditeľný v editore, ale defaultne sa nepublikuje.",
+      "start": "2026-10-29T17:00:00+01:00",
+      "end": "2026-10-29T18:00:00+01:00",
+      "expected_in_autumn_window": true,
+      "expected_default_public_description": null,
+      "expected_editor_prefill": "Tento text je viditeľný v editore, ale defaultne sa nepublikuje."
+    },
+    {
+      "scenario_id": "stop-carlo",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-stop-carlo",
+      "title": "Interná udalosť",
+      "description": "Organizačná poznámka. STOP CARLO",
+      "start": "2026-10-30T16:00:00+01:00",
+      "end": "2026-10-30T17:00:00+01:00",
+      "expected_in_editor": true,
+      "expected_in_autumn_window": false,
+      "expected_exclusion_reason": "stop_carlo"
+    },
+    {
+      "scenario_id": "missing-title",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-missing-title",
+      "title": null,
+      "start": "2026-10-31T10:00:00+01:00",
+      "end": "2026-10-31T11:00:00+01:00",
+      "expected_in_autumn_window": true,
+      "expected_warning": "missing_title"
+    },
+    {
+      "scenario_id": "recurring-base-1",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-recurring-20261028",
+      "recurring_series_id": "series-weekly-community",
+      "original_start": "2026-10-28T18:00:00+01:00",
+      "title": "Pravidelné komunitné stretnutie",
+      "start": "2026-10-28T18:00:00+01:00",
+      "end": "2026-10-28T19:00:00+01:00",
+      "expected_in_autumn_window": true
+    },
+    {
+      "scenario_id": "recurring-moved",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-recurring-20261104",
+      "recurring_series_id": "series-weekly-community",
+      "original_start": "2026-11-04T18:00:00+01:00",
+      "title": "Pravidelné komunitné stretnutie – presunuté",
+      "start": "2026-11-05T19:00:00+01:00",
+      "end": "2026-11-05T20:00:00+01:00",
+      "expected_in_autumn_window": true
+    },
+    {
+      "scenario_id": "recurring-cancelled",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-cancelled-20261102",
+      "recurring_series_id": "series-cancelled-example",
+      "original_start": "2026-11-02T17:00:00+01:00",
+      "status": "cancelled",
+      "title": "Zrušený výskyt",
+      "start": "2026-11-02T17:00:00+01:00",
+      "end": "2026-11-02T18:00:00+01:00",
+      "expected_in_autumn_window": false
+    },
+    {
+      "scenario_id": "same-time-primary",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-same-primary",
+      "title": "A – primárny kalendár",
+      "start": "2026-11-06T18:00:00+01:00",
+      "end": "2026-11-06T19:00:00+01:00",
+      "expected_in_autumn_window": true,
+      "expected_relative_order": 1
+    },
+    {
+      "scenario_id": "same-time-secondary",
+      "source": "secondary-test-calendar",
+      "provider_event_id": "evt-same-secondary",
+      "title": "B – sekundárny kalendár",
+      "start": "2026-11-06T18:00:00+01:00",
+      "end": "2026-11-06T19:00:00+01:00",
+      "expected_in_autumn_window": true,
+      "expected_relative_order": 2
+    },
+    {
+      "scenario_id": "before-window-end",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-before-window-end",
+      "title": "Minútu pred koncom okna",
+      "start": "2026-11-09T19:59:00+01:00",
+      "end": "2026-11-09T20:30:00+01:00",
+      "expected_in_autumn_window": true
+    },
+    {
+      "scenario_id": "window-end",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-window-end",
+      "title": "Presný exkluzívny koniec",
+      "start": "2026-11-09T20:00:00+01:00",
+      "end": "2026-11-09T21:00:00+01:00",
+      "expected_in_autumn_window": false
+    },
+    {
+      "scenario_id": "spring-dst-after-change",
+      "source": "primary-test-calendar",
+      "provider_event_id": "evt-spring-dst",
+      "title": "Udalosť po zmene času",
+      "start": "2027-03-29T20:00:00+02:00",
+      "end": "2027-03-29T21:00:00+02:00",
+      "expected_in_spring_window": true,
+      "expected_local_hour": 20
+    }
+  ]
+}

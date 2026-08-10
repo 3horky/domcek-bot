@@ -7,7 +7,10 @@ __pycache__/
 # Virtualenv
 venv/
 .env
-.env.* 
+.env.*
+!.env.example
+!**/.env.example
+!**/.env.*.example
 
 # Databazy
 *.db
@@ -16,9 +19,26 @@ venv/
 # Logs
 *.log
 
+# Domcek Bot 2.0 local secrets and credentials
+secrets/
+**/secrets/
+service-account*.json
+*.pem
+*.key
+
+# Domcek Bot 2.0 generated development artifacts
+v2/.local-secrets/
+v2/backend/.venv/
+v2/frontend/node_modules/
+v2/frontend/dist/
+v2/frontend/coverage/
+v2/frontend/playwright-report/
+v2/frontend/test-results/
+
 # Thumbnails cache
 thumbnails/
 
 # IDE / editor
+.DS_Store
 .vscode/
 .idea/
