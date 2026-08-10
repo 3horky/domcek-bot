@@ -15,12 +15,11 @@ Rozhodnutie a kontrolné výsledky sú v `SHADOW_CYKLY.md`.
 ## 2. Commit, push a vzdialený CI
 
 Používateľ 11. augusta 2026 výslovne povolil commit a push na `origin/main`.
-Vznikli dva lokálne commity: implementačný
-`6100cd63dea7136063a990cbbb5ec0f3a1a49d01` a dokumentačný
-`5e4201b418ba13764db27f66a14c83e9668e1eae`. Pracovný strom je čistý, ale HTTPS
-push sa na tomto hoste zastavil v `osxkeychain` bez sprístupnenia poverenia a
-existujúci SSH kľúč GitHub nepozná. Remote `origin/main` preto stále bezpečne
-zostáva na `48f301e91ebfb0f566b94ef462f557fa4e03d542`.
+Vznikol implementačný commit `6100cd63dea7136063a990cbbb5ec0f3a1a49d01`
+a nadväzujúce dokumentačné commity. Pracovný strom je čistý, ale HTTPS push sa
+na tomto hoste zastavil v `osxkeychain` bez sprístupnenia poverenia a existujúci
+SSH kľúč GitHub nepozná. Remote `origin/main` preto stále bezpečne zostáva na
+`48f301e91ebfb0f566b94ef462f557fa4e03d542`.
 
 Používateľ musí v lokálnom Termináli dokončiť autentifikovaný fast-forward push
 príkazom `git push origin main` alebo najprv odomknúť/povoliť macOS kľúčenku a
