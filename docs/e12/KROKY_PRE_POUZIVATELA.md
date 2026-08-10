@@ -14,11 +14,18 @@ Rozhodnutie a kontrolné výsledky sú v `SHADOW_CYKLY.md`.
 
 ## 2. Commit, push a vzdialený CI
 
-Pracovný strom je stále necommitnutý a nepushnutý. Používateľ musí povoliť
-vytvorenie commitu a push na konkrétny remote/branch alebo tieto kroky vykonať
-sám. Read-only kontrola potvrdila aktuálnu vetvu `main` a nakonfigurovaný remote
-`origin` smerujúci na `3horky/domcek-bot`; tieto hodnoty sa nepovažujú za súhlas
-na zápis. Po pushnutí musí byť workflow `Domček Bot 2.0 CI` úplne zelený vrátane:
+Používateľ 11. augusta 2026 výslovne povolil commit a push na `origin/main`.
+Vznikli dva lokálne commity: implementačný
+`6100cd63dea7136063a990cbbb5ec0f3a1a49d01` a dokumentačný
+`5e4201b418ba13764db27f66a14c83e9668e1eae`. Pracovný strom je čistý, ale HTTPS
+push sa na tomto hoste zastavil v `osxkeychain` bez sprístupnenia poverenia a
+existujúci SSH kľúč GitHub nepozná. Remote `origin/main` preto stále bezpečne
+zostáva na `48f301e91ebfb0f566b94ef462f557fa4e03d542`.
+
+Používateľ musí v lokálnom Termináli dokončiť autentifikovaný fast-forward push
+príkazom `git push origin main` alebo najprv odomknúť/povoliť macOS kľúčenku a
+nechať Codex push zopakovať. Token ani heslo sa nesmú posielať v konverzácii.
+Po pushnutí musí byť workflow `Domček Bot 2.0 CI` úplne zelený vrátane:
 
 - 188 backendových testov,
 - 13 Vitest testov,
