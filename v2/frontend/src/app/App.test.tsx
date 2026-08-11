@@ -423,9 +423,12 @@ describe('authenticated application shell', () => {
     expect(screen.queryByText('Pravidlá umiestnenia')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Vytvoriť nový kanál/ }))
     const channelDialog = screen.getByRole('dialog', { name: 'Vytvoriť nový kanál' })
-    fireEvent.change(within(channelDialog).getByLabelText('Názov'), {
-      target: { value: 'Projekt' },
+    const channelName = within(channelDialog).getByLabelText('Názov')
+    fireEvent.change(channelName, {
+      target: { value: 'Môj Projekt!' },
     })
+    expect(channelName).toHaveValue('moj-projekt')
+    expect(within(channelDialog).getByText('#🏠・moj-projekt')).toBeInTheDocument()
     fireEvent.click(within(channelDialog).getByRole('button', { name: /^Vytvoriť kanál/ }))
     expect(await screen.findByText('Dočasná chyba vytvorenia kanála.')).toBeInTheDocument()
     fireEvent.click(within(channelDialog).getByRole('button', { name: /^Vytvoriť kanál/ }))

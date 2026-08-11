@@ -36,6 +36,8 @@ export function MemberPicker({
   const [knownMembers, setKnownMembers] = useState<Record<string, DiscordMemberOption>>({})
   const [state, setState] = useState<SearchState>('idle')
   const requestSequence = useRef(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const restoreFocus = useRef(false)
 
   useEffect(() => {
     const normalized = query.trim()
@@ -68,12 +70,37 @@ export function MemberPicker({
     }
   }, [query])
 
+  useEffect(() => {
+    if (!restoreFocus.current) return
+    restoreFocus.current = false
+    inputRef.current?.focus()
+  }, [query, value])
+
+  function resetSearch() {
+    restoreFocus.current = true
+    requestSequence.current += 1
+    setQuery('')
+    setResults([])
+    setState('idle')
+  }
+
   function toggleMember(member: DiscordMemberOption) {
     if (value.includes(member.id)) {
       onChange(value.filter((id) => id !== member.id))
     } else {
       onChange(multiple ? [...value, member.id] : [member.id])
     }
+    resetSearch()
+  }
+
+  function removeMember(id: string) {
+    onChange(value.filter((item) => item !== id))
+    resetSearch()
+  }
+
+  function clearSelection() {
+    onChange([])
+    resetSearch()
   }
 
   return (
@@ -84,7 +111,7 @@ export function MemberPicker({
           <span>{description}</span>
         </div>
         {value.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => onChange([])}>
+          <Button variant="ghost" size="sm" onClick={clearSelection}>
             <X /> Zrušiť výber
           </Button>
         )}
@@ -92,11 +119,7 @@ export function MemberPicker({
       {value.length > 0 ? (
         <div className="picker-selections" aria-label={`Vybrané: ${label}`}>
           {value.map((id) => (
-            <button
-              type="button"
-              key={id}
-              onClick={() => onChange(value.filter((item) => item !== id))}
-            >
+            <button type="button" key={id} onClick={() => removeMember(id)}>
               <MemberAvatar member={knownMembers[id]} />
               <span>{knownMembers[id]?.display_name ?? `Discord člen ${id}`}</span>
               <X aria-hidden="true" />
@@ -110,6 +133,7 @@ export function MemberPicker({
         <Search aria-hidden="true" />
         <Input
           id={`${listId}-search`}
+          ref={inputRef}
           role="combobox"
           aria-controls={listId}
           aria-expanded={query.trim().length > 0}

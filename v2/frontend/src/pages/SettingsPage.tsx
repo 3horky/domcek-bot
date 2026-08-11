@@ -3,6 +3,7 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  ChevronDown,
   ChevronRight,
   Clock3,
   FolderArchive,
@@ -13,6 +14,7 @@ import {
   Search,
   Settings2,
   ShieldCheck,
+  SmilePlus,
   Sparkles,
   Users,
   UsersRound,
@@ -83,11 +85,31 @@ import {
 } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'
 import { Switch } from '../components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Textarea } from '../components/ui/textarea'
 
 const weekdays = ['pondelok', 'utorok', 'streda', 'štvrtok', 'piatok', 'sobota', 'nedeľa']
+const primaryChannelEmojis = ['🏠', '🎨', '🌱', '🎭', '🛠️', '📚', '🎵']
+const additionalChannelEmojis = [
+  '⛺',
+  '🎬',
+  '⚽',
+  '🏐',
+  '🎲',
+  '🍲',
+  '☕',
+  '🎉',
+  '💬',
+  '📷',
+  '💡',
+  '❤️',
+  '🚲',
+  '🧭',
+  '🌍',
+  '✨',
+]
 
 export type Notice = { kind: 'success' | 'error'; text: string } | null
 
@@ -711,13 +733,16 @@ export function ChannelsPanel({
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [name, setName] = useState('')
   const [emoji, setEmoji] = useState('🏠')
-  const [ownerId, setOwnerId] = useState<string | null>(null)
+  const [emojiIsAutomatic, setEmojiIsAutomatic] = useState(true)
+  const [leaderIds, setLeaderIds] = useState<string[]>([])
   const [memberIds, setMemberIds] = useState<string[]>([])
   const [roleIds, setRoleIds] = useState<string[]>([])
   const [categoryId, setCategoryId] = useState('')
   const [archiveChannel, setArchiveChannel] = useState('')
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const createButtonRef = useRef<HTMLButtonElement>(null)
+  const archiveButtonRef = useRef<HTMLButtonElement>(null)
   const createInFlight = useRef(false)
   const createIdempotencyKey = useRef(crypto.randomUUID())
   const [pendingDecision, setPendingDecision] = useState<{ id: string; approve: boolean } | null>(
@@ -733,6 +758,7 @@ export function ChannelsPanel({
     (category) => category.is_default_project_category,
   )
   const selectedCategory = availableCategories.find((category) => category.id === categoryId)
+  const effectiveEmoji = emojiIsAutomatic ? suggestChannelEmoji(name) : emoji
   const archiveCategoryIds = new Set(
     directory.categories.filter((category) => category.is_archive_category).map((item) => item.id),
   )
@@ -746,20 +772,21 @@ export function ChannelsPanel({
     try {
       const result = await createDiscordChannel({
         name,
-        emoji,
-        owner_id: ownerId,
-        member_ids: memberIds,
+        emoji: effectiveEmoji,
+        owner_id: leaderIds[0] ?? null,
+        member_ids: [...new Set([...leaderIds.slice(1), ...memberIds])],
         role_ids: roleIds,
         category_id: categoryId || null,
         idempotency_key: createIdempotencyKey.current,
       })
       setNotice({ kind: 'success', text: `Kanál #${result.name} bol vytvorený.` })
       setName('')
-      setOwnerId(null)
+      setLeaderIds([])
       setMemberIds([])
       setRoleIds([])
       setCategoryId('')
       setEmoji('🏠')
+      setEmojiIsAutomatic(true)
       setCreateOpen(false)
       createIdempotencyKey.current = crypto.randomUUID()
     } catch (error) {
@@ -823,6 +850,7 @@ export function ChannelsPanel({
     <div className="channel-home">
       <section className="channel-action-grid" aria-label="Čo chcete urobiť?">
         <button
+          ref={createButtonRef}
           type="button"
           className="channel-action-card primary"
           onClick={() => setCreateOpen(true)}
@@ -836,7 +864,12 @@ export function ChannelsPanel({
           </span>
           <ArrowRight />
         </button>
-        <button type="button" className="channel-action-card" onClick={() => setArchiveOpen(true)}>
+        <button
+          ref={archiveButtonRef}
+          type="button"
+          className="channel-action-card"
+          onClick={() => setArchiveOpen(true)}
+        >
           <span className="channel-action-icon archive">
             <FolderArchive />
           </span>
@@ -928,7 +961,11 @@ export function ChannelsPanel({
       </section>
 
       <Dialog open={createOpen} onOpenChange={(open) => !busy && setCreateOpen(open)}>
-        <DialogContent className="channel-dialog" showCloseButton={!busy}>
+        <DialogContent
+          className="channel-dialog"
+          showCloseButton={!busy}
+          finalFocus={() => createButtonRef.current}
+        >
           <DialogHeader className="channel-dialog-header">
             <span className="channel-dialog-icon">
               <Plus />
@@ -951,38 +988,47 @@ export function ChannelsPanel({
               </div>
               <div className="channel-name-builder">
                 <div className="emoji-choice-grid" aria-label="Symbol kanála">
-                  {['🏠', '🎨', '🌱', '🎭', '🛠️', '📚', '🎵'].map((option) => (
+                  {primaryChannelEmojis.map((option) => (
                     <button
                       type="button"
                       key={option}
-                      className={emoji === option ? 'selected' : ''}
+                      className={effectiveEmoji === option ? 'selected' : ''}
                       aria-label={`Použiť ${option}`}
-                      aria-pressed={emoji === option}
-                      onClick={() => setEmoji(option)}
+                      aria-pressed={!emojiIsAutomatic && emoji === option}
+                      onClick={() => {
+                        setEmoji(option)
+                        setEmojiIsAutomatic(false)
+                      }}
                     >
                       {option}
                     </button>
                   ))}
+                  <ChannelEmojiPicker
+                    value={effectiveEmoji}
+                    automatic={emojiIsAutomatic}
+                    onChange={(value) => {
+                      setEmoji(value)
+                      setEmojiIsAutomatic(false)
+                    }}
+                    onAutomatic={() => setEmojiIsAutomatic(true)}
+                  />
                 </div>
                 <Field label="Názov">
                   <Input
-                    placeholder="napríklad letný tábor"
+                    placeholder="napriklad-letny-tabor"
                     value={name}
-                    onChange={(event) => setName(event.target.value)}
+                    onChange={(event) => setName(normalizeChannelName(event.target.value))}
                     autoFocus
                   />
                 </Field>
               </div>
-              <details className="channel-optional-control">
-                <summary>Použiť iný symbol</summary>
-                <Field label="Vlastný symbol">
-                  <Input
-                    value={emoji}
-                    maxLength={16}
-                    onChange={(event) => setEmoji(event.target.value)}
-                  />
-                </Field>
-              </details>
+              <div className="channel-name-preview" aria-live="polite">
+                <span>Názov na Discorde</span>
+                <strong>
+                  #{effectiveEmoji}・{name || 'nazov-kanala'}
+                </strong>
+                {emojiIsAutomatic && <small>Symbol vyberá Carlo podľa názvu</small>}
+              </div>
               <div
                 className={`channel-location-note ${defaultCategory || selectedCategory ? '' : 'warning'}`}
               >
@@ -1035,27 +1081,27 @@ export function ChannelsPanel({
               <div className="channel-access-stack">
                 <MemberPicker
                   label="Kto bude kanál viesť?"
-                  description="Ak nikoho nevyberiete, budete to vy."
-                  value={ownerId ? [ownerId] : []}
-                  multiple={false}
+                  description="Môžete vybrať aj viacerých. Ak nevyberiete nikoho, budete to vy."
+                  value={leaderIds}
+                  excludedIds={memberIds}
                   emptyLabel="Kanál budete viesť vy"
                   onChange={(ids) => {
-                    const nextOwner = ids[0] ?? null
-                    setOwnerId(nextOwner)
-                    if (nextOwner)
-                      setMemberIds((current) => current.filter((id) => id !== nextOwner))
+                    setLeaderIds(ids)
+                    setMemberIds((current) => current.filter((id) => !ids.includes(id)))
                   }}
                 />
                 <MemberPicker
                   label="Koho chcete pridať?"
                   description="Píšte meno a vyberte ľudí zo zoznamu."
                   value={memberIds}
-                  excludedIds={ownerId ? [ownerId] : []}
+                  excludedIds={leaderIds}
                   onChange={setMemberIds}
                 />
                 <details className="channel-optional-control access-groups">
                   <summary>
-                    <UsersRound /> Pridať celú skupinu
+                    <UsersRound />
+                    <span>Pridať celú skupinu</span>
+                    <ChevronDown className="disclosure-caret" />
                   </summary>
                   <RolePicker roles={directory.roles} value={roleIds} onChange={setRoleIds} />
                 </details>
@@ -1067,7 +1113,9 @@ export function ChannelsPanel({
               Zrušiť
             </Button>
             <Button
-              disabled={busy || !name.trim() || !emoji.trim() || (!categoryId && !defaultCategory)}
+              disabled={
+                busy || !name.trim() || !effectiveEmoji.trim() || (!categoryId && !defaultCategory)
+              }
               onClick={() => void create()}
             >
               {busy ? <LoaderCircle className="spin" /> : <Plus />} Vytvoriť kanál
@@ -1077,7 +1125,11 @@ export function ChannelsPanel({
       </Dialog>
 
       <Dialog open={archiveOpen} onOpenChange={(open) => !busy && setArchiveOpen(open)}>
-        <DialogContent className="channel-dialog archive-dialog" showCloseButton={!busy}>
+        <DialogContent
+          className="channel-dialog archive-dialog"
+          showCloseButton={!busy}
+          finalFocus={() => archiveButtonRef.current}
+        >
           <DialogHeader className="channel-dialog-header">
             <span className="channel-dialog-icon archive">
               <FolderArchive />
@@ -1153,6 +1205,81 @@ export function ChannelsPanel({
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+function ChannelEmojiPicker({
+  value,
+  automatic,
+  onChange,
+  onAutomatic,
+}: {
+  value: string
+  automatic: boolean
+  onChange: (value: string) => void
+  onAutomatic: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className={
+              !automatic && additionalChannelEmojis.includes(value)
+                ? 'selected more-emoji'
+                : 'more-emoji'
+            }
+            aria-label="Vybrať ďalšie emoji"
+          />
+        }
+      >
+        <SmilePlus />
+      </PopoverTrigger>
+      <PopoverContent className="channel-emoji-popover" aria-label="Ďalšie emoji">
+        <div className="channel-emoji-popover-heading">
+          <strong>Vyberte emoji</strong>
+          <span>Symbol sa zobrazí na začiatku názvu kanála.</span>
+        </div>
+        <div className="channel-emoji-more-grid">
+          {additionalChannelEmojis.map((option) => (
+            <button
+              type="button"
+              key={option}
+              className={!automatic && value === option ? 'selected' : ''}
+              aria-label={`Použiť ${option}`}
+              aria-pressed={!automatic && value === option}
+              onClick={() => {
+                onChange(option)
+                setOpen(false)
+              }}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className={`automatic-emoji-choice ${automatic ? 'selected' : ''}`}
+          onClick={() => {
+            onAutomatic()
+            setOpen(false)
+          }}
+        >
+          <Sparkles />
+          <span>
+            <strong>Vyberať automaticky</strong>
+            <small>Carlo navrhne symbol podľa názvu.</small>
+          </span>
+          {automatic && <Check />}
+        </button>
+        <p className="custom-emoji-limit">
+          Vlastné serverové emoji Discord v názvoch kanálov nezobrazuje, preto tu používame bežné
+          emoji.
+        </p>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -1756,4 +1883,38 @@ function archiveRequestLabel(count: number) {
   if (count === 1) return 'otvorená žiadosť'
   if (count > 1 && count < 5) return 'otvorené žiadosti'
   return 'otvorených žiadostí'
+}
+
+function normalizeChannelName(value: string) {
+  const asciiValue = Array.from(value.normalize('NFKD'))
+    .filter((character) => character.charCodeAt(0) < 128)
+    .join('')
+  return asciiValue
+    .toLocaleLowerCase('en-US')
+    .trim()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .slice(0, 100)
+    .replace(/-+$/g, '')
+}
+
+function suggestChannelEmoji(name: string) {
+  const suggestions: Array<[string[], string]> = [
+    [['hudba', 'koncert', 'kapela', 'spev', 'zbor'], '🎵'],
+    [['divadlo', 'predstavenie', 'drama', 'tanec'], '🎭'],
+    [['kniha', 'citanie', 'skola', 'kurz', 'vzdelavanie'], '📚'],
+    [['zahrada', 'priroda', 'eko', 'rastlin', 'strom'], '🌱'],
+    [['umenie', 'tvoriv', 'malovanie', 'kreslenie'], '🎨'],
+    [['dielna', 'oprava', 'stavba', 'technika'], '🛠️'],
+    [['tabor', 'vylet', 'stanovanie'], '⛺'],
+    [['film', 'kino', 'video'], '🎬'],
+    [['futbal', 'sport', 'turnaj'], '⚽'],
+    [['varenie', 'kuchyna', 'jedlo'], '🍲'],
+    [['fot', 'kamera'], '📷'],
+    [['oslava', 'party', 'festival'], '🎉'],
+  ]
+  return (
+    suggestions.find(([keywords]) => keywords.some((keyword) => name.includes(keyword)))?.[1] ??
+    '🏠'
+  )
 }
