@@ -5,8 +5,8 @@
 ## Základné údaje
 
 - **Posledná aktualizácia:** 11. august 2026
-- **Celkový stav:** E0–E11 sú implementované a auditované; aktuálna lokálna regresia má 192 úspešných backendových testov a 1 opt-in skip, 13 frontendových testov, 34 desktop/mobile browser scenárov a 2 full-stack browser scenáre. Shadow runtime, praktická obnova aktuálneho databázového snapshotu, exact-source backend image a vzdialený CI run `31522115765` sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
-- **Aktuálna etapa:** E12 – popri otvorenom externom staging/UAT kroku prebieha používateľsky validovaný produktový polish E9 administrácie; stránka Kanály má štvrtú revíziu tvorby kanála a režim `live` zostáva zakázaný
+- **Celkový stav:** E0–E11 sú implementované a auditované; aktuálna lokálna regresia má 192 úspešných backendových testov a 1 opt-in skip, 13 frontendových testov, 34 desktop/mobile browser scenárov a 2 full-stack browser scenáre. Shadow runtime, praktická obnova aktuálneho databázového snapshotu, exact-source backend image a vzdialený CI run `31537457718` sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
+- **Aktuálna etapa:** E12 – popri otvorenom externom staging/UAT kroku prebieha používateľsky validovaný produktový polish E9 administrácie; vznikol záväzný UI/UX štandard pre celú aplikáciu a režim `live` zostáva zakázaný
 - **Najbližší kontrolný bod:** pripraviť produkčne podobný HTTPS staging a vykonať/podpísať Admin, Team Mod, SDB/FMA, desktop/tablet/mobile/200 %/keyboard UAT podľa `docs/e12/KROKY_PRE_POUZIVATELA.md`; vyžaduje staging host/doménu a reálnych testerov. Režim `live` zostáva zakázaný
 - **Produkčný runtime:** pôvodný bot; jeho existujúci aplikačný kód nebol pri príprave zadania a plánu zmenený
 - **Nový runtime Carlo:** úplný auditovaný build API, Discord procesu, workera, frontendu a PostgreSQL beží lokálne pod `v2/` výhradne v režime `shadow`
@@ -44,6 +44,9 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 - Zadanie pokrýva automatické udalosti z Google Kalendára, redakčné úpravy, opakované udalosti, manuálne udalosti, INFO oznamy, webovú administráciu, Discord príkazy, kanály, roly, reakcie, audit, migráciu, bezpečnosť a akceptačné kritériá.
 - Otvorené produktové rozhodnutia boli zodpovedané a zapracované do normatívnych častí zadania.
 - Do zadania bolo pridané nemenné pravidlo kontinuity vyžadujúce priebežnú aktualizáciu tohto súboru.
+- Bol vytvorený normatívny dokument `UI_UX_STANDARDY.md`, ktorý prevádza produktové požiadavky a doterajšiu používateľskú validáciu na dlhodobo použiteľné pravidlá informačnej architektúry, responzivity, vizuálneho jazyka, komponentov, mikrotextov, systémových stavov, prístupnosti, bezpečnosti a kontroly kvality.
+- Kapitola 12 zadania na tento dokument priamo odkazuje a určuje, že funkčne hotová obrazovka bez splnenia UI/UX štandardu nie je hotovým výsledkom. Štandard obsahuje aj zakázané antipatterny, kontrolné zoznamy, Definition of Done, šablónu návrhu novej stránky a pravidlá riadenia budúcich výnimiek.
+- Dokument má 23 súvislých kapitol a po vytvorení prešiel kontrolou formátovania nového súboru, whitespace, existencie interných dokumentových odkazov, jedinečnosti hlavného nadpisu, postupnosti hlavných kapitol a uzavretia code fence. Keďže ide výhradne o dokumentačnú zmenu bez zásahu do runtime kódu, aplikačné testy sa neopakovali.
 
 ### Potvrdené produktové rozhodnutia
 

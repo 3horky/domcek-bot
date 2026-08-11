@@ -619,6 +619,12 @@ Každé tlačidlo, formulár a potvrdenie musí znovu overiť oprávnenie a iden
 
 ## 12.1 Všeobecné požiadavky
 
+Konkrétna informačná architektúra, vizuálny jazyk, komponentové správanie,
+mikrotexty, responzivita, prístupnosť a kontrola kvality sa riadia normatívnym
+dokumentom [`UI_UX_STANDARDY.md`](./UI_UX_STANDARDY.md). Každá nová alebo menená
+obrazovka musí spĺňať zadanie aj tento štandard; samotné funkčné dokončenie bez
+zodpovedajúcej UI/UX kvality sa nepovažuje za hotový výsledok.
+
 Webová administrácia musí byť:
 
 - vizuálne elegantná a konzistentná,
