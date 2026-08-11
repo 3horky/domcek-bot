@@ -5,9 +5,10 @@
 | Stav                  | pripravený na realizáciu        |
 | Rozsah                | celá webová administrácia Carlo |
 | Prvé oblasti          | Reakcie → Roly → Nastavenia     |
+| Vstupný index         | `UI_UX_DESTILAT.md`             |
 | Normatívny základ     | `UI_UX_STANDARDY.md`            |
 | Funkčný základ        | `ZADANIE.md`                    |
-| Posledná aktualizácia | 11. august 2026                 |
+| Posledná aktualizácia | 12. august 2026                 |
 
 ## 1. Cieľ plánu
 
@@ -19,7 +20,7 @@ Výsledkom má byť aplikácia, v ktorej:
 - používateľ rozumie aktuálnemu stavu aj dôsledku každej akcie,
 - rovnaké prvky vyzerajú a správajú sa rovnako,
 - žiadna kritická funkcia nie je navrhnutá iba pre ideálny úspech,
-- desktop, mobil, klávesnica a rôzne roly dostávajú rovnocennú skúsenosť,
+- primárny desktop, podporovaný mobil, klávesnica a rôzne roly dostávajú bezpečnú skúsenosť s vedome určenými prioritami,
 - automatizované testy chránia funkčnosť aj dôležité UX pravidlá,
 - každé zistenie, rozhodnutie, oprava a overenie zostáva dohľadateľné.
 
@@ -27,14 +28,15 @@ Výsledkom má byť aplikácia, v ktorej:
 
 Každá oblasť prejde rovnakým uzavretým cyklom:
 
-1. **Inventarizácia úloh** – čo chce používateľ na stránke skutočne dosiahnuť.
-2. **Audit skutočného rozhrania** – desktop, mobil, klávesnica, roly a systémové stavy.
-3. **Porovnanie so štandardom** – každé zistenie sa viaže na konkrétnu kapitolu `UI_UX_STANDARDY.md`.
-4. **Návrh cieľového toku** – hierarchia, stavy, mikrotexty a responzívne správanie pred úpravou CSS.
-5. **Implementácia po ucelených rezoch** – správanie, vzhľad, backend kontrakt a testy sa menia spolu.
-6. **Vizuálna a interakčná kontrola** – reálne vykreslená stránka, nie iba kontrola DOM.
-7. **Regresia a kontrolná brána** – zmena sa uzavrie až po splnení všetkých akceptačných bodov.
-8. **Aktualizácia dokumentácie** – auditná matica, rozhodnutia a `STATUS.md` sa aktualizujú v tom istom kroku.
+1. **Povinné načítanie pravidiel** – prečítať celý `UI_UX_DESTILAT.md`, potom celé kapitoly 1, 19, 20, 24 a všetky doménovo relevantné kapitoly `UI_UX_STANDARDY.md`.
+2. **Inventarizácia úloh** – čo chce používateľ na stránke skutočne dosiahnuť.
+3. **Audit skutočného rozhrania** – primárny desktop, sekundárne viewporty, klávesnica, roly a systémové stavy.
+4. **Porovnanie so štandardom** – každé zistenie sa viaže na konkrétnu kapitolu, dostane závažnosť aj nezávislé označenie **[BLOKUJE]** alebo **[BACKLOG]**.
+5. **Návrh cieľového toku** – hierarchia, stavy, mikrotexty a responzívne správanie pred úpravou CSS.
+6. **Implementácia po ucelených rezoch** – správanie, vzhľad, backend kontrakt a testy sa menia spolu.
+7. **Automatická, vizuálna a interakčná kontrola** – použiť zavedený lint/test; chýbajúci mechanizmus nahradiť explicitným manuálnym dôkazom a evidovať jeho implementáciu.
+8. **Regresia a kontrolná brána** – uzavrieť všetky body **[BLOKUJE]**; každý odložený **[BACKLOG]** musí mať ID, dopad a etapu.
+9. **Aktualizácia dokumentácie** – auditná matica, rozhodnutia a `STATUS.md` sa aktualizujú v tom istom kroku.
 
 Oprava sa nesmie uzavrieť iba preto, že nový layout vyzerá lepšie na jednom screenshote. Musí byť lepší aj pri reálnych dátach, dlhom texte, chybe, pomalej odpovedi, úzkom viewporte a klávesnicovom ovládaní.
 
@@ -50,19 +52,22 @@ Na začiatku realizácie vznikne `docs/ui-ux/AUDIT_MATICA.md`. Každé zistenie 
 | Oblasť a úloha    | stránka a používateľský cieľ                      |
 | Štandard          | konkrétna kapitola `UI_UX_STANDARDY.md`           |
 | Závažnosť         | P0, P1 alebo P2                                   |
+| Dopad na dodanie  | **[BLOKUJE]** alebo **[BACKLOG]**                 |
 | Stav súladu       | spĺňa / čiastočne spĺňa / nespĺňa / nevzťahuje sa |
 | Dôkaz             | screenshot, video, test, DOM alebo zdrojový odkaz |
 | Dopad             | čo problém spôsobuje používateľovi                |
 | Cieľové správanie | stručný návrh nápravy                             |
 | Akceptácia        | merateľná podmienka dokončenia                    |
+| Vynútenie         | lint / automatizovaný test / ľudský úsudok        |
 | Test              | automatizované a manuálne overenie                |
+| Plánovaná etapa   | povinná pri každom **[BACKLOG]**                  |
 | Stav opravy       | otvorené / navrhnuté / implementované / overené   |
 
 Matica nesmie byť iba checklist s odškrtnutým „OK“. Každé nesplnené pravidlo potrebuje dôkaz, dopad a akceptačné kritérium.
 
 ### 3.2 Závažnosť zistení
 
-#### P0 – blokujúce
+#### P0 – kritické
 
 P0 je problém, ktorý môže:
 
@@ -73,7 +78,7 @@ P0 je problém, ktorý môže:
 - sprístupniť citlivú funkciu nesprávnej role,
 - nechať používateľa bez bezpečnej cesty na zotavenie.
 
-P0 sa opravuje pred vizuálnym polishom danej oblasti.
+P0 sa opravuje pred vizuálnym polishom danej oblasti. Závažnosť opisuje silu dopadu; o bráne dodania rozhoduje samostatné označenie podľa kapitoly 1 štandardu. P0 bude spravidla **[BLOKUJE]**, ale obe polia sa vždy vypĺňajú osobitne.
 
 #### P1 – významné
 
@@ -112,7 +117,10 @@ Pre každú relevantnú stránku sa pripravia fixtures pre:
 - stratu oprávnenia,
 - dlhé slovenské názvy a veľa položiek,
 - nedostupný externý objekt,
-- neuložené zmeny.
+- neuložené zmeny,
+- prvé spustenie bez nastavení, kalendára a histórie,
+- stratu siete a vypršanie relácie uprostred vyplneného formulára,
+- ochrannú lehotu publikovania a podmienene bezpečné Undo.
 
 ## 4. Východiskové zistenia z aktuálneho kódu
 
@@ -181,6 +189,10 @@ UX0 nie je redesign celej aplikácie. Vytvorí iba minimum potrebné na bezpečn
 - spísať route, roly, primárne úlohy a zodpovedajúce fixtures,
 - pripraviť konzistentný spôsob screenshotov pre povinné viewporty,
 - pridať testovacie helpery pre loading, empty, API error, forbidden a dlhé dáta,
+- zaviesť Stylelint zákaz hex farieb mimo tokenov a zdokumentovaného allowlistu,
+- zaviesť `eslint-plugin-jsx-a11y` a kontrolu zakázaných viacnásobných selectov,
+- zaviesť Playwright + Axe základ pre hlavný tok, návrat fokusu a dvojklik,
+- zaviesť kontrolu označení **[BLOKUJE]** / **[BACKLOG]** v kapitolách 19 a 20,
 - zmerať hardcoded farby, lokálne tlačidlá a duplicitné stavové vzory,
 - určiť spoločný komponent pre page header, lokálny loading/error/empty stav a notice,
 - zabezpečiť správnu alert sémantiku chyby a status sémantiku úspechu,
@@ -191,6 +203,7 @@ UX0 nie je redesign celej aplikácie. Vytvorí iba minimum potrebné na bezpečn
 
 - Každá etapa má pripravenú auditnú sekciu a dôkazové scenáre.
 - Browser testy vedia spustiť desktopový aj mobilný projekt s požadovanými stavmi.
+- Lint, Axe, dvojklik a návrat fokusu majú spustiteľný mechanizmus alebo otvorený blokujúci záznam; samotné tvrdenie o manuálnej kontrole nestačí.
 - Spoločné stavové komponenty majú izolovaný test alebo pilotné použitie.
 - Existujúci test suite zostáva zelený.
 
@@ -238,7 +251,7 @@ Každé pravidlo na jednom mieste odpovedá, či je zapnuté, aké emoji použí
 - Testované emoji nemôže byť iné než hodnota, ktorú používateľ považuje za testovanú.
 - Všetky tri pravidlá používajú jeden vizuálny a interakčný model.
 - Reakcie majú desktopový aj mobilný browser E2E scenár.
-- Všetky P0 a P1 zistenia sú overené ako opravené.
+- Všetky zistenia **[BLOKUJE]** sú overené ako opravené a každý **[BACKLOG]** je evidovaný.
 
 ## 8. UX2 – Roly
 
@@ -295,6 +308,8 @@ Nastavenia obsahujú iba trvalé pravidlá Publikovania a Kalendáre. Ručné pu
 - Prepísať sync/recovery/retry texty na dopad a odporúčanú činnosť.
 - Núdzovú cache výnimku označiť ako rizikovú, vysvetliť čerstvosť a pri zapnutí potvrdiť.
 - Zachovať `@everyone` ako povinnú informatívnu vlastnosť, nie switch.
+- Pridať ochrannú lehotu 0–300 sekúnd s predvolenými 30 sekundami a výber ďalších príjemcov dočasnej DM popri aktuálnych Adminoch.
+- Vysvetliť, že zlyhanie DM publikovanie nezastaví, ale vytvorí moderátorské upozornenie.
 - Zaviesť dirty indikátor, jasný rozsah uloženia a ochranu pred stratou práce.
 - Pri „Obnoviť údaje“ rozlíšiť tiché načítanie, zahodenie zmien a konflikt.
 - Na mobile ponechať akcie dostupné v kontexte príslušných sekcií.
@@ -315,7 +330,7 @@ Nastavenia obsahujú iba trvalé pravidlá Publikovania a Kalendáre. Ručné pu
 
 - Admin vidí obe oblasti a môže ich meniť.
 - Používateľ bez `manage_settings` nemá navigáciu a pri priamej route dostane zrozumiteľný forbidden stav.
-- Testovať uloženie každej skupiny, reload, dirty odchod, konflikt, núdzovú cache výnimku, pridanie/úpravu/aktiváciu/sync/radenie kalendára, stale/failure, mobil, nízky viewport a 200 % zoom.
+- Testovať uloženie každej skupiny, reload, dirty odchod, konflikt, núdzovú cache výnimku, ochrannú lehotu a príjemcov DM, pridanie/úpravu/aktiváciu/sync/radenie kalendára, stale/failure, mobil, nízky viewport a 200 % zoom.
 
 ### 9.5 Kontrolná brána UX3
 
@@ -338,7 +353,9 @@ Po prvých troch etapách sa osvedčené vzory zjednotia naprieč aplikáciou:
 - modaly a potvrdzovacie dialógy,
 - route-level oprávnenie,
 - hardcoded farby, spacingy a duplicitné tlačidlá,
-- topbar, sidebar, mobilná navigácia, skip link a route loader.
+- topbar, sidebar, mobilná navigácia, skip link a route loader,
+- prvé spustenie v poradí Discord miesta → voliteľný kalendár → harmonogram → preview,
+- zachovanie formulára pri strate siete a relácie bez automatického opätovného odoslania.
 
 Táto etapa nesmie svojvoľne prefarbiť dokončené stránky. Spoločný komponent sa prevezme iba po overení akceptovaného správania.
 
@@ -352,7 +369,9 @@ Audit preverí:
 - prioritizáciu problémov a čakajúcich archivácií,
 - jednoznačný vstup do Redakčného pultu,
 - správne umiestnené ručné publikovanie s náhľadom,
+- ochrannú lehotu: odpočet, „Zastaviť“, „Zverejniť teraz“, žiadny verejný účinok pred koncom a pravdivý výsledok neskorého zastavenia,
 - odstránenie metrík bez rozhodovacej hodnoty,
+- prvé spustenie bez histórie, kalendára a uložených nastavení,
 - mobile/zoom a roly SDB / FMA vs. Admin.
 
 ## 12. UX6 – Redakčný pult a Discord náhľad
@@ -373,6 +392,8 @@ Audit preverí:
 - palety INFO/udalosti, limity, delenie správ a seen reakciu,
 - veľký balík, mobil a nízky viewport.
 
+Ako konkrétne regresné hypotézy sa overí, či sa nevrátil trvalý bočný formulár, pracovisko stratené na širokom monitore alebo vyššie než viewport, tri oddelené administrácie obsahu, záložky oddeľujúce obsah od Discord náhľadu, nulová čiastková metrika vydávaná za celok a odlišný kartový layout INFO bez doménového dôvodu.
+
 ## 13. UX7 – Kanály
 
 Kanály už prešli používateľskými revíziami, preto sa najprv vykoná regresný audit. Kontroluje sa:
@@ -382,12 +403,17 @@ Kanály už prešli používateľskými revíziami, preto sa najprv vykoná regr
 - normalizácia názvu s diakritikou a composition inputom,
 - dynamické štyri emoji a úplný katalóg,
 - focus po výbere/odstránení ľudí,
+- vyčistenie dopytu a výsledkov po výbere človeka a primeranú veľkosť čipu voči avataru,
 - návrat rolí a skupín na nulu,
 - zákaz archívu a voice/stage kategórií,
 - podmienené abecedné radenie,
 - modal, mobilná klávesnica, sticky akcie a návrat fokusu,
 - čakajúca archivácia a Admin rozhodnutie,
 - double-click, nejasný externý výsledok a recovery.
+
+Regresné hypotézy zahŕňajú disclosure bez šípky alebo súhrnu, rozdielne disclosure riadky v jednom formulári, textové pole „použiť iný symbol“, obmedzený emoji katalóg, blokovanie medzier či diakritiky namiesto živej normalizácie a preskočovací odkaz uviaznutý po zatvorení modalu.
+
+Undo sa overí osobitne: rola iba pri nezmenenom stave a čerstvom oprávnení, archivácia iba s platným snapshotom a vytvorený kanál presným odstránením len keď zostal prázdny a nezmenený; inak sa ponúkne archivácia. Návrat nemá časový limit, ale nikdy nesmie obísť aktuálne predpoklady.
 
 Ak stránka pravidlo spĺňa, nemení sa iba kvôli vizuálnej uniformite.
 
@@ -412,21 +438,23 @@ Audit preverí používateľský dopad namiesto technických heartbeatov, zdravi
 - vykonať automatický accessibility scan a manuálnu kontrolu,
 - overiť kontrast, reduced motion, 200 % zoom a dlhé dáta,
 - skontrolovať horizontálny scroll,
-- uzavrieť všetky P0/P1 s dôkazom,
-- zdokumentovať vedomé P2 výnimky.
+- uzavrieť všetky zistenia **[BLOKUJE]** s dôkazom,
+- každému otvorenému **[BACKLOG]** priradiť ID, dopad a plánovanú etapu,
+- pred väčším UI vydaním vykonať a zdokumentovať 20–30-minútový vlastný pozorovací scenár.
 
 ### 16.2 Finálna kontrolná brána
 
 Audit je uzavretý iba vtedy, keď:
 
-1. všetky P0 a P1 sú implementované a overené,
-2. žiadna hlavná úloha nemá iba happy-path test,
-3. každá route má relevantné loading, empty/error a forbidden správanie,
-4. desktopové aj mobilné browser testy sú zelené,
-5. používateľská vizuálna kontrola potvrdí prvé tri oblasti aj kľúčové pracoviská,
-6. štandard, auditná matica, evidencia a `STATUS.md` zodpovedajú realite,
-7. celý repository CI je zelený,
-8. režim `live` nebol kvôli UI práci svojvoľne zapnutý.
+1. všetky zistenia **[BLOKUJE]** sú implementované a overené,
+2. každý otvorený **[BACKLOG]** má ID, dopad, dôkaz a plánovanú etapu,
+3. žiadna hlavná úloha nemá iba happy-path test,
+4. každá route má relevantné loading, empty/error a forbidden správanie,
+5. browser test primárneho desktopu je zelený a sekundárne profily majú evidovaný výsledok,
+6. vlastný pozorovací scenár potvrdí prvé tri oblasti aj kľúčové pracoviská,
+7. štandard, auditná matica, evidencia a `STATUS.md` zodpovedajú realite,
+8. celý repository CI je zelený,
+9. režim `live` nebol kvôli UI práci svojvoľne zapnutý.
 
 ## 17. Definition of Done každej etapy
 
@@ -434,11 +462,11 @@ Etapa sa nepovažuje za dokončenú, kým:
 
 - má uzavretú auditnú maticu pre svoj rozsah,
 - cieľový tok bol navrhnutý pred detailným polishom,
-- všetky P0 a P1 sú opravené,
+- všetky body **[BLOKUJE]** sú opravené a každý **[BACKLOG]** má plánovanú etapu,
 - relevantné systémové stavy sú implementované,
 - zmena funguje pre všetky oprávnené roly,
 - citlivé akcie overujú oprávnenie a zabraňujú dvojkliku,
-- mobil, desktop, nízky viewport, 200 % zoom a reduced motion sú overené,
+- primárny desktop je blokujúco overený; mobil, nízky viewport, 200 % zoom a reduced motion majú výsledok a prípadný backlog,
 - tok sa dá dokončiť klávesnicou a fokus je predvídateľný,
 - browser E2E obsahuje úspech aj významnú chybu,
 - vizuálna kontrola používa reálny render a realistické dáta,

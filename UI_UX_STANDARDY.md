@@ -1,12 +1,12 @@
 # UI a UX štandardy aplikácie Carlo
 
-| Vlastnosť             | Hodnota                                                                    |
-| --------------------- | -------------------------------------------------------------------------- |
-| Stav                  | záväzný projektový štandard                                                |
-| Rozsah                | webová administrácia Carlo a jej používateľské toky                        |
-| Vlastník              | produktový a frontendový návrh projektu Carlo                              |
-| Posledná aktualizácia | 11. august 2026                                                            |
-| Súvisiace dokumenty   | `ZADANIE.md`, `PLAN_IMPLEMENTACIE.md`, `PLAN_UI_UX_AUDITU.md`, `STATUS.md` |
+| Vlastnosť             | Hodnota                                                                                         |
+| --------------------- | ----------------------------------------------------------------------------------------------- |
+| Stav                  | záväzný projektový štandard                                                                     |
+| Rozsah                | webová administrácia Carlo a jej používateľské toky                                             |
+| Vlastník              | produktový a frontendový návrh projektu Carlo                                                   |
+| Posledná aktualizácia | 12. august 2026                                                                                 |
+| Súvisiace dokumenty   | `UI_UX_DESTILAT.md`, `ZADANIE.md`, `PLAN_IMPLEMENTACIE.md`, `PLAN_UI_UX_AUDITU.md`, `STATUS.md` |
 
 ## 1. Účel a záväznosť dokumentu
 
@@ -28,6 +28,13 @@ Pri požiadavkách sa používajú tieto výrazy:
 - **MUSÍ / NESMIE** – záväzné pravidlo bez voľnej interpretácie,
 - **MÁ / NEMÁ** – silné odporúčanie; výnimka potrebuje písomné zdôvodnenie,
 - **MÔŽE** – dovolená možnosť, ak nenaruší ostatné pravidlá.
+
+Zároveň sa každé auditné alebo kontrolné zistenie označuje nezávislou osou dopadu na dodanie:
+
+- **[BLOKUJE]** – zistenie v menenom alebo auditovanom toku bráni dokončeniu, merge alebo priamemu odoslaniu na `main`. Patrí sem najmä falošný úspech, nepravdivý náhľad, strata alebo tiché prepísanie práce, nesprávne oprávnenie, nejasný externý výsledok vydávaný za úspech, neidempotentná kritická operácia a hlavný tok nedostupný klávesnicou.
+- **[BACKLOG]** – zistenie zhoršuje kvalitu, ale neklame používateľa ani nespôsobuje externú škodu. Smie sa odložiť iba s evidovaným ID, dopadom a plánovanou etapou nápravy.
+
+Normatívne slovo a dopad na dodanie sú dve rôzne veci: aj pravidlo **MUSÍ** môže byť pri existujúcom náleze dočasne **[BACKLOG]**, nikdy však nesmie potichu zaniknúť. Nové alebo zhoršené porušenie sa neposudzuje miernejšie len preto, že podobný dlh už existuje. Ak odložiteľný nedostatok v konkrétnom kontexte znemožní úlohu, skryje dôsledok alebo vytvorí riziko externého zásahu, automaticky sa stáva **[BLOKUJE]**.
 
 Funkčný a produktový rozsah určuje [`ZADANIE.md`](./ZADANIE.md). Technické etapy určuje [`PLAN_IMPLEMENTACIE.md`](./PLAN_IMPLEMENTACIE.md). Tento dokument je autoritatívny pre spôsob, akým sa funkcie organizujú, pomenúvajú, zobrazujú a ovládajú. Pri konflikte sa najprv zachová produktová pravda zo zadania a následne sa nájde riešenie, ktoré spĺňa tento štandard; konflikt sa nesmie potichu obísť.
 
@@ -200,6 +207,17 @@ Tieto stránky slúžia na dohľadanie a vysvetlenie, nie na vystavenie technick
 
 Samostatné systémové obrazovky majú zachovať značku Carlo, krátky zrozumiteľný nadpis, vysvetlenie a jednu relevantnú ďalšiu akciu. Používateľ nesmie ako hlavný obsah dostať JSON, nečitateľné kódovanie, stack trace alebo samotný HTTP status.
 
+### 6.7 Prvé spustenie
+
+Nový správca bez nastavení, pripojeného kalendára a histórie musí vidieť pokojný úvodný stav, nie pokazený Prehľad. Carlo ho vedie v poradí:
+
+1. vybrať cieľové miesta na Discorde,
+2. voliteľne pripojiť Google kalendár,
+3. skontrolovať harmonogram publikovania,
+4. overiť kanonický náhľad.
+
+V jednom okamihu sa zvýrazní jeden najbližší krok, dokončené kroky sa označia a rozpracovanie sa dá bezpečne opustiť a obnoviť. Kalendár je preskočiteľný: Carlo musí vedieť pripraviť manuálne udalosti a INFO oznamy aj bez neho. Chýbajúca história sa pomenuje „Zatiaľ sa nič nepublikovalo“ a ponúkne zmysluplný ďalší krok. Predvolená hodnota sa nesmie tváriť ako uložené nastavenie. Po základnom nastavení onboarding ustúpi bežnému Prehľadu, ale zostane znovu dostupný ako sprievodca.
+
 ## 7. Globálne rozloženie a responzivita
 
 ### 7.1 Aplikačný rámec
@@ -254,6 +272,12 @@ Ak sa použije vnorené rolovanie:
 Primárne dotykové ciele majú mať aspoň 44 × 44 px. Kompaktné desktopové ikonové akcie môžu mať 36 × 36 px iba vtedy, ak majú dostatočné rozostupy a na dotykovom layoute sa zväčšia. Klikateľný riadok nesmie obsahovať malé konfliktné ciele bez jasného oddelenia.
 
 Rozhranie musí zostať použiteľné pri 200 % zväčšení. Obsah sa má preliať a preskladať, nie odrezať.
+
+### 7.6 Profil primárneho zariadenia
+
+Primárnym pracovným profilom je do ďalšieho používateľského zistenia desktop alebo notebook s klávesnicou a myšou; referenčná auditná šírka je 1440 px. Pri konflikte sa uprednostní čitateľnosť, pracovná hustota a rýchlosť hlavného desktopového toku. Povinné zostáva overenie pri 1024 px a pri širokom pracovisku 1920 px.
+
+Mobil je podporovaný sekundárny profil, nie zmenšená kópia desktopu. Jeho kvalitatívny nedostatok môže byť **[BACKLOG]**, pokiaľ nespôsobí nesprávny výsledok, nestratí údaje alebo nezneprístupní kritickú akciu; vtedy je **[BLOKUJE]**. Profil sa prehodnotí podľa evidencie zo spätnej väzby, nie podľa dojmu.
 
 ## 8. Vizuálny jazyk
 
@@ -524,9 +548,13 @@ Modal sa nepoužíva pre dlhý viacstránkový proces, rozsiahle porovnávanie a
 
 ### 10.10 Potvrdzovacie dialógy
 
-Potvrdenie je povinné pri publikovaní, zmene citlivej roly, schválení archivácie a iných externe viditeľných alebo ťažko vratných akciách.
+Publikovanie, zmena citlivej roly, schválenie archivácie a iné externe viditeľné alebo ťažko vratné akcie musia mať primeranú ochranu: potvrdenie, ochrannú lehotu podľa kapitoly 13.7 alebo preukázateľne bezpečné Undo. Ak podmienky Undo nie sú splnené, potvrdenie je povinné.
 
 Dialóg musí pomenovať konkrétny objekt a dôsledok. Primárna deštruktívna akcia má presný názov, nie „Áno“. Bezpečná akcia „Zrušiť“ má dostať po otvorení rozumný predvolený fokus, ak by Enter na nebezpečnej akcii predstavoval riziko.
+
+Undo je plnohodnotná alternatíva k dialógu, ak systém pozná presný bezpečný opak, vie ho vykonať idempotentne, pred návratom znovu overí oprávnenie a nezmenený stav a prípadné zlyhanie zobrazí pravdivo. Vtedy sa uprednostní okamžitý výsledok so správou „Vykonané. Vrátiť späť“ pred otázkou, ktorá iba spomaľuje bežnú prácu.
+
+Undo nesmie byť sľubom bez technicky bezpečnej cesty späť. Ak sa objekt medzitým zmenil, oprávnenie zaniklo alebo by návrat odstránil cudziu prácu, Carlo návrat nevykoná a vysvetlí dôvod aj bezpečnú alternatívu. Potvrdenie zostáva povinné, ak presný opak neexistuje, vzniká nevratná externá škoda alebo sa nedajú spoľahlivo overiť predpoklady návratu. Časová lehota sama osebe nerozhoduje o dostupnosti Undo; rozhoduje aktuálna bezpečnosť operácie.
 
 ### 10.11 Popovery, tooltipy a výber emoji
 
@@ -643,6 +671,19 @@ Ak obsah vychádza zo starej cache alebo posledná synchronizácia zlyhala, mus�
 
 Optimistická aktualizácia je prípustná iba pri ľahko vratnej operácii s nízkym rizikom. Publikovanie, vytvorenie kanála, archivácia a zmena rolí musia počkať na potvrdený výsledok. Ak sa optimistická zmena nepodarí, musí sa spoľahlivo vrátiť a vysvetliť.
 
+### 11.7 Strata spojenia a vypršanie relácie počas formulára
+
+Rozpracovaný formulár nesmie zmiznúť len preto, že vypadla sieť alebo vypršala relácia. Carlo musí:
+
+- zachovať hodnoty v pamäti a netajné rozpracovanie v rámci aktuálnej relácie prehliadača, oddelené podľa účtu, servera, formulára a verzie,
+- zobraziť trvalý stav „Bez spojenia“ alebo „Prihlásenie vypršalo“ s dopadom na uloženie,
+- nevykonať externú operáciu ani ju potichu nezaradiť na neskoršie automatické odoslanie,
+- po opätovnom prihlásení obnoviť rozpracovanie iba tomu istému používateľovi a serveru,
+- po návrate spojenia najprv načítať aktuálnu verziu a pri konflikte ponúknuť porovnanie, nie tiché prepísanie,
+- umožniť skopírovať dlhý text, ak bezpečné obnovenie nie je možné.
+
+Rozpracovanie sa odstráni po potvrdenom uložení, vedomom zahodení alebo odhlásení. Tajomstvá a citlivé tokeny sa nikdy neukladajú do klientského konceptu. Automatické opakovanie odoslania formulára bez nového vedomého potvrdenia je zakázané.
+
 ## 12. Interakcie a pohyb
 
 ### 12.1 Odozva
@@ -747,6 +788,22 @@ Nastavenia musia zobrazovať aktuálnu hodnotu, dopad zmeny a stav uloženia.
 - Celkový stav integrácie nesmie byť zelený, ak niektorý aktívny zdroj nikdy neuspel alebo je zastaraný.
 - Ručná synchronizácia má stav priebehu a po dokončení povie, čo sa aktualizovalo.
 
+### 13.7 Ochranná lehota publikovania a vratné serverové operácie
+
+Publikovanie môže mať v Nastaveniach ochrannú lehotu 0 až 300 sekúnd, predvolene 30 sekúnd. Hodnota 0 ju úplne vypne. Počas lehoty ešte neexistuje verejný oznam ani `@everyone`; Carlo drží nemenný publikačný snapshot v trvácnom stave „Čaká na zverejnenie“.
+
+Pri ručnom publikovaní web zobrazí verný náhľad, odpočet a akcie „Zastaviť“ a „Zverejniť teraz“. Pri automatickom publikovaní Carlo pošle dočasnú bežnú DM všetkým aktuálnym Adminom a ďalším ľuďom určeným v Nastaveniach. Každý aktuálny Admin aj každý takto nakonfigurovaný príjemca môže publikovanie zastaviť tlačidlom alebo správou `stop` v DM počas lehoty. Oprávnenie a zoznam príjemcov sa overia čerstvo; rozhodnutie zastaviť alebo zverejniť musí byť atómové, idempotentné a bezpečné po reštarte. Neskorý príkaz dostane pravdivú odpoveď, že publikovanie už nebolo možné zastaviť.
+
+Nedoručená DM nesmie zablokovať automatické publikovanie, ale musí vytvoriť moderátorské upozornenie. Dočasné DM sa po zastavení alebo zverejnení odstránia, ak ich Discord ešte sprístupňuje. Toto nie je Discord „ephemeral“ správa ani Undo už verejnej publikácie; je to ochranná lehota pred externým účinkom.
+
+Vytvorenie kanála, archivácia a zmena roly ponúkajú časovo neobmedzené, ale stavovo bezpečné Undo:
+
+- rola sa vráti iba pri nezmenenom relevantnom stave a platnom oprávnení,
+- archivácia sa vráti iba ak kanál stále existuje a obnovovací snapshot spĺňa predpoklady,
+- novovytvorený kanál sa presne odstráni iba ak zostal prázdny a nezmenený; inak Carlo ponúkne bezpečnú archiváciu.
+
+Ak predpoklady neplatia, ovládanie nesmie predstierať dostupný návrat a musí vysvetliť, čo sa zmenilo.
+
 ## 14. Prístupnosť
 
 Minimálnym cieľom je WCAG 2.1 AA; nové komponenty sa majú posudzovať aj podľa relevantných zlepšení WCAG 2.2 AA.
@@ -805,37 +862,22 @@ Používateľ má dostať vizuálnu odozvu do 100 ms od interakcie. Bežná lok�
 
 ## 17. Zakázané antipatterny
 
-Nasledujúce riešenia sú výslovne neprípustné, pretože už viedli alebo pravdepodobne povedú k nejasnému rozhraniu:
+Nasledujúce nadčasové vzory sú výslovne neprípustné:
 
-- formulár natlačený trvalo v bočnom stĺpci bez priestoru a kontextu,
-- malý pracovný panel stratený na veľkom monitore,
-- pracovisko vyššie než viewport s nedostupným spodkom,
-- tri oddelené administrácie pre obsah jedného oznamu,
-- samostatné záložky „Obsah“ a „Discord preview“, ak majú byť videné naraz,
-- vizuálne nepresný náhľad s vymyslenými textami alebo inou štruktúrou než výsledný Discord,
-- samostatná nulová metrika prezentovaná ako nulový celkový obsah,
-- odlišný kartový layout pre INFO bez doménového dôvodu,
-- technické názvy akcií ako „trigger“, „draft refresh“, enum alebo endpoint,
-- surový JSON ako chybová stránka,
-- natívny viacnásobný select vyžadujúci Ctrl/Cmd,
-- výber, ktorý sa nedá vrátiť na nulu,
-- vyhľadávanie, pri ktorom po výbere zostane starý dopyt aj výsledky,
-- čip menší než jeho avatar alebo s nestabilnou výškou,
-- disclosure bez šípky, súhrnu a zreteľnej klikateľnosti,
-- rôzne disclosure riadky s odlišnou výškou a štruktúrou v tom istom formulári,
-- textové pole „použiť iný symbol“ namiesto kvalitného emoji pickera,
-- obmedzený náhodný zoznam emoji bez úplného vyhľadateľného katalógu,
-- pomocný text vysvetľujúci technické detaily bez úžitku,
-- zakázanie medzery alebo diakritiky namiesto prirodzenej živej normalizácie,
-- klikateľnosť alebo dôležitá informácia dostupná iba hoverom,
-- deaktivované tlačidlo bez zrozumiteľného dôvodu,
-- modal bez návratu fokusu alebo s odrezanou pätou,
-- preskočovací odkaz viditeľne uviaznutý po zatvorení modalu,
+- náhľad, číslo, stav alebo úspech, ktorý nezodpovedá skutočnému výsledku,
+- technické názvy akcií, interné enumy, endpointy alebo surový JSON ako hlavný obsah,
+- natívny viacnásobný select vyžadujúci Ctrl/Cmd alebo výber bez návratu na nulu,
+- pomocný text o implementácii bez úžitku pre rozhodnutie používateľa,
+- dôležitá informácia alebo ovládanie dostupné iba hoverom,
+- deaktivovaná akcia bez zrozumiteľného dôvodu,
+- modal bez návratu fokusu, bezpečného rolovania alebo dostupnej päty,
 - farba ako jediný indikátor stavu,
 - horizontálny scroll celej mobilnej stránky,
-- lokálne hardcoded farby, spacing a komponenty kopírujúce existujúci systém,
-- potvrdenie každej triviálnej akcie alebo naopak chýbajúce potvrdenie citlivej akcie,
-- falošný úspech pred dokončením operácie na Discorde alebo v Kalendári.
+- lokálne hardcoded farby, rozostupy alebo kópia existujúceho komponentu,
+- potvrdzovanie každej triviálnej akcie alebo chýbajúce bezpečie pri citlivej akcii,
+- Undo, ktoré už podľa aktuálneho stavu nevie bezpečne obnoviť presný výsledok.
+
+Konkrétne nálezy viazané na dnešné obrazovky nie sú trvalým štandardom. Sú evidované a overované ako regresné hypotézy v [`PLAN_UI_UX_AUDITU.md`](./PLAN_UI_UX_AUDITU.md); odstránenie zo stránky neznamená odstránenie všeobecného pravidla z tohto dokumentu.
 
 ## 18. Proces návrhu a zmeny
 
@@ -878,93 +920,101 @@ Výnimka zo štandardu musí obsahovať:
 
 „Na tejto stránke to vyzeralo lepšie“ nie je dostatočný dôvod.
 
+### 18.4 Spätná väzba v jednočlennom projekte
+
+Pred väčším UI vydaním vlastník vykoná aspoň jedno 20 až 30-minútové pozorovanie podľa pevného scenára v čistej relácii a s reálnou rolou. Scenár obsahuje dve až tri konkrétne úlohy; počas neho sa kód neopravuje a vlastník nahlas pomenúva, čo očakáva, čo hľadá a čomu nerozumie. Záznam obrazovky alebo stručné poznámky zachytia zaváhania, omyly, nečakané výsledky a čas dokončenia.
+
+Každý nález dostane **[BLOKUJE]** alebo **[BACKLOG]** podľa kapitoly 1. Doklad je povinnou bránou väčšieho UI vydania, nie každej malej zmeny. Súčasťou pozorovania je aj použitá šírka a zariadenie; opakované zistenia slúžia na prehodnotenie primárneho profilu z kapitoly 7.6.
+
 ## 19. Povinná kontrola kvality
 
 ### 19.1 Kontrolný zoznam návrhu
 
-- [ ] Stránka má jednu jasnú hlavnú úlohu alebo zrozumiteľne zoradené úlohy.
-- [ ] Názov, podnadpis, čísla a prázdne stavy presne opisujú svoj rozsah.
-- [ ] Funkcia je na správnom mieste informačnej architektúry.
-- [ ] Primárna akcia je zrejmá bez prečítania celej stránky.
-- [ ] Pokročilé možnosti sú odhalené postupne a objaviteľne.
-- [ ] Rozhranie používa netechnickú slovenčinu.
-- [ ] Nevznikol duplicitný vizuálny alebo behaviorálny vzor.
-- [ ] Citlivé dôsledky sú vysvetlené pred potvrdením.
+- [ ] **[BACKLOG]** Stránka má jednu jasnú hlavnú úlohu alebo zrozumiteľne zoradené úlohy.
+- [ ] **[BLOKUJE]** Názov, podnadpis, čísla a prázdne stavy presne opisujú svoj rozsah.
+- [ ] **[BACKLOG]** Funkcia je na správnom mieste informačnej architektúry.
+- [ ] **[BACKLOG]** Primárna akcia je zrejmá bez prečítania celej stránky.
+- [ ] **[BACKLOG]** Pokročilé možnosti sú odhalené postupne a objaviteľne.
+- [ ] **[BACKLOG]** Rozhranie používa netechnickú slovenčinu.
+- [ ] **[BACKLOG]** Nevznikol duplicitný vizuálny alebo behaviorálny vzor.
+- [ ] **[BLOKUJE]** Citlivé dôsledky sú vysvetlené pred potvrdením.
 
 ### 19.2 Kontrolný zoznam stavov
 
-- [ ] Načítanie má primeraný skeleton alebo lokálny stav.
-- [ ] Prázdny stav pomenúva presný zdroj alebo filter.
-- [ ] Úspech zodpovedá potvrdenému výsledku.
-- [ ] Validačné chyby sú pri poliach a nestrácajú vstup.
-- [ ] Sieťová alebo externá chyba obsahuje možnosť nápravy.
-- [ ] Konflikt neprepíše novšie údaje potichu.
-- [ ] Bez oprávnenia sa zobrazí zrozumiteľný výsledok.
-- [ ] Zastarané dáta ukazujú vek a dopad.
-- [ ] Čiastočný alebo nejasný výsledok sa netvári ako úplný úspech.
+- [ ] **[BACKLOG]** Načítanie má primeraný skeleton alebo lokálny stav.
+- [ ] **[BLOKUJE]** Prázdny stav pomenúva presný zdroj alebo filter.
+- [ ] **[BLOKUJE]** Úspech zodpovedá potvrdenému výsledku.
+- [ ] **[BLOKUJE]** Validačné chyby sú pri poliach a nestrácajú vstup.
+- [ ] **[BLOKUJE]** Sieťová alebo externá chyba obsahuje možnosť nápravy.
+- [ ] **[BLOKUJE]** Konflikt neprepíše novšie údaje potichu.
+- [ ] **[BLOKUJE]** Bez oprávnenia sa zobrazí zrozumiteľný výsledok.
+- [ ] **[BLOKUJE]** Zastarané dáta ukazujú vek a dopad, ak ovplyvňujú rozhodnutie.
+- [ ] **[BLOKUJE]** Čiastočný alebo nejasný výsledok sa netvári ako úplný úspech.
 
 ### 19.3 Kontrolný zoznam responzivity
 
-- [ ] 360 px: bez horizontálneho scrollu stránky, všetky akcie dotykovo dostupné.
-- [ ] 768 px: hierarchia zostáva jasná a obsah nie je iba zmenšený desktop.
-- [ ] 1024 px: panely majú primerané pomery a text sa neláme nečitateľne.
-- [ ] 1440 px: obsah využíva priestor bez nadmerne dlhých riadkov.
-- [ ] 1920 px pri pracovných plochách: pracovisko nie je stratené v strede.
-- [ ] Nízky viewport: modal a pracovná plocha neodrežú spodné akcie.
-- [ ] 200 % zoom: obsah sa preleje a zostane ovládateľný.
-- [ ] Mobilná klávesnica: aktívne pole a akcie zostávajú dosiahnuteľné.
+- [ ] **[BACKLOG]** 360 px: bez horizontálneho scrollu stránky, všetky akcie dotykovo dostupné.
+- [ ] **[BACKLOG]** 768 px: hierarchia zostáva jasná a obsah nie je iba zmenšený desktop.
+- [ ] **[BLOKUJE]** 1024 a 1440 px: hlavný tok, panely a text sú plne použiteľné.
+- [ ] **[BACKLOG]** 1920 px pri pracovných plochách: pracovisko nie je stratené v strede.
+- [ ] **[BACKLOG]** Nízky viewport: modal a pracovná plocha neodrežú spodné akcie.
+- [ ] **[BACKLOG]** 200 % zoom: obsah sa preleje a zostane ovládateľný.
+- [ ] **[BACKLOG]** Mobilná klávesnica: aktívne pole a akcie zostávajú dosiahnuteľné.
 
 ### 19.4 Kontrolný zoznam prístupnosti
 
-- [ ] Stránka má jeden `h1` a správnu hierarchiu nadpisov.
-- [ ] Všetky polia majú labels a chyby sú programovo prepojené.
-- [ ] Celý tok sa dá dokončiť klávesnicou.
-- [ ] Fokus je vždy viditeľný a po modale/dynamickej zmene sa vracia logicky.
-- [ ] Ikonové tlačidlá majú prístupné názvy a tooltipy.
-- [ ] Stav nie je vyjadrený iba farbou.
-- [ ] Kontrast spĺňa WCAG AA.
-- [ ] Live regióny oznamujú dôležité asynchrónne zmeny bez zahltenia.
-- [ ] `prefers-reduced-motion` je rešpektované.
-- [ ] Dotykové ciele a rozostupy sú primerané.
+- [ ] **[BACKLOG]** Stránka má jeden `h1` a správnu hierarchiu nadpisov.
+- [ ] **[BLOKUJE]** Všetky polia majú labels a chyby sú programovo prepojené.
+- [ ] **[BLOKUJE]** Hlavný tok sa dá dokončiť klávesnicou.
+- [ ] **[BLOKUJE]** Fokus je viditeľný a po modale alebo kritickej dynamickej zmene sa vracia logicky.
+- [ ] **[BLOKUJE]** Ikonové tlačidlá vykonávajúce akciu majú prístupné názvy.
+- [ ] **[BLOKUJE]** Stav nie je vyjadrený iba farbou.
+- [ ] **[BACKLOG]** Kontrast spĺňa WCAG AA.
+- [ ] **[BACKLOG]** Live regióny oznamujú dôležité asynchrónne zmeny bez zahltenia.
+- [ ] **[BACKLOG]** `prefers-reduced-motion` je rešpektované.
+- [ ] **[BACKLOG]** Dotykové ciele a rozostupy sú primerané.
 
 ### 19.5 Kontrolný zoznam obsahu
 
-- [ ] Text je po slovensky, stručný a bez interného žargónu.
-- [ ] Tlačidlá pomenúvajú konkrétny výsledok.
-- [ ] Pomocný text odpovedá na reálnu otázku.
-- [ ] Chyba vysvetľuje problém, dopad a ďalší krok.
-- [ ] Dátumy a časy sú jednoznačné.
-- [ ] Slovenská diakritika, dlhé mená a dlhšie reálne názvy nerozbijú layout.
-- [ ] Terminológia je rovnaká v navigácii, nadpisoch, formulároch aj notifikáciách.
+- [ ] **[BACKLOG]** Text je po slovensky, stručný a bez interného žargónu.
+- [ ] **[BLOKUJE]** Tlačidlá citlivých akcií pomenúvajú konkrétny výsledok.
+- [ ] **[BACKLOG]** Pomocný text odpovedá na reálnu otázku.
+- [ ] **[BLOKUJE]** Chyba kritickej operácie vysvetľuje problém, dopad a ďalší krok.
+- [ ] **[BLOKUJE]** Dátumy a časy ovplyvňujúce publikovanie sú jednoznačné.
+- [ ] **[BACKLOG]** Slovenská diakritika, dlhé mená a dlhšie reálne názvy nerozbijú layout.
+- [ ] **[BACKLOG]** Terminológia je rovnaká v navigácii, nadpisoch, formulároch aj notifikáciách.
 
 ### 19.6 Kontrolný zoznam testovania
 
-- [ ] Prešli formát, lint, TypeScript a produkčný build.
-- [ ] Komponentové testy pokrývajú kritické interakcie a stavy.
-- [ ] Browser test pokrýva hlavný tok na desktope aj mobile.
-- [ ] Kritická operácia má test dvojkliku/idempotencie a zlyhania.
-- [ ] Overil sa návrat fokusu, klávesnicová cesta a prístupné názvy.
-- [ ] Vizuálne sa skontrolovali reálne renderované obrazovky, nie iba DOM assertions.
-- [ ] Overili sa všetky relevantné roly a zakázané akcie.
-- [ ] Pri externom náhľade sa porovnala vernosť s reálnym výsledkom.
+- [ ] **[BLOKUJE]** Prešli formát, lint, TypeScript a produkčný build.
+- [ ] **[BLOKUJE]** Testy pokrývajú kritické interakcie a stavy.
+- [ ] **[BLOKUJE]** Browser test pokrýva hlavný tok na primárnom zariadení.
+- [ ] **[BLOKUJE]** Kritická operácia má test dvojkliku, idempotencie a zlyhania.
+- [ ] **[BLOKUJE]** Overil sa návrat fokusu a klávesnicová cesta hlavného toku.
+- [ ] **[BACKLOG]** Vizuálne sa skontrolovali reálne renderované obrazovky, nie iba DOM assertions.
+- [ ] **[BLOKUJE]** Overili sa všetky relevantné roly a zakázané akcie.
+- [ ] **[BLOKUJE]** Pri externom náhľade sa porovnala vernosť s reálnym výsledkom.
 
 ## 20. Definition of Done pre UI/UX zmenu
 
+### 20.1 Brána dokončenia
+
 UI/UX zmena sa nepovažuje za dokončenú, kým:
 
-1. spĺňa konkrétnu používateľskú úlohu bez zbytočného prepínania,
-2. používa správnu informačnú architektúru a spoločné komponenty,
-3. má hotové načítanie, prázdny stav, úspech, chybu a oprávnenia,
-4. funguje s klávesnicou, fokusom a čítačkou obrazovky v relevantnom rozsahu,
-5. je overená na povinných šírkach a pri 200 % zoome,
-6. obsahuje zrozumiteľnú slovenskú mikrocopy,
-7. neukazuje internú implementáciu ako hlavný obsah,
-8. bezpečne spracúva dvojklik, konflikt a externé zlyhanie,
-9. má primerané automatizované a vizuálne testy,
-10. neporušuje žiadny antipattern z kapitoly 17,
-11. zodpovedajúca zmena a jej overenie sú pravdivo zapísané v `STATUS.md`.
+1. **[BLOKUJE]** neobsahuje falošný úspech, nepravdivý náhľad ani nejasný externý výsledok vydávaný za úspech,
+2. **[BLOKUJE]** autorizácia a citlivý dôsledok zodpovedajú skutočnému stavu v okamihu akcie,
+3. **[BLOKUJE]** dvojklik, konflikt, opakovanie a externé zlyhanie sú bezpečné a idempotentné,
+4. **[BLOKUJE]** rozpracované dáta sa pri chybe siete alebo relácie nestratia ani neodošlú potichu,
+5. **[BLOKUJE]** hlavný tok je na primárnom zariadení dokončiteľný klávesnicou s logickým fokusom,
+6. **[BLOKUJE]** relevantné automatizované brány prešli a náhľad bol porovnaný s kanonickým výsledkom,
+7. **[BLOKUJE]** všetky zistenia označené **[BLOKUJE]** sú uzavreté alebo zmena nie je dokončená,
+8. **[BLOKUJE]** zmena a jej skutočné overenie sú pravdivo zapísané v `STATUS.md`.
 
-Splnenie iba funkčného happy path nie je hotový používateľský výsledok.
+### 20.2 Povinná evidencia odložiteľnej kvality
+
+Informačná architektúra, konzistentnosť komponentov, sekundárne viewporty, zoom, vizuálny polish, mikrocopy a ostatné úplné systémové stavy zostávajú záväzným cieľom. Neuzavretý bod **[BACKLOG]** nebráni dokončeniu iba vtedy, ak má v auditnom pláne alebo trackeri ID, používateľský dopad, dôkaz a plánovanú etapu. „Neskôr“ bez záznamu nie je prijateľný stav.
+
+Splnenie iba funkčného happy path nie je hotový používateľský výsledok; os priority iba určuje, čo musí byť opravené teraz a čo sa môže riadene doručiť neskôr.
 
 ## 21. Šablóna pre návrh novej stránky alebo toku
 
@@ -1024,3 +1074,34 @@ Jednorazová vizuálna úprava konkrétnej stránky nemá automaticky meniť št
 V každom review UI zmeny sa musí položiť otázka: „Ak by sa tento vzor zopakoval na ďalších piatich stránkach, bola by aplikácia stále jednoduchšia a konzistentnejšia?“ Ak odpoveď nie je jednoznačne áno, riešenie sa má prehodnotiť.
 
 Systematická kontrola existujúcej aplikácie a poradie nápravných etáp sa riadia dokumentom [`PLAN_UI_UX_AUDITU.md`](./PLAN_UI_UX_AUDITU.md). Tento plán neurčuje nižší kvalitatívny štandard; prevádza požiadavky tohto dokumentu na auditné dôkazy, priority, implementačné rezy a kontrolné brány.
+
+## 24. Vynucovanie štandardu
+
+Pravidlo bez opakovateľnej kontroly sa považuje za riziko, nie za zavedenú bránu. Nasledujúce mechanizmy sú cieľový stav a **k 12. augustu 2026 ešte nie sú systematicky implementované**. Ich zavedenie patrí do [`PLAN_IMPLEMENTACIE.md`](./PLAN_IMPLEMENTACIE.md); dovtedy ich nenahrádza domnienka, ale explicitný manuálny audit a evidencia nálezu.
+
+### 24.1 Lint a statická kontrola
+
+Automaticky sa má overovať:
+
+- Stylelint zákazom hex farieb mimo súborov dizajnových tokenov a úzkeho zdokumentovaného allowlistu,
+- `eslint-plugin-jsx-a11y` pre názvy ovládacích prvkov, labels, sémantiku, fokusovateľnosť a klávesnicové handlery,
+- vlastné alebo existujúce lint pravidlo proti natívnemu viacnásobnému selectu a neoznačeným ikonovým akciám,
+- kontrola dokumentu, že každý bod kapitol 19 a 20 nesie práve jedno označenie **[BLOKUJE]** alebo **[BACKLOG]**.
+
+### 24.2 Automatizovaný test
+
+Browserové a integračné testy majú overovať:
+
+- Playwright hlavné toky podľa rolí a primárneho zariadenia,
+- Axe kontrolu prístupnosti na reprezentatívnych routach a stavoch,
+- celý klávesnicový tok a návrat fokusu po modale, popoveri, chybe a Undo,
+- dvojklik a opakovanie kritickej požiadavky s dôkazom jediného externého účinku,
+- konflikt, vypršanie relácie, stratu siete a zachovanie rozpracovania bez automatického odoslania,
+- kanonickú zhodu náhľadu a publikovaného payloadu,
+- atómovú ochrannú lehotu vrátane príkazu `stop`, reštartu, neskorého zastavenia a zlyhania DM,
+- stavové predpoklady Undo vrátane odmietnutia návratu po cudzej zmene,
+- priame otvorenie zakázanej routy a čerstvé oprávnenie pri citlivej akcii.
+
+### 24.3 Ľudský úsudok
+
+Človek posudzuje najmä zrozumiteľnosť hierarchie, prirodzenosť slovenčiny, vizuálnu rovnováhu, objaviteľnosť a kvalitatívnu vernosť voči Discordu. Rozhodnutie sa opiera o renderované obrazovky a pozorovanie podľa kapitoly 18.4, nie iba o čítanie kódu. Výsledok musí dostať evidenciu a prioritu; ľudský úsudok nesmie nahradiť automatizovateľnú kontrolu z predchádzajúcich dvoch podkapitol.

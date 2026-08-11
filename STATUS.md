@@ -4,9 +4,9 @@
 
 ## Základné údaje
 
-- **Posledná aktualizácia:** 11. august 2026
+- **Posledná aktualizácia:** 12. august 2026
 - **Celkový stav:** E0–E11 sú implementované a auditované; aktuálna lokálna regresia má 192 úspešných backendových testov a 1 opt-in skip, 13 frontendových testov, 34 desktop/mobile browser scenárov a 2 full-stack browser scenáre. Shadow runtime, praktická obnova aktuálneho databázového snapshotu, exact-source backend image a vzdialený CI run `31540172600` sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
-- **Aktuálna etapa:** E12 – popri otvorenom externom staging/UAT kroku je pripravený systematický UI/UX audit celej administrácie; prvé opravné etapy sú Reakcie, Roly a Nastavenia a režim `live` zostáva zakázaný
+- **Aktuálna etapa:** E12 – popri otvorenom externom staging/UAT kroku je pripravený systematický UI/UX audit celej administrácie; jeho štandard bol doplnený o priority dodania, vynucovanie, prvé spustenie, ochrannú lehotu, bezpečné Undo a obnovu formulárov. Automatické vynucovacie mechanizmy sú iba naplánované, nie implementované; režim `live` zostáva zakázaný
 - **Najbližší kontrolný bod:** pripraviť produkčne podobný HTTPS staging a vykonať/podpísať Admin, Team Mod, SDB/FMA, desktop/tablet/mobile/200 %/keyboard UAT podľa `docs/e12/KROKY_PRE_POUZIVATELA.md`; vyžaduje staging host/doménu a reálnych testerov. Režim `live` zostáva zakázaný
 - **Produkčný runtime:** pôvodný bot; jeho existujúci aplikačný kód nebol pri príprave zadania a plánu zmenený
 - **Nový runtime Carlo:** úplný auditovaný build API, Discord procesu, workera, frontendu a PostgreSQL beží lokálne pod `v2/` výhradne v režime `shadow`
@@ -46,9 +46,12 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 - Do zadania bolo pridané nemenné pravidlo kontinuity vyžadujúce priebežnú aktualizáciu tohto súboru.
 - Bol vytvorený normatívny dokument `UI_UX_STANDARDY.md`, ktorý prevádza produktové požiadavky a doterajšiu používateľskú validáciu na dlhodobo použiteľné pravidlá informačnej architektúry, responzivity, vizuálneho jazyka, komponentov, mikrotextov, systémových stavov, prístupnosti, bezpečnosti a kontroly kvality.
 - Kapitola 12 zadania na tento dokument priamo odkazuje a určuje, že funkčne hotová obrazovka bez splnenia UI/UX štandardu nie je hotovým výsledkom. Štandard obsahuje aj zakázané antipatterny, kontrolné zoznamy, Definition of Done, šablónu návrhu novej stránky a pravidlá riadenia budúcich výnimiek.
-- Dokument má 23 súvislých kapitol a po vytvorení prešiel kontrolou formátovania nového súboru, whitespace, existencie interných dokumentových odkazov, jedinečnosti hlavného nadpisu, postupnosti hlavných kapitol a uzavretia code fence. Keďže ide výhradne o dokumentačnú zmenu bez zásahu do runtime kódu, aplikačné testy sa neopakovali.
+- Dokument má po cielenej revízii 24 súvislých kapitol. Nezávislá os **[BLOKUJE]** / **[BACKLOG]** je aplikovaná na každý bod povinnej kontroly a Definition of Done; nové pravidlá pokrývajú prvé spustenie, primárny desktopový profil, bezpečné Undo, stratu spojenia/relácie, ochrannú lehotu publikovania a jednočlennú spätnú väzbu. Kapitola 24 rozdeľuje budúce vynucovanie na lint, automatizovaný test a krátky ľudský úsudok a pravdivo uvádza, že mechanizmy zatiaľ nie sú systematicky implementované.
+- Vznikol jednostranový povinný vstup `UI_UX_DESTILAT.md`. Auditujúci musí najprv prečítať celý destilát a následne celé kapitoly 1, 19, 20, 24 a relevantné doménové kapitoly hlavného štandardu; destilát nie je jeho náhrada.
 - Commit `18129819e3f017eae7dd91b525b7686cea76a29c` s novým štandardom je na `origin/main`; vzdialený GitHub Actions run `31538894647` prešiel celý úspešne vrátane backendu, frontendu a repository-safety.
 - Bol vytvorený vykonateľný `PLAN_UI_UX_AUDITU.md`. Definuje auditnú maticu, P0/P1/P2 závažnosť, povinné viewporty, roly a dátové stavy, opravné etapy UX0–UX10, kontrolné brány a Definition of Done. Podľa používateľovho poradia začína Reakciami, pokračuje Rolami a Nastaveniami a následne pokrýva aplikačný rámec, Prehľad, Redakčný pult, Kanály, Históriu, Audit a systémové obrazovky.
+- Auditný plán po revízii začína povinným načítaním celého destilátu, eviduje závažnosť oddelene od brány dodania a pri každom náleze určuje vynútenie lintom, testom alebo ľudským úsudkom. Konkrétne dnešné antipatterny boli zo štandardu presunuté do príslušných etáp ako regresné hypotézy. Uzavretie vyžaduje všetky body **[BLOKUJE]** opraviť a každý **[BACKLOG]** evidovať s ID, dopadom a etapou.
+- Dokumentačný rez prešiel Prettier kontrolou všetkých šiestich upravených súborov, `git diff --check`, kontrolou súvislého číslovania kapitol 1–24, kontrolou označenia každého checklist bodu a existencie odkazovaných projektových súborov. `UI_UX_STANDARDY.md` narástol z 1 026 na 1 107 riadkov a zo 7 685 na 8 905 slov, teda v oboch mierach o menej než povolenú tretinu. Runtime kód sa nemenil, preto sa aplikačná regresia neopakovala.
 - Zdrojový audit pred plánom identifikoval konkrétne úvodné riziká: test Reakcií používa uloženú konfiguráciu namiesto viditeľného neuloženého draftu, Reakcie a Roly môžu po chybe zostať v loading vetve, Roly majú neúplný vyhľadávací/prístupnostný model a Nastavenia nemajú spoľahlivý dirty/reload model a stále obsahujú pracovnú operáciu ručného publikovania. Tieto body sú v pláne vedené ako hypotézy, ktoré musí potvrdiť reálny vizuálny audit.
 - Browser skill bol pri príprave plánu použitý na pokus o kontrolu živého lokálneho UI, ale relácia neposkytovala žiadny pripojený prehliadač. Plán preto výslovne vyžaduje desktopový, mobilný, klávesnicový a stavový browser baseline ako vstupnú bránu každej opravovanej oblasti; vizuálny audit sa nepovažuje za vykonaný iba na základe zdrojového kódu.
 - Nový plán má 19 kapitol a po vytvorení prešiel Prettier kontrolou, `git diff --check`, kontrolou postupnosti hlavných kapitol a existencie odkazovaných projektových dokumentov. `UI_UX_STANDARDY.md` bol spätne prepojený s realizačným plánom. Keďže v tomto kroku nevznikla runtime zmena, aplikačné testy sa neopakovali.
@@ -74,6 +77,10 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 - Nastavenia obsahujú iba publikovanie vrátane pravidiel umiestnenia kanálov a Google kalendáre. Vytváranie/archivácia kanálov, roly a automatické reakcie majú samostatné pracovné stránky v sekcii Správa servera.
 - Výber ľudí na Discorde je priebežný počas písania, zobrazuje identitu a avatar a nevyžaduje samostatné tlačidlo Hľadať. Viacnásobné výbery ľudí, rolí a kanálov musia mať jednoznačný návrat na nulový výber.
 - Nový projektový kanál nemožno vytvoriť v archívnej kategórii ani v kategórii s hlasovými kanálmi; pravidlo vynucuje web aj serverová aplikačná vrstva.
+- Publikovanie má v cieľovom produkte nastaviteľnú ochrannú lehotu 0–300 sekúnd, predvolene 30; počas nej ešte nevznikne verejná správa ani `@everyone`. Ručný web ukáže odpočet, zastavenie a okamžité zverejnenie. Automatický tok pošle dočasnú bežnú DM všetkým aktuálnym Adminom a ďalším osobám z Nastavení; autorizovaný príjemca môže použiť tlačidlo alebo DM `stop`.
+- Nedoručenie ochrannej DM publikovanie nezablokuje, ale musí vytvoriť moderátorské upozornenie. Prechod na zastavenie alebo verejné publikovanie musí byť atómový, idempotentný a bezpečný po reštarte. Toto správanie je zatiaľ iba zapísané v zadaní, štandarde, auditnom a implementačnom pláne; runtime ho ešte neimplementuje.
+- Vytvorenie kanála, archivácia a zmena roly majú mať časovo neobmedzené, ale stavovo bezpečné Undo. Presný návrat sa vykoná iba pri nezmenenom relevantnom stave a čerstvom oprávnení; zmenený alebo neprázdny nový kanál sa namiesto odstránenia bezpečne archivuje. Aj toto je zatiaľ špecifikácia, nie implementovaný runtime.
+- Prvé spustenie vedie správcu v poradí Discord miesta → voliteľný Google kalendár → harmonogram → kanonický náhľad; Carlo môže fungovať bez kalendára. Primárny profil je zatiaľ desktop/notebook s referenčnou šírkou 1440 px a pred väčším UI vydaním vykoná vlastník pevný 20–30-minútový pozorovací scenár.
 
 ### Následný E9 produktový overhaul správy servera
 
@@ -115,6 +122,7 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 - Plán obsahuje etapy E0 až E14, kontrolné brány, kritickú cestu, pracovné prúdy, odhad rozsahu, migráciu, cutover, rollback a stabilizáciu.
 - Bola vytvorená matica trasovania požiadaviek a register hlavných rizík.
 - Do definície hotovej funkcie bola doplnená povinná aktualizácia `STATUS.md`.
+- Plán teraz obsahuje samostatný balík automatického UI/UX vynucovania: Stylelint, `eslint-plugin-jsx-a11y`, dokumentačnú kontrolu priorít, Playwright + Axe, test dvojkliku a návratu fokusu. E7/E9 plán zároveň zachytáva ochrannú lehotu a stavovo bezpečné Undo; tieto nové body sú otvorená implementačná práca a nemenia historický stav pôvodných kontrolných brán.
 
 ### Etapa E0 – hotové časti
 
@@ -178,23 +186,23 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 
 ## Stav implementačných etáp
 
-| Etapa | Názov | Stav | Poznámka |
-|---|---|---|---|
-| E0 | Príprava projektu a rozhodnutí | dokončená | Brána splnená; izolované Discord a Google prostredia aj credentials sú technicky overené |
-| E1 | Aplikačná kostra a vývojové prostredie | dokončená | Brána splnená; štyri procesy, PostgreSQL, migrácia, lock súbory a čistá kontrolná sada sú overené |
-| E2 | Doménový a databázový základ | dokončená | Brána splnená; 16 tabuliek, doménové hodnoty, repozitáre, Unit of Work, migrácie a PostgreSQL testy sú overené |
-| E3 | Integrácia Google Kalendára | dokončená | Brána splnená; read-only adaptér, full/incremental sync, recurring identity, retry, čerstvosť a live testy sú overené |
-| E4 | Kompozícia publikačného balíka | dokončená | Brána splnená; čistý draft, DB snapshot loader, override pravidlá, formátovanie a Discord message plan sú overené |
-| E5 | Autentifikácia, autorizácia a webové API | dokončená | Brána splnená; OAuth/session, RBAC, CSRF/CORS/rate limit, editorové API, audit a rolová matica sú overené |
-| E6 | Webová administrácia | dokončená | Používateľ prijal aktuálny Redakčný pult; ďalší vizuálny a accessibility polish je priebežná QA a neblokuje E7 |
-| E7 | Publikačný engine a plánovač | dokončená | Brána splnená; snapshot, publisher, retry/recovery, scheduler, ručný trigger a dvoj-worker ochrana sú overené |
-| E8 | Discord príkazy a interakcie | dokončená | Brána je splnená: štyri staging príkazy, bezpečné ephemeral flow, idempotentný publish/kanál a jednorazová persistentná archivácia sú overené |
-| E9 | Webová správa kanálov, rolí a reakcií | dokončená, produktový polish | Kanály majú jednoduché úlohové rozhranie a modaly, pravidlá umiestnenia sú v Nastaveniach; živé avatarové vyhľadávanie, nulovateľné výbery a serverový zákaz archívnych/voice cieľov zostávajú zachované |
-| E10 | Migrácia údajov | dokončená | Read-only inventarizácia, deterministické reporty a dve čisté idempotentné PostgreSQL skúšky sú overené |
-| E11 | Komplexné testovanie a hardening | automatizovane dokončená | Gateway heartbeat oprava, 188 testov, runtime reconnect, current-head restore, exact-source image, full-stack browser aj vzdialený CI sú zelené |
-| E12 | Staging, tieňová prevádzka a akceptácia | rozpracovaná, externý vstup | Dvojcyklový rehearsal aj vzdialený CI sú splnené; čaká produkčne podobné HTTPS a podpísaný rolový/responzívny UAT |
-| E13 | Produkčné nasadenie a cutover | pripravená, blokovaná | Nasadzovacie artefakty a runbooky sú overené; vykonanie čaká na E12, produkčný host/doménu/secrets/digesty a súhlas |
-| E14 | Stabilizácia a ukončenie starej verzie | pripravená, čaká | Reporting a retirement postup sú hotové; vykonanie čaká na E13 a tri skutočné produkčné cykly |
+| Etapa | Názov                                    | Stav                         | Poznámka                                                                                                                                                                                                 |
+| ----- | ---------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E0    | Príprava projektu a rozhodnutí           | dokončená                    | Brána splnená; izolované Discord a Google prostredia aj credentials sú technicky overené                                                                                                                 |
+| E1    | Aplikačná kostra a vývojové prostredie   | dokončená                    | Brána splnená; štyri procesy, PostgreSQL, migrácia, lock súbory a čistá kontrolná sada sú overené                                                                                                        |
+| E2    | Doménový a databázový základ             | dokončená                    | Brána splnená; 16 tabuliek, doménové hodnoty, repozitáre, Unit of Work, migrácie a PostgreSQL testy sú overené                                                                                           |
+| E3    | Integrácia Google Kalendára              | dokončená                    | Brána splnená; read-only adaptér, full/incremental sync, recurring identity, retry, čerstvosť a live testy sú overené                                                                                    |
+| E4    | Kompozícia publikačného balíka           | dokončená                    | Brána splnená; čistý draft, DB snapshot loader, override pravidlá, formátovanie a Discord message plan sú overené                                                                                        |
+| E5    | Autentifikácia, autorizácia a webové API | dokončená                    | Brána splnená; OAuth/session, RBAC, CSRF/CORS/rate limit, editorové API, audit a rolová matica sú overené                                                                                                |
+| E6    | Webová administrácia                     | dokončená                    | Používateľ prijal aktuálny Redakčný pult; ďalší vizuálny a accessibility polish je priebežná QA a neblokuje E7                                                                                           |
+| E7    | Publikačný engine a plánovač             | dokončená                    | Brána splnená; snapshot, publisher, retry/recovery, scheduler, ručný trigger a dvoj-worker ochrana sú overené                                                                                            |
+| E8    | Discord príkazy a interakcie             | dokončená                    | Brána je splnená: štyri staging príkazy, bezpečné ephemeral flow, idempotentný publish/kanál a jednorazová persistentná archivácia sú overené                                                            |
+| E9    | Webová správa kanálov, rolí a reakcií    | dokončená, produktový polish | Kanály majú jednoduché úlohové rozhranie a modaly, pravidlá umiestnenia sú v Nastaveniach; živé avatarové vyhľadávanie, nulovateľné výbery a serverový zákaz archívnych/voice cieľov zostávajú zachované |
+| E10   | Migrácia údajov                          | dokončená                    | Read-only inventarizácia, deterministické reporty a dve čisté idempotentné PostgreSQL skúšky sú overené                                                                                                  |
+| E11   | Komplexné testovanie a hardening         | automatizovane dokončená     | Gateway heartbeat oprava, 188 testov, runtime reconnect, current-head restore, exact-source image, full-stack browser aj vzdialený CI sú zelené                                                          |
+| E12   | Staging, tieňová prevádzka a akceptácia  | rozpracovaná, externý vstup  | Dvojcyklový rehearsal aj vzdialený CI sú splnené; čaká produkčne podobné HTTPS a podpísaný rolový/responzívny UAT                                                                                        |
+| E13   | Produkčné nasadenie a cutover            | pripravená, blokovaná        | Nasadzovacie artefakty a runbooky sú overené; vykonanie čaká na E12, produkčný host/doménu/secrets/digesty a súhlas                                                                                      |
+| E14   | Stabilizácia a ukončenie starej verzie   | pripravená, čaká             | Reporting a retirement postup sú hotové; vykonanie čaká na E13 a tri skutočné produkčné cykly                                                                                                            |
 
 ## Aktuálny implementačný stav
 

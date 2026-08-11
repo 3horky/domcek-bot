@@ -92,21 +92,21 @@ Všetky tri procesy importujú rovnaké aplikačné služby. Neexistuje samostat
 
 ## 3.2 Navrhovaný technologický základ
 
-| Oblasť | Navrhované riešenie | Dôvod |
-|---|---|---|
-| Backend | Python, asynchrónny webový framework typu FastAPI | Nadväzuje na existujúci Python ekosystém a poskytuje typované API |
-| Discord | `discord.py` | Zachováva overený model pôvodného bota |
-| Databáza | PostgreSQL | Transakcie, zámky, súbeh procesov, spoľahlivé migrácie |
-| Databázová vrstva | SQLAlchemy s asynchrónnym driverom | Oddelenie domény od SQL a testovateľné repozitáre |
-| Migrácie | Alembic | Verzionovanie schémy a kontrolovaný rollout |
-| Frontend | React + TypeScript | Vhodné pre bohatý editor, živý náhľad a responzívnu administráciu |
-| Build frontendu | Vite alebo ekvivalent | Rýchly lokálny vývoj a jednoduchý produkčný build |
-| Formuláre | Typovaný formulárový a validačný model | Konzistentné chyby a kontrola súbehu |
-| Frontend API stav | Query/cache vrstva s invalidáciou | Synchronizácia editora, refetch a chybové stavy |
-| Backend testy | pytest | Jednotkové a integračné testy |
-| Web E2E testy | Playwright | Reálne používateľské scenáre a responzívne testy |
-| Lokálny vývoj | Docker Compose | Opakovateľný PostgreSQL a procesy bez ručného nastavovania |
-| Produkcia | Kontajnerizované procesy alebo ekvivalentný process manager | Oddelené reštarty, health checks a logy |
+| Oblasť            | Navrhované riešenie                                         | Dôvod                                                             |
+| ----------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- |
+| Backend           | Python, asynchrónny webový framework typu FastAPI           | Nadväzuje na existujúci Python ekosystém a poskytuje typované API |
+| Discord           | `discord.py`                                                | Zachováva overený model pôvodného bota                            |
+| Databáza          | PostgreSQL                                                  | Transakcie, zámky, súbeh procesov, spoľahlivé migrácie            |
+| Databázová vrstva | SQLAlchemy s asynchrónnym driverom                          | Oddelenie domény od SQL a testovateľné repozitáre                 |
+| Migrácie          | Alembic                                                     | Verzionovanie schémy a kontrolovaný rollout                       |
+| Frontend          | React + TypeScript                                          | Vhodné pre bohatý editor, živý náhľad a responzívnu administráciu |
+| Build frontendu   | Vite alebo ekvivalent                                       | Rýchly lokálny vývoj a jednoduchý produkčný build                 |
+| Formuláre         | Typovaný formulárový a validačný model                      | Konzistentné chyby a kontrola súbehu                              |
+| Frontend API stav | Query/cache vrstva s invalidáciou                           | Synchronizácia editora, refetch a chybové stavy                   |
+| Backend testy     | pytest                                                      | Jednotkové a integračné testy                                     |
+| Web E2E testy     | Playwright                                                  | Reálne používateľské scenáre a responzívne testy                  |
+| Lokálny vývoj     | Docker Compose                                              | Opakovateľný PostgreSQL a procesy bez ručného nastavovania        |
+| Produkcia         | Kontajnerizované procesy alebo ekvivalentný process manager | Oddelené reštarty, health checks a logy                           |
 
 Konkrétne podporované verzie sa uzamknú pri vytvorení projektu a budú sa aktualizovať kontrolovane. Plán zámerne neviaže produkt na konkrétne číslo verzie ešte pred založením novej aplikačnej kostry.
 
@@ -770,6 +770,18 @@ Implementovať znovupoužiteľné komponenty:
 - Žiadna kritická funkcia iba na hover.
 - Žiadna povinná horizontálne posúvaná desktopová tabuľka na mobile.
 
+### 11.9.1 Automatizované vynucovanie UI/UX štandardu
+
+Tento balík je naplánovaný, ale zatiaľ nie je systematicky implementovaný:
+
+- Stylelint zakáže hex farby mimo tokenov a zdokumentovaného allowlistu.
+- `eslint-plugin-jsx-a11y` a doplnková statická kontrola pokryjú labels, názvy ikonových akcií, klávesnicové handlery a zakázaný natívny viacnásobný select.
+- Dokumentačný test overí označenie každého bodu kapitol 19 a 20 `UI_UX_STANDARDY.md` ako **[BLOKUJE]** alebo **[BACKLOG]**.
+- Playwright projekty pokryjú primárny desktop a sekundárny mobil; Axe sa spustí na reprezentatívnych routach a stavoch.
+- Browser testy overia celý klávesnicový tok, návrat fokusu, dvojklik/idempotenciu, konflikt, výpadok siete, expiráciu relácie a kanonickú zhodu náhľadu.
+- CI bude blokovať nové alebo zhoršené porušenia; existujúci dlh sa smie oddeliť iba do evidovaného backlogu s ID a etapou.
+- Zavedenie sa riadi `UI_UX_DESTILAT.md`, kapitolou 24 `UI_UX_STANDARDY.md` a etapou UX0 v `PLAN_UI_UX_AUDITU.md`.
+
 ## 11.10 Kontrolná brána E6
 
 Reálny Admin a Team Mod musia bez vysvetľovania dokončiť editor, INFO oznam, manuálnu udalosť a archiváciu na desktope aj mobile. Kritické accessibility testy musia prejsť automaticky aj manuálne.
@@ -822,6 +834,16 @@ Reálny Admin a Team Mod musia bez vysvetľovania dokončiť editor, INFO oznam,
 - Po reštarte dobehne zmeškaný termín podľa definovanej grace period.
 - Termín mimo grace period nepublikuje bez Admin rozhodnutia.
 - Všetky rozhodnutia zaznamená.
+
+### 12.5.1 Ochranná lehota pred zverejnením
+
+- Nastaviteľná lehota je 0–300 sekúnd, predvolene 30; hodnota 0 ju vypne.
+- Po vytvorení nemenného snapshotu ostáva run trvácne v stave čakania a ešte nevytvorí verejnú správu ani `@everyone`.
+- Ručný tok zobrazí countdown, verný náhľad, „Zastaviť“ a „Zverejniť teraz“.
+- Automatický tok odošle dočasnú bežnú DM všetkým čerstvo načítaným Adminom a ďalším príjemcom z Nastavení.
+- Oprávnený príjemca môže počas lehoty použiť tlačidlo alebo normalizovanú DM `stop`; zastavenie a prechod do publikovania sú atómové a idempotentné.
+- Zlyhanie DM nezastaví publikovanie, ale vytvorí moderátorské upozornenie; dočasná DM sa po rozhodnutí odstráni, ak je dostupná.
+- Reštart nesmie skrátiť lehotu, zdvojiť odoslanie ani stratiť stop; neskorý stop vráti pravdivý terminálny výsledok.
 
 ## 12.6 Ručný trigger
 
@@ -924,6 +946,7 @@ Simulované cudzie kliknutie, expirované tlačidlo, jedna reakcia pri viacerýc
 - Vytvorenie cez spoločnú službu.
 - Archivácia a rozhodovanie cez spoločnú službu.
 - Odkaz na vytvorený alebo archivovaný kanál.
+- Časovo neobmedzené Undo overí aktuálny stav: nový kanál presne odstráni iba ak je prázdny a nezmenený, inak ponúkne archiváciu; archiváciu obnoví iba z platného snapshotu.
 
 ## 14.2 Roly
 
@@ -934,6 +957,7 @@ Simulované cudzie kliknutie, expirované tlačidlo, jedna reakcia pri viacerýc
 - Zakázať odobratie posledného Admina spravujúceho aplikáciu.
 - Po zmene znova načítať stav z Discordu.
 - Auditovať úspech aj relevantné zlyhanie.
+- Časovo neobmedzené Undo vráti rolu iba pri nezmenenom relevantnom stave, čerstvom oprávnení a zachovaní ochrany posledného Admina.
 
 ## 14.3 Reakcie
 
@@ -952,6 +976,7 @@ Simulované cudzie kliknutie, expirované tlačidlo, jedna reakcia pri viacerýc
 - Publikačný deň, čas, časové pásmo, cieľový Discord kanál a náhľad nasledujúceho termínu.
 - Predvolené používanie Google popisov a jasný opis jeho dopadu na nové oznamy.
 - Nastavenie automatického úvodu, seen reakcie a súvisiacich fallbackov.
+- Nastavenie ochrannej lehoty a ďalších príjemcov dočasnej DM; aktuálni Admini sú príjemcami vždy.
 - Položku Nastavenia nezobrazovať v navigácii, kým príslušné služby a API nemajú funkčné čítanie, zápis, autorizáciu a audit.
 
 ## 14.5 Kontrolná brána E9
@@ -1226,23 +1251,23 @@ Po stabilizačnom období:
 
 # 20. Závislosti medzi etapami
 
-| Etapa | Priama závislosť | Môže čiastočne bežať paralelne s |
-|---|---|---|
-| E0 Príprava | zadanie | ničím |
-| E1 Kostra | E0 | UX prieskum |
-| E2 Doména a DB | E1 | prvé wireframes |
-| E3 Google Calendar | E2 | OAuth základ |
-| E4 Composer | E2, fixtures z E3 | API auth, UX návrh |
-| E5 API a autorizácia | E1, E2 | E3, E4 |
-| E6 Web | E5 kontrakty, E4 draft model | publikačný engine |
-| E7 Publikovanie | E3, E4, E2 | webové stránky |
-| E8 Discord príkazy | E5 autorizácia, aplikačné služby | neskorá E6 |
-| E9 Web kanály/roly/reakcie | E5, služby E8 | E7 |
-| E10 Migrácia | stabilná E2 schéma, E3 matching | E6–E9 |
-| E11 Hardening | všetky funkčné etapy | priebežne od E1 |
-| E12 Staging/UAT | E10, E11 | dokumentácia |
-| E13 Produkcia | E12 | ničím |
-| E14 Stabilizácia | E13 | nepovinné backlog položky až po stabilite |
+| Etapa                      | Priama závislosť                 | Môže čiastočne bežať paralelne s          |
+| -------------------------- | -------------------------------- | ----------------------------------------- |
+| E0 Príprava                | zadanie                          | ničím                                     |
+| E1 Kostra                  | E0                               | UX prieskum                               |
+| E2 Doména a DB             | E1                               | prvé wireframes                           |
+| E3 Google Calendar         | E2                               | OAuth základ                              |
+| E4 Composer                | E2, fixtures z E3                | API auth, UX návrh                        |
+| E5 API a autorizácia       | E1, E2                           | E3, E4                                    |
+| E6 Web                     | E5 kontrakty, E4 draft model     | publikačný engine                         |
+| E7 Publikovanie            | E3, E4, E2                       | webové stránky                            |
+| E8 Discord príkazy         | E5 autorizácia, aplikačné služby | neskorá E6                                |
+| E9 Web kanály/roly/reakcie | E5, služby E8                    | E7                                        |
+| E10 Migrácia               | stabilná E2 schéma, E3 matching  | E6–E9                                     |
+| E11 Hardening              | všetky funkčné etapy             | priebežne od E1                           |
+| E12 Staging/UAT            | E10, E11                         | dokumentácia                              |
+| E13 Produkcia              | E12                              | ničím                                     |
+| E14 Stabilizácia           | E13                              | nepovinné backlog položky až po stabilite |
 
 Kritická cesta je:
 
@@ -1293,20 +1318,20 @@ Spoločné integračné body musia mať vopred dohodnuté typované kontrakty. P
 
 Odhad slúži na plánovanie kapacity, nie ako pevný termín. Predpokladá jedného skúseného full-stack vývojára, pripravené prístupy a bez zásadnej zmeny zadania.
 
-| Oblasť | Orientačný rozsah |
-|---|---:|
-| Príprava, ADR a prostredie | 4–7 človekodní |
-| Kostra, CI, PostgreSQL a migrácie | 6–10 človekodní |
-| Doménový model a composer | 10–16 človekodní |
-| Google Calendar sync a recurrence | 8–14 človekodní |
-| OAuth, API, RBAC a audit | 8–13 človekodní |
-| Webový dizajn a administrácia | 15–24 človekodní |
-| Publikovanie, scheduler a recovery | 10–16 človekodní |
-| Discord príkazy, kanály, roly, reakcie | 8–13 človekodní |
-| Migrácia údajov | 5–9 človekodní |
-| Hardening, E2E, security a staging | 10–18 človekodní |
-| Cutover, dokumentácia a stabilizácia | 5–9 človekodní |
-| **Spolu** | **89–149 človekodní** |
+| Oblasť                                 |     Orientačný rozsah |
+| -------------------------------------- | --------------------: |
+| Príprava, ADR a prostredie             |        4–7 človekodní |
+| Kostra, CI, PostgreSQL a migrácie      |       6–10 človekodní |
+| Doménový model a composer              |      10–16 človekodní |
+| Google Calendar sync a recurrence      |       8–14 človekodní |
+| OAuth, API, RBAC a audit               |       8–13 človekodní |
+| Webový dizajn a administrácia          |      15–24 človekodní |
+| Publikovanie, scheduler a recovery     |      10–16 človekodní |
+| Discord príkazy, kanály, roly, reakcie |       8–13 človekodní |
+| Migrácia údajov                        |        5–9 človekodní |
+| Hardening, E2E, security a staging     |      10–18 človekodní |
+| Cutover, dokumentácia a stabilizácia   |        5–9 človekodní |
+| **Spolu**                              | **89–149 človekodní** |
 
 Pre jedného človeka ide realisticky o niekoľkomesačný projekt. Menší tím môže skrátiť kalendárny čas paralelizáciou webu, integrácií a domény, nie však lineárne, pretože kritická cesta a integračné brány zostávajú.
 
@@ -1412,57 +1437,57 @@ Toto poradie minimalizuje riziko, že sa elegantné webové rozhranie postaví n
 
 # 27. Matica trasovania hlavných požiadaviek
 
-| Požiadavka | Primárna etapa | Overenie |
-|---|---|---|
-| Automatický import Google udalostí | E3 | Calendar integračné testy a shadow sync |
-| Štandardne jeden, architektonicky viac kalendárov | E2, E3 | Dva zdroje v staging fixtures |
-| Konfigurovateľný deň a čas, default Po 20:00 | E4, E6, E7 | DST/unit test a web E2E |
-| Dvojtýždňové okno | E4 | Hraničné unit testy |
-| Automatické day emoji a formátovanie | E4 | Snapshot testy composeru |
-| Google popis predvolene vypnutý | E4, E6 | Policy unit test a editor E2E |
-| Predvyplnenie redakcie Google popisom | E6 | Formulárový E2E test |
-| Trvalá úprava konkrétnej udalosti | E2, E4 | Sync + composer integračný test |
-| Úprava recurring série od výskytu | E2, E3, E4, E6 | Series/instance matica testov |
-| `stop carlo` | E3, E4, E6 | Parser, force-include a E2E test |
-| Manuálne udalosti | E2, E4, E6 | CRUD + composer E2E |
-| INFO s thumbnailom a expiráciou | E2, E4, E6 | Inkluzívna platnosť a image failure test |
-| Generovaný úvod | E7 | Model success/fallback test |
-| Presne jedno `@everyone` | E4, E7 | Payload integračný test |
-| Ručný publish a skip termínu | E7, E8 | Scheduler E2E |
-| Admin a SDB / FMA publish | E5, E7, E8 | RBAC matica |
-| Webová administrácia | E5, E6, E9 | UAT, Playwright a accessibility |
-| Discord preview | E8 | Command integračný test |
-| Vytvorenie kanála | E8, E9 | Permission overwrite test |
-| Bezpečná archivácia | E8, E9 | Viac paralelných žiadostí |
-| Správa Team Mod/Admin | E9 | Role hierarchy E2E |
-| Seen a auto-reaction emoji | E9 | Emoji validation a test reaction |
-| Moderátorské upozornenia | E3, E7, E8 | Failure injection test |
-| Audit a história | E2, E5, E7 | Transakčný integračný test |
-| Migrácia legacy | E10 | Dvojitý dry run a staging import |
-| Bezpečný cutover | E12, E13 | UAT a rollback rehearsal |
+| Požiadavka                                        | Primárna etapa | Overenie                                 |
+| ------------------------------------------------- | -------------- | ---------------------------------------- |
+| Automatický import Google udalostí                | E3             | Calendar integračné testy a shadow sync  |
+| Štandardne jeden, architektonicky viac kalendárov | E2, E3         | Dva zdroje v staging fixtures            |
+| Konfigurovateľný deň a čas, default Po 20:00      | E4, E6, E7     | DST/unit test a web E2E                  |
+| Dvojtýždňové okno                                 | E4             | Hraničné unit testy                      |
+| Automatické day emoji a formátovanie              | E4             | Snapshot testy composeru                 |
+| Google popis predvolene vypnutý                   | E4, E6         | Policy unit test a editor E2E            |
+| Predvyplnenie redakcie Google popisom             | E6             | Formulárový E2E test                     |
+| Trvalá úprava konkrétnej udalosti                 | E2, E4         | Sync + composer integračný test          |
+| Úprava recurring série od výskytu                 | E2, E3, E4, E6 | Series/instance matica testov            |
+| `stop carlo`                                      | E3, E4, E6     | Parser, force-include a E2E test         |
+| Manuálne udalosti                                 | E2, E4, E6     | CRUD + composer E2E                      |
+| INFO s thumbnailom a expiráciou                   | E2, E4, E6     | Inkluzívna platnosť a image failure test |
+| Generovaný úvod                                   | E7             | Model success/fallback test              |
+| Presne jedno `@everyone`                          | E4, E7         | Payload integračný test                  |
+| Ručný publish a skip termínu                      | E7, E8         | Scheduler E2E                            |
+| Admin a SDB / FMA publish                         | E5, E7, E8     | RBAC matica                              |
+| Webová administrácia                              | E5, E6, E9     | UAT, Playwright a accessibility          |
+| Discord preview                                   | E8             | Command integračný test                  |
+| Vytvorenie kanála                                 | E8, E9         | Permission overwrite test                |
+| Bezpečná archivácia                               | E8, E9         | Viac paralelných žiadostí                |
+| Správa Team Mod/Admin                             | E9             | Role hierarchy E2E                       |
+| Seen a auto-reaction emoji                        | E9             | Emoji validation a test reaction         |
+| Moderátorské upozornenia                          | E3, E7, E8     | Failure injection test                   |
+| Audit a história                                  | E2, E5, E7     | Transakčný integračný test               |
+| Migrácia legacy                                   | E10            | Dvojitý dry run a staging import         |
+| Bezpečný cutover                                  | E12, E13       | UAT a rollback rehearsal                 |
 
 ---
 
 # 28. Register hlavných rizík
 
-| Riziko | Dopad | Preventívne opatrenie | Reakcia |
-|---|---|---|---|
-| Nesprávna identita recurring výskytu | Úprava sa pripojí k nesprávnej udalosti | Google fixtures, stabilný zložený kľúč, konzervatívne matching pravidlá | Zastaviť automatické priradenie a vytvoriť review incident |
-| Pád po odoslaní Discord správy a pred uložením ID | Možná duplicita | Snapshot, message part stav, nonce, sekvenčné ukladanie | Reconcile obrazovka; nepublikovať neistú časť automaticky |
-| Súbeh dvoch workerov | Dvojité publikovanie | DB unique constraint, transakčný/advisory lock | Jeden run odmietnuť a auditovať konflikt |
-| Zastaraný Calendar sync | Neaktuálne oznamy | Max cache age, pre-publish sync, health stav | Blokovať publish a upozorniť `moderátori` |
-| Zmena alebo zrušenie udalosti tesne pred publikovaním | Nesprávny draft | Finálny sync pred snapshotom | Publikovať až zo snapshotu po úspešnom syncu |
-| Chyba time zone alebo DST | Nesprávny termín/okno | IANA timezone, centralizovaný časový modul, DST testy | Pozastaviť scheduler, opraviť termín administrátorsky |
-| Discord role hierarchy neumožní zmenu | Neúspešná moderácia | Preflight kontrola a staging konfigurácia | Zrozumiteľný error a moderátorský alert |
-| Neoprávnený priamy API request | Bezpečnostný incident | Server RBAC pri každom use case, CSRF, session security | Zamietnuť, auditovať, invalidovať podozrivú session |
-| User content vytvorí nechcenú zmienku | Nechcené upozornenia | Sanitizácia a explicitné allowed_mentions | Zablokovať draft alebo zmienku neutralizovať |
-| Thumbnail URL zneužije internú sieť | SSRF | URL policy, DNS/IP kontrola, izolovaná proxy | Odmietnuť obrázok, pokračovať bez thumbnailu |
-| AI úvod zlyhá alebo vytvorí nevhodný text | Publikácia bez vhodného úvodu | Verzionovaný prompt, sanitizácia, deterministic fallback | Použiť fallback a zaznamenať warning |
-| Legacy event sa nesprávne spáruje s Google eventom | Strata alebo chybná redakcia | Iba jednoznačné auto-match, review report | Importovať ako manuálny event alebo ručne potvrdiť override |
-| Starý a nový bot bežia súčasne | Duplicitné správy a reakcie | Cutover checklist, jediný token owner, vypnutie legacy scheduleru | Okamžite vypnúť nový worker alebo legacy proces podľa stavu |
-| Webový editor je na mobile príliš komplikovaný | Nízka adopcia | Mobile-first wireframe, test s reálnymi používateľmi | Upraviť flow pred E6 gate, nie po produkcii |
-| Rozsah sa počas vývoja nekontrolovane rozšíri | Nedokončená kritická cesta | Väzba backlogu na zadanie, oddelený post-v1 backlog | Zmenu zaradiť až po dopadovej analýze a schválení |
-| Závislosť alebo externé API sa zmení | Výpadok integrácie | Zamknuté verzie, adapter testy, sledovanie changelogov | Kontrolovaný upgrade v stagingu |
+| Riziko                                                | Dopad                                   | Preventívne opatrenie                                                   | Reakcia                                                     |
+| ----------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Nesprávna identita recurring výskytu                  | Úprava sa pripojí k nesprávnej udalosti | Google fixtures, stabilný zložený kľúč, konzervatívne matching pravidlá | Zastaviť automatické priradenie a vytvoriť review incident  |
+| Pád po odoslaní Discord správy a pred uložením ID     | Možná duplicita                         | Snapshot, message part stav, nonce, sekvenčné ukladanie                 | Reconcile obrazovka; nepublikovať neistú časť automaticky   |
+| Súbeh dvoch workerov                                  | Dvojité publikovanie                    | DB unique constraint, transakčný/advisory lock                          | Jeden run odmietnuť a auditovať konflikt                    |
+| Zastaraný Calendar sync                               | Neaktuálne oznamy                       | Max cache age, pre-publish sync, health stav                            | Blokovať publish a upozorniť `moderátori`                   |
+| Zmena alebo zrušenie udalosti tesne pred publikovaním | Nesprávny draft                         | Finálny sync pred snapshotom                                            | Publikovať až zo snapshotu po úspešnom syncu                |
+| Chyba time zone alebo DST                             | Nesprávny termín/okno                   | IANA timezone, centralizovaný časový modul, DST testy                   | Pozastaviť scheduler, opraviť termín administrátorsky       |
+| Discord role hierarchy neumožní zmenu                 | Neúspešná moderácia                     | Preflight kontrola a staging konfigurácia                               | Zrozumiteľný error a moderátorský alert                     |
+| Neoprávnený priamy API request                        | Bezpečnostný incident                   | Server RBAC pri každom use case, CSRF, session security                 | Zamietnuť, auditovať, invalidovať podozrivú session         |
+| User content vytvorí nechcenú zmienku                 | Nechcené upozornenia                    | Sanitizácia a explicitné allowed_mentions                               | Zablokovať draft alebo zmienku neutralizovať                |
+| Thumbnail URL zneužije internú sieť                   | SSRF                                    | URL policy, DNS/IP kontrola, izolovaná proxy                            | Odmietnuť obrázok, pokračovať bez thumbnailu                |
+| AI úvod zlyhá alebo vytvorí nevhodný text             | Publikácia bez vhodného úvodu           | Verzionovaný prompt, sanitizácia, deterministic fallback                | Použiť fallback a zaznamenať warning                        |
+| Legacy event sa nesprávne spáruje s Google eventom    | Strata alebo chybná redakcia            | Iba jednoznačné auto-match, review report                               | Importovať ako manuálny event alebo ručne potvrdiť override |
+| Starý a nový bot bežia súčasne                        | Duplicitné správy a reakcie             | Cutover checklist, jediný token owner, vypnutie legacy scheduleru       | Okamžite vypnúť nový worker alebo legacy proces podľa stavu |
+| Webový editor je na mobile príliš komplikovaný        | Nízka adopcia                           | Mobile-first wireframe, test s reálnymi používateľmi                    | Upraviť flow pred E6 gate, nie po produkcii                 |
+| Rozsah sa počas vývoja nekontrolovane rozšíri         | Nedokončená kritická cesta              | Väzba backlogu na zadanie, oddelený post-v1 backlog                     | Zmenu zaradiť až po dopadovej analýze a schválení           |
+| Závislosť alebo externé API sa zmení                  | Výpadok integrácie                      | Zamknuté verzie, adapter testy, sledovanie changelogov                  | Kontrolovaný upgrade v stagingu                             |
 
 ---
 

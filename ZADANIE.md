@@ -485,10 +485,11 @@ V nastavenom týždennom termíne systém:
 3. vykoná poslednú synchronizáciu Google Kalendára,
 4. zostaví publikačný balík,
 5. uloží nemenný snapshot balíka,
-6. odošle obsah do nakonfigurovaného Discord kanála,
-7. uloží identifikátory všetkých odoslaných správ,
-8. pridá seen emoji na určenú záverečnú správu,
-9. až po úplnom úspechu označí termín ako publikovaný.
+6. vykoná nakonfigurovanú ochrannú lehotu pred zverejnením,
+7. odošle obsah do nakonfigurovaného Discord kanála,
+8. uloží identifikátory všetkých odoslaných správ,
+9. pridá seen emoji na určenú záverečnú správu,
+10. až po úplnom úspechu označí termín ako publikovaný.
 
 Ak proces zlyhá uprostred odosielania, musí poznať už odoslané časti a nesmie pri opakovaní bezhlavo zdvojiť celý obsah. Stav musí umožniť bezpečné dokončenie, riadené opakovanie alebo administrátorské rozhodnutie.
 
@@ -509,6 +510,14 @@ Ručné publikovanie:
 - musí byť idempotentné voči opakovanému kliknutiu alebo opakovanému príkazu.
 
 Ak je termín už publikovaný, systém nesmie vytvoriť duplicitu obyčajným opakovaním. Prípadné nútené opätovné publikovanie musí byť oddelená administrátorská operácia s výrazným upozornením a auditom.
+
+### Ochranná lehota pred externým účinkom
+
+Automatické aj ručné publikovanie podporuje nastaviteľnú lehotu 0 až 300 sekúnd, predvolene 30 sekúnd. Hodnota 0 lehotu vypne. Počas nej je nemenný snapshot uložený v trvácnom stave, ale vo verejnom kanáli ešte nie je správa ani `@everyone`.
+
+Pri ručnom toku web zobrazuje náhľad, odpočet a možnosti zastaviť alebo zverejniť okamžite. Pri automatickom toku Carlo pošle dočasnú bežnú DM všetkým aktuálnym Adminom a ďalším osobám vybraným v Nastaveniach. Každý aktuálny Admin aj každá takto nakonfigurovaná osoba môže počas lehoty zastaviť publikovanie tlačidlom alebo DM `stop`. Rozhodnutie zastaviť alebo začať verejné odosielanie musí byť atómové, idempotentné a bezpečné pri reštarte.
+
+Zlyhanie doručenia DM nezastaví publikovanie, ale vytvorí moderátorské upozornenie. Dočasná DM sa po rozhodnutí odstráni, ak je dostupná. Príkaz po uplynutí lehoty pravdivo oznámi, že publikovanie už nebolo možné zastaviť. Nejde o Undo verejne publikovanej správy.
 
 ## 10.3 Rozdelenie do Discord správ
 
@@ -712,6 +721,8 @@ Umožňuje:
 - schváliť alebo zamietnuť čakajúcu archiváciu,
 - zobraziť históriu operácií.
 
+Vytvorenie a archivácia ponúkajú časovo neobmedzené Undo iba pri bezpečnom aktuálnom stave. Nový kanál sa presne odstráni len ak zostal prázdny a nezmenený; inak sa ponúkne archivácia. Archivácia sa obnoví iba ak kanál existuje a obnovovací snapshot stále spĺňa predpoklady.
+
 ### Používatelia a oprávnenia
 
 Umožňuje oprávnenému administrátorovi:
@@ -724,6 +735,8 @@ Umožňuje oprávnenému administrátorovi:
 - zobraziť výsledok synchronizácie s Discordom.
 
 Systém nesmie dovoliť odstrániť posledného spravovateľného administrátora ani vykonať zmenu, na ktorú bot podľa hierarchie Discord rolí nemá právo.
+
+Zmena roly ponúka časovo neobmedzené Undo, ale návrat sa vykoná iba pri nezmenenom relevantnom stave, čerstvom oprávnení a zachovaní ochrany posledného Admina. Ak sa stav zmenil, Carlo návrat odmietne s vysvetlením.
 
 ### Automatické reakcie a seen emoji
 
@@ -747,6 +760,7 @@ Umožňuje:
 - zapnúť alebo vypnúť predvolené publikovanie zdrojových popisov z Google Kalendára,
 - nastaviť úvod a záver,
 - nastaviť moderátorský kanál pre prevádzkové upozornenia,
+- nastaviť ochrannú lehotu publikovania a ďalších príjemcov dočasnej DM; aktuálni Admini sa zahŕňajú vždy,
 - zobraziť jednoznačné časové pásmo,
 - ručne publikovať najbližší balík.
 
@@ -796,21 +810,21 @@ Discord token bota ani Google prihlasovacie údaje sa nikdy neposielajú do preh
 
 Minimálny model oprávnení:
 
-| Operácia | Team Mod | SDB / FMA | Admin |
-|---|---:|---:|---:|
-| Zobraziť najbližšie oznamy | áno | áno | áno |
-| Upraviť titulok a popis udalosti | áno | nie | áno |
-| Spravovať manuálne udalosti | áno | nie | áno |
-| Spravovať INFO oznamy | áno | nie | áno |
-| Vytvoriť kanál | áno | nie | áno |
-| Požiadať o archiváciu | áno | nie | áno |
-| Schváliť archiváciu | nie | nie | áno |
-| Ručne publikovať | nie | áno | áno |
-| Meniť harmonogram a integrácie | nie | nie | áno |
-| Meniť automatické reakcie | nie | nie | áno |
-| Udeľovať Team Mod | nie | nie | áno |
-| Udeľovať Admin | nie | nie | áno, s dodatočným potvrdením |
-| Zobraziť audit | obmedzene | nie | áno |
+| Operácia                         |  Team Mod | SDB / FMA |                        Admin |
+| -------------------------------- | --------: | --------: | ---------------------------: |
+| Zobraziť najbližšie oznamy       |       áno |       áno |                          áno |
+| Upraviť titulok a popis udalosti |       áno |       nie |                          áno |
+| Spravovať manuálne udalosti      |       áno |       nie |                          áno |
+| Spravovať INFO oznamy            |       áno |       nie |                          áno |
+| Vytvoriť kanál                   |       áno |       nie |                          áno |
+| Požiadať o archiváciu            |       áno |       nie |                          áno |
+| Schváliť archiváciu              |       nie |       nie |                          áno |
+| Ručne publikovať                 |       nie |       áno |                          áno |
+| Meniť harmonogram a integrácie   |       nie |       nie |                          áno |
+| Meniť automatické reakcie        |       nie |       nie |                          áno |
+| Udeľovať Team Mod                |       nie |       nie |                          áno |
+| Udeľovať Admin                   |       nie |       nie | áno, s dodatočným potvrdením |
+| Zobraziť audit                   | obmedzene |       nie |                          áno |
 
 Rola `SDB / FMA` je špecializovaná publikačná rola. Sama osebe neposkytuje všeobecnú administráciu ani redakčné práva; umožňuje zobraziť najbližší balík a ručne ho publikovať.
 
