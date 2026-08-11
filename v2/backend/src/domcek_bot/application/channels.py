@@ -49,6 +49,8 @@ class CreatedChannel:
 
 
 class DiscordChannelGateway(Protocol):
+    async def category_allows_project_channel(self, *, guild_id: int, category_id: int) -> bool: ...
+
     async def get_text_channel(self, *, guild_id: int, channel_id: int) -> CreatedChannel: ...
 
     async def create_text_channel(
@@ -129,11 +131,17 @@ class ChannelManagementService:
         )
         async with self._unit_of_work.transaction() as repositories:
             config = await repositories.guild_configs.get(principal.guild_id)
-            if config is None or config.projects_category_id is None:
-                raise ChannelConfigurationMissing("projects category is not configured")
-            target_category_id = config.projects_category_id if category_id is None else category_id
-            if target_category_id <= 0 or target_category_id == config.archive_category_id:
-                raise ValueError("selected project category is not allowed")
+        if config is None or config.projects_category_id is None:
+            raise ChannelConfigurationMissing("projects category is not configured")
+        target_category_id = config.projects_category_id if category_id is None else category_id
+        if target_category_id <= 0 or target_category_id == config.archive_category_id:
+            raise ValueError("selected project category is not allowed")
+        if not await self._discord.category_allows_project_channel(
+            guild_id=principal.guild_id,
+            category_id=target_category_id,
+        ):
+            raise ValueError("selected project category contains voice channels")
+        async with self._unit_of_work.transaction() as repositories:
             claimed = await repositories.integration_tasks.claim(proposed_task)
         task = claimed
         if task.state is IntegrationTaskState.SUCCEEDED and task.result_value:

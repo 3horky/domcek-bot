@@ -18,6 +18,7 @@ const session = {
     'edit_content',
     'manage_settings',
     'manage_channels',
+    'manage_roles',
     'reconcile_publication',
   ],
   expires_at: '2026-08-09T22:00:00+00:00',
@@ -329,12 +330,52 @@ describe('authenticated application shell', () => {
     }
     const directory = {
       channels: [
-        { id: '700', name: 'oznamy', kind: 'text', category_id: '800' },
-        { id: '701', name: 'moderatori', kind: 'text', category_id: null },
+        {
+          id: '700',
+          name: 'oznamy',
+          kind: 'text',
+          category_id: '800',
+          text_channel_count: 0,
+          voice_channel_count: 0,
+          can_create_project_channel: false,
+          is_archive_category: false,
+          is_default_project_category: false,
+        },
+        {
+          id: '701',
+          name: 'moderatori',
+          kind: 'text',
+          category_id: null,
+          text_channel_count: 0,
+          voice_channel_count: 0,
+          can_create_project_channel: false,
+          is_archive_category: false,
+          is_default_project_category: false,
+        },
       ],
       categories: [
-        { id: '800', name: 'projekty', kind: 'category', category_id: null },
-        { id: '801', name: 'archiv', kind: 'category', category_id: null },
+        {
+          id: '800',
+          name: 'projekty',
+          kind: 'category',
+          category_id: null,
+          text_channel_count: 2,
+          voice_channel_count: 0,
+          can_create_project_channel: true,
+          is_archive_category: false,
+          is_default_project_category: true,
+        },
+        {
+          id: '801',
+          name: 'archiv',
+          kind: 'category',
+          category_id: null,
+          text_channel_count: 2,
+          voice_channel_count: 0,
+          can_create_project_channel: false,
+          is_archive_category: true,
+          is_default_project_category: false,
+        },
       ],
       roles: [],
       emojis: [],
@@ -370,11 +411,12 @@ describe('authenticated application shell', () => {
     expect(await screen.findByRole('tab', { name: /Publikovanie/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Nastavenia Carla' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /Kalendáre/ })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /Kanály/ })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /Kanály/ })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Oznamy')).toHaveValue('700')
     fireEvent.click(screen.getByRole('tab', { name: /Kalendáre/ }))
     expect(await screen.findByText('Zatiaľ nie je pripojený kalendár')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('tab', { name: /Kanály/ }))
+    fireEvent.click(screen.getByRole('link', { name: /Kanály/ }))
+    expect(await screen.findByRole('heading', { name: 'Kanály' })).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Názov kanála'), {
       target: { value: 'Projekt' },
     })

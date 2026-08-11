@@ -153,6 +153,15 @@ class DiscordPyChannelGateway(DiscordChannelGateway):
             raise ChannelOperationError("archive target is not a guild text channel")
         return CreatedChannel(channel.id, channel.name, channel.jump_url, channel.category_id)
 
+    async def category_allows_project_channel(self, *, guild_id: int, category_id: int) -> bool:
+        guild = self._client.get_guild(guild_id)
+        category = guild.get_channel(category_id) if guild is not None else None
+        return (
+            isinstance(category, discord.CategoryChannel)
+            and not category.voice_channels
+            and not category.stage_channels
+        )
+
     async def create_text_channel(
         self,
         *,

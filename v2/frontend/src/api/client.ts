@@ -270,6 +270,11 @@ export interface DiscordChannelOption {
   name: string
   kind: 'text' | 'category'
   category_id: string | null
+  text_channel_count: number
+  voice_channel_count: number
+  can_create_project_channel: boolean
+  is_archive_category: boolean
+  is_default_project_category: boolean
 }
 
 export interface DiscordRoleOption {

@@ -1,12 +1,15 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import {
   Activity,
+  Hash,
   History,
   House,
   LayoutDashboard,
   LogOut,
   Megaphone,
   Settings2,
+  ShieldCheck,
+  SmilePlus,
 } from 'lucide-react'
 
 import { useAuth } from '../auth/context'
@@ -22,8 +25,10 @@ export function AppLayout() {
   if (auth.status !== 'authenticated') return null
   const { user, roles, capabilities } = auth.session
   const canEditContent = capabilities.includes('edit_content')
-  const canManage =
-    capabilities.includes('manage_settings') || capabilities.includes('manage_channels')
+  const canChannels = capabilities.includes('manage_channels')
+  const canSettings = capabilities.includes('manage_settings')
+  const canRoles = capabilities.includes('manage_roles')
+  const canManageServer = canChannels || canSettings || canRoles
 
   return (
     <div className="app-shell">
@@ -76,7 +81,29 @@ export function AppLayout() {
               <span className="nav-short">Audit</span>
             </NavLink>
           )}
-          {canManage && (
+          {canManageServer && <p className="nav-heading">Správa servera</p>}
+          {canChannels && (
+            <NavLink to="/kanaly">
+              <Hash aria-hidden="true" />
+              <span className="nav-long">Kanály</span>
+              <span className="nav-short">Kanály</span>
+            </NavLink>
+          )}
+          {canRoles && (
+            <NavLink to="/roly">
+              <ShieldCheck aria-hidden="true" />
+              <span className="nav-long">Roly</span>
+              <span className="nav-short">Roly</span>
+            </NavLink>
+          )}
+          {canSettings && (
+            <NavLink to="/reakcie">
+              <SmilePlus aria-hidden="true" />
+              <span className="nav-long">Reakcie</span>
+              <span className="nav-short">Reakcie</span>
+            </NavLink>
+          )}
+          {canSettings && (
             <NavLink to="/nastavenia">
               <Settings2 aria-hidden="true" />
               <span className="nav-long">Nastavenia</span>

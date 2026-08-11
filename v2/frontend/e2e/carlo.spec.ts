@@ -367,12 +367,63 @@ function adminSettings() {
 function directory() {
   return {
     channels: [
-      { id: '700', name: 'oznamy', kind: 'text', category_id: '800' },
-      { id: '701', name: 'moderatori', kind: 'text', category_id: null },
+      {
+        id: '700',
+        name: 'oznamy',
+        kind: 'text',
+        category_id: '800',
+        text_channel_count: 0,
+        voice_channel_count: 0,
+        can_create_project_channel: false,
+        is_archive_category: false,
+        is_default_project_category: false,
+      },
+      {
+        id: '701',
+        name: 'moderatori',
+        kind: 'text',
+        category_id: null,
+        text_channel_count: 0,
+        voice_channel_count: 0,
+        can_create_project_channel: false,
+        is_archive_category: false,
+        is_default_project_category: false,
+      },
     ],
     categories: [
-      { id: '800', name: 'projekty', kind: 'category', category_id: null },
-      { id: '801', name: 'archiv', kind: 'category', category_id: null },
+      {
+        id: '800',
+        name: 'projekty',
+        kind: 'category',
+        category_id: null,
+        text_channel_count: 4,
+        voice_channel_count: 0,
+        can_create_project_channel: true,
+        is_archive_category: false,
+        is_default_project_category: true,
+      },
+      {
+        id: '801',
+        name: 'archiv',
+        kind: 'category',
+        category_id: null,
+        text_channel_count: 8,
+        voice_channel_count: 0,
+        can_create_project_channel: false,
+        is_archive_category: true,
+        is_default_project_category: false,
+      },
+      {
+        id: '802',
+        name: 'voice',
+        kind: 'category',
+        category_id: null,
+        text_channel_count: 0,
+        voice_channel_count: 3,
+        can_create_project_channel: false,
+        is_archive_category: false,
+        is_default_project_category: false,
+      },
     ],
     roles: [{ id: '901', name: 'Team Mod', position: 2, managed: false }],
     emojis: [],
@@ -474,18 +525,32 @@ test('07 Admin ručne publikuje dvojkrokovo', async ({ page }) => {
 
 test('08 Admin vytvorí súkromný kanál', async ({ page }) => {
   const state = await mockCarlo(page)
-  await page.goto('/nastavenia')
-  await page.getByRole('tab', { name: /Kanály/ }).click()
+  await page.goto('/kanaly')
+  await expect(page.getByRole('heading', { name: 'Kanály', exact: true })).toBeVisible()
+  const creationCategory = page.getByLabel('Kategória', { exact: true })
+  await expect(creationCategory.getByRole('option', { name: /archiv/i })).toHaveCount(0)
+  await expect(creationCategory.getByRole('option', { name: /voice/i })).toHaveCount(0)
+  await page.getByLabel('Ďalší ľudia s prístupom').fill('tester')
+  await page.getByRole('option', { name: /Testovací člen/ }).click()
+  const rolePicker = page.locator('.role-picker')
+  await rolePicker.getByRole('option', { name: /Team Mod/ }).click()
+  await expect(rolePicker.getByRole('button', { name: 'Team Mod' })).toBeVisible()
+  await rolePicker.getByRole('button', { name: 'Zrušiť výber' }).click()
+  await expect(
+    rolePicker.getByText('Žiadna rola – prístup dostanú iba vybraní ľudia.'),
+  ).toBeVisible()
   await page.getByLabel('Názov kanála').fill('e2e-projekt')
   await page.getByRole('button', { name: 'Vytvoriť kanál' }).click()
   await expect(page.getByText(/Kanál #e2e-projekt bol vytvorený/)).toBeVisible()
   expect(state.calls.some((call) => call.path === '/api/v1/admin/channels')).toBe(true)
+  const createCall = state.calls.find((call) => call.path === '/api/v1/admin/channels')
+  expect((createCall?.body as Record<string, unknown>).member_ids).toEqual(['999'])
+  expect((createCall?.body as Record<string, unknown>).role_ids).toEqual([])
 })
 
 test('09 Team Mod požiada o archiváciu a Admin schváli konkrétnu žiadosť', async ({ page }) => {
   const state = await mockCarlo(page, 'team_mod')
-  await page.goto('/nastavenia')
-  await page.getByRole('tab', { name: /Kanály/ }).click()
+  await page.goto('/kanaly')
   await page.getByLabel('Kanál', { exact: true }).selectOption('700')
   await page.getByLabel('Dôvod').fill('Projekt skončil')
   await page.getByRole('button', { name: 'Odoslať žiadosť' }).click()
@@ -494,7 +559,6 @@ test('09 Team Mod požiada o archiváciu a Admin schváli konkrétnu žiadosť',
 
   state.role = 'admin'
   await page.reload()
-  await page.getByRole('tab', { name: /Kanály/ }).click()
   await page.getByRole('button', { name: 'Schváliť' }).click()
   await page.getByRole('button', { name: 'Potvrdiť' }).click()
   await expect(page.getByText('Kanál bol archivovaný.')).toBeVisible()
@@ -503,10 +567,8 @@ test('09 Team Mod požiada o archiváciu a Admin schváli konkrétnu žiadosť',
 
 test('10 Admin udelí a odoberie Team Mod rolu', async ({ page }) => {
   const state = await mockCarlo(page)
-  await page.goto('/nastavenia')
-  await page.getByRole('tab', { name: /Roly/ }).click()
-  await page.getByPlaceholder('Meno člena servera').fill('tester')
-  await page.getByRole('button', { name: 'Vyhľadať' }).click()
+  await page.goto('/roly')
+  await page.getByPlaceholder('Začnite písať meno alebo prezývku…').fill('tester')
   await page.getByRole('switch', { name: 'Team Mod' }).click()
   await page.getByRole('button', { name: 'Potvrdiť zmenu' }).click()
   await expect(page.getByText(/Team Mod oprávnenie bolo udelené/)).toBeVisible()

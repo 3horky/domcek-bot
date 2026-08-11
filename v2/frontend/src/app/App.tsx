@@ -26,6 +26,19 @@ const StatusPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage })),
 )
+const ChannelsPage = lazy(() =>
+  import('../pages/DiscordAdministrationPages').then((module) => ({
+    default: module.ChannelsPage,
+  })),
+)
+const RolesPage = lazy(() =>
+  import('../pages/DiscordAdministrationPages').then((module) => ({ default: module.RolesPage })),
+)
+const ReactionsPage = lazy(() =>
+  import('../pages/DiscordAdministrationPages').then((module) => ({
+    default: module.ReactionsPage,
+  })),
+)
 
 const router = createBrowserRouter([
   {
@@ -40,6 +53,9 @@ const router = createBrowserRouter([
       { path: 'historia', element: <PublicationHistoryPage /> },
       { path: 'stav', element: <StatusPage /> },
       { path: 'nastavenia', element: <SettingsPage /> },
+      { path: 'kanaly', element: <ChannelsPage /> },
+      { path: 'roly', element: <RolesPage /> },
+      { path: 'reakcie', element: <ReactionsPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

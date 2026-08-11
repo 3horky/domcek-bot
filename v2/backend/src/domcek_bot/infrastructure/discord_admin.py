@@ -39,16 +39,29 @@ class DiscordHttpAdministrationGateway:
 
     async def directory(self, guild_id: int) -> DiscordDirectory:
         channels_payload, roles_payload, emojis_payload = await self._parallel_directory(guild_id)
+        text_counts: dict[int, int] = {}
+        voice_counts: dict[int, int] = {}
+        for item in channels_payload:
+            parent_id = _optional_snowflake(item.get("parent_id"))
+            if parent_id is None:
+                continue
+            if item.get("type") in {0, 5, 15, 16}:
+                text_counts[parent_id] = text_counts.get(parent_id, 0) + 1
+            elif item.get("type") in {2, 13}:
+                voice_counts[parent_id] = voice_counts.get(parent_id, 0) + 1
         channels = tuple(
             DiscordChannelOption(
                 id=_snowflake(item, "id"),
                 name=str(item.get("name", "")),
                 kind="category" if item.get("type") == 4 else "text",
                 category_id=_optional_snowflake(item.get("parent_id")),
+                text_channel_count=text_counts.get(_snowflake(item, "id"), 0),
+                voice_channel_count=voice_counts.get(_snowflake(item, "id"), 0),
             )
             for item in channels_payload
             if item.get("type") in {0, 4}
         )
+
         roles = tuple(
             DiscordRoleOption(
                 id=_snowflake(item, "id"),
@@ -75,6 +88,18 @@ class DiscordHttpAdministrationGateway:
             roles=tuple(sorted(roles, key=lambda item: (-item.position, item.name.casefold()))),
             emojis=tuple(sorted(emojis, key=lambda item: item.name.casefold())),
         )
+
+    async def category_allows_project_channel(self, *, guild_id: int, category_id: int) -> bool:
+        channels = _objects(await self._json("GET", f"/guilds/{guild_id}/channels"))
+        category_exists = any(
+            item.get("type") == 4 and _snowflake(item, "id") == category_id for item in channels
+        )
+        has_voice_children = any(
+            item.get("type") in {2, 13}
+            and _optional_snowflake(item.get("parent_id")) == category_id
+            for item in channels
+        )
+        return category_exists and not has_voice_children
 
     async def get_text_channel(self, *, guild_id: int, channel_id: int) -> CreatedChannel:
         payload = _object(await self._json("GET", f"/channels/{channel_id}"))

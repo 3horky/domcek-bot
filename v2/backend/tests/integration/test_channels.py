@@ -59,6 +59,11 @@ class RecordingChannels:
         self.ambiguous_after_archive = False
         self.crash_after_create = False
         self.created_markers: dict[str, CreatedChannel] = {}
+        self.disallowed_categories: set[int] = set()
+
+    async def category_allows_project_channel(self, *, guild_id: int, category_id: int) -> bool:
+        assert guild_id == GUILD_ID
+        return category_id not in self.disallowed_categories
 
     async def get_text_channel(self, *, guild_id: int, channel_id: int) -> CreatedChannel:
         assert guild_id == GUILD_ID
@@ -254,6 +259,24 @@ async def test_channel_creation_recovers_crash_after_discord_without_duplicate(
     assert task.state == "succeeded"
     assert task.result_value is not None
     assert task.result_value["channel_id"] == 5000
+
+
+async def test_channel_creation_rejects_category_with_voice_channels(database: Database) -> None:
+    service, gateway = await _service(database)
+    gateway.disallowed_categories.add(PROJECTS_CATEGORY)
+
+    with pytest.raises(ValueError, match="contains voice channels"):
+        await service.create_channel(
+            name="Nevhodná kategória",
+            member_ids=(),
+            role_ids=(),
+            idempotency_key="voice-category",
+            principal=_principal(AppRole.ADMIN),
+            correlation_id="voice-category",
+            now=NOW,
+        )
+
+    assert gateway.created == []
 
 
 async def test_archive_request_is_single_use_and_requires_fresh_admin_authorization(

@@ -4,7 +4,6 @@ import {
   Check,
   ChevronRight,
   Clock3,
-  Hash,
   LoaderCircle,
   MessageSquareMore,
   Plus,
@@ -12,8 +11,8 @@ import {
   Search,
   Settings2,
   ShieldCheck,
-  SmilePlus,
   Users,
+  X,
 } from 'lucide-react'
 import {
   cloneElement,
@@ -43,7 +42,6 @@ import {
   confirmManualPublication,
   decideArchiveRequest,
   getAdminSettings,
-  getArchiveRequests,
   getDiscordDirectory,
   prepareManualPublication,
   recoverArchiveRequests,
@@ -57,6 +55,7 @@ import {
 } from '../api/client'
 import { useAuth } from '../auth/context'
 import { DiscordPreview } from '../components/DiscordPreview'
+import { ChannelMultiPicker, MemberPicker, RolePicker } from '../components/DiscordPickers'
 import { Badge } from '../components/ui/badge'
 import {
   AlertDialog,
@@ -78,17 +77,14 @@ import { Textarea } from '../components/ui/textarea'
 
 const weekdays = ['pondelok', 'utorok', 'streda', 'štvrtok', 'piatok', 'sobota', 'nedeľa']
 
-type Notice = { kind: 'success' | 'error'; text: string } | null
+export type Notice = { kind: 'success' | 'error'; text: string } | null
 
 export function SettingsPage() {
   const auth = useAuth()
   const canAdmin =
     auth.status === 'authenticated' && auth.session.capabilities.includes('manage_settings')
-  const canChannels =
-    auth.status === 'authenticated' && auth.session.capabilities.includes('manage_channels')
   const [settings, setSettings] = useState<AdminSettings | null>(null)
   const [directory, setDirectory] = useState<DiscordDirectory | null>(null)
-  const [archives, setArchives] = useState<ArchiveRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState<Notice>(null)
 
@@ -96,32 +92,25 @@ export function SettingsPage() {
     setLoading(true)
     setNotice(null)
     try {
-      const [directoryValue, archiveValue, settingsValue] = await Promise.all([
+      const [directoryValue, settingsValue] = await Promise.all([
         getDiscordDirectory(),
-        canChannels ? getArchiveRequests() : Promise.resolve([]),
         canAdmin ? getAdminSettings() : Promise.resolve(null),
       ])
       setDirectory(directoryValue)
-      setArchives(archiveValue)
       setSettings(settingsValue)
     } catch (error) {
       setNotice({ kind: 'error', text: message(error) })
     } finally {
       setLoading(false)
     }
-  }, [canAdmin, canChannels])
+  }, [canAdmin])
 
   useEffect(() => {
     let cancelled = false
-    void Promise.all([
-      getDiscordDirectory(),
-      canChannels ? getArchiveRequests() : Promise.resolve([]),
-      canAdmin ? getAdminSettings() : Promise.resolve(null),
-    ])
-      .then(([directoryValue, archiveValue, settingsValue]) => {
+    void Promise.all([getDiscordDirectory(), canAdmin ? getAdminSettings() : Promise.resolve(null)])
+      .then(([directoryValue, settingsValue]) => {
         if (cancelled) return
         setDirectory(directoryValue)
-        setArchives(archiveValue)
         setSettings(settingsValue)
       })
       .catch((error: unknown) => {
@@ -133,26 +122,25 @@ export function SettingsPage() {
     return () => {
       cancelled = true
     }
-  }, [canAdmin, canChannels])
+  }, [canAdmin])
 
   if (loading) return <SettingsSkeleton />
   if (!directory) return <PageError notice={notice} onRetry={() => void reload()} />
 
-  const firstTab = canAdmin ? 'publikovanie' : 'kanaly'
   return (
     <section className="settings-page">
       <header className="settings-hero">
         <div>
           <p className="eyebrow">Riadiace centrum</p>
           <h1>Nastavenia Carla</h1>
-          <p>Kalendáre, publikovanie aj správa Discordu na jednom mieste.</p>
+          <p>Časovanie, obsah publikovania a zdroje z Google kalendára.</p>
         </div>
         <Button variant="outline" onClick={() => void reload()}>
           <RefreshCw /> Obnoviť údaje
         </Button>
       </header>
       {notice && <NoticeBanner notice={notice} />}
-      <Tabs defaultValue={firstTab} className="settings-workspace">
+      <Tabs defaultValue="publikovanie" className="settings-workspace">
         <TabsList className="settings-tabs" aria-label="Sekcie nastavení">
           {canAdmin && (
             <TabsTrigger value="publikovanie">
@@ -164,24 +152,6 @@ export function SettingsPage() {
             <TabsTrigger value="kalendare">
               <CalendarDays />
               Kalendáre
-            </TabsTrigger>
-          )}
-          {canChannels && (
-            <TabsTrigger value="kanaly">
-              <Hash />
-              Kanály
-            </TabsTrigger>
-          )}
-          {canAdmin && (
-            <TabsTrigger value="roly">
-              <Users />
-              Roly
-            </TabsTrigger>
-          )}
-          {canAdmin && (
-            <TabsTrigger value="reakcie">
-              <SmilePlus />
-              Reakcie
             </TabsTrigger>
           )}
         </TabsList>
@@ -204,32 +174,6 @@ export function SettingsPage() {
             <CalendarsPanel
               items={settings.calendars}
               onChanged={(items) => setSettings({ ...settings, calendars: items })}
-              setNotice={setNotice}
-            />
-          </TabsContent>
-        )}
-        {canChannels && (
-          <TabsContent value="kanaly">
-            <ChannelsPanel
-              directory={directory}
-              archives={archives}
-              isAdmin={canAdmin}
-              onArchivesChanged={setArchives}
-              setNotice={setNotice}
-            />
-          </TabsContent>
-        )}
-        {canAdmin && settings && (
-          <TabsContent value="roly">
-            <RolesPanel publication={settings.publication} setNotice={setNotice} />
-          </TabsContent>
-        )}
-        {canAdmin && settings && (
-          <TabsContent value="reakcie">
-            <ReactionsPanel
-              value={settings.reactions}
-              directory={directory}
-              onSaved={(value) => setSettings({ ...settings, reactions: value })}
               setNotice={setNotice}
             />
           </TabsContent>
@@ -458,18 +402,6 @@ function PublicationPanel({
             value={draft.command_channel_id}
             channels={directory.channels}
             onChange={(id) => setDraft({ ...draft, command_channel_id: id })}
-          />
-          <ChannelSelect
-            label="Projektová kategória"
-            value={draft.projects_category_id}
-            channels={directory.categories}
-            onChange={(id) => setDraft({ ...draft, projects_category_id: id })}
-          />
-          <ChannelSelect
-            label="Archívna kategória"
-            value={draft.archive_category_id}
-            channels={directory.categories}
-            onChange={(id) => setDraft({ ...draft, archive_category_id: id })}
           />
           <Button className="settings-save" disabled={saving} onClick={() => void save()}>
             {saving ? <LoaderCircle className="spin" /> : <Check />} Uložiť nastavenia
@@ -726,16 +658,20 @@ function CalendarRow({
   )
 }
 
-function ChannelsPanel({
+export function ChannelsPanel({
   directory,
   archives,
   isAdmin,
+  configuration,
+  onConfigurationSaved,
   onArchivesChanged,
   setNotice,
 }: {
   directory: DiscordDirectory
   archives: ArchiveRequest[]
   isAdmin: boolean
+  configuration?: PublicationSettings | null
+  onConfigurationSaved?: (value: PublicationSettings) => Promise<void>
   onArchivesChanged: (value: ArchiveRequest[]) => void
   setNotice: (notice: Notice) => void
 }) {
@@ -748,23 +684,33 @@ function ChannelsPanel({
   const [archiveChannel, setArchiveChannel] = useState('')
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const [projectsCategoryId, setProjectsCategoryId] = useState(
+    configuration?.projects_category_id ?? '',
+  )
+  const [archiveCategoryId, setArchiveCategoryId] = useState(
+    configuration?.archive_category_id ?? '',
+  )
   const createInFlight = useRef(false)
   const createIdempotencyKey = useRef(crypto.randomUUID())
-  const [memberQuery, setMemberQuery] = useState('')
-  const [members, setMembers] = useState<DiscordMemberOption[]>([])
   const [pendingDecision, setPendingDecision] = useState<{ id: string; approve: boolean } | null>(
     null,
   )
   const recoverableArchives = archives.filter((item) =>
     ['archiving', 'failed'].includes(item.state),
   )
-  async function search() {
-    try {
-      setMembers(await searchDiscordMembers(memberQuery))
-    } catch (error) {
-      setNotice({ kind: 'error', text: message(error) })
-    }
-  }
+  const availableCategories = directory.categories.filter(
+    (category) => category.can_create_project_channel,
+  )
+  const defaultCategory = availableCategories.find(
+    (category) => category.is_default_project_category,
+  )
+  const peopleWithAccess = memberIds.length + 1
+  const archiveCategoryIds = new Set(
+    directory.categories.filter((category) => category.is_archive_category).map((item) => item.id),
+  )
+  const archivableChannels = directory.channels.filter(
+    (channel) => channel.category_id === null || !archiveCategoryIds.has(channel.category_id),
+  )
   async function create() {
     if (createInFlight.current) return
     createInFlight.current = true
@@ -781,6 +727,7 @@ function ChannelsPanel({
       })
       setNotice({ kind: 'success', text: `Kanál #${result.name} bol vytvorený.` })
       setName('')
+      setOwnerId(null)
       setMemberIds([])
       setRoleIds([])
       createIdempotencyKey.current = crypto.randomUUID()
@@ -839,207 +786,258 @@ function ChannelsPanel({
       setBusy(false)
     }
   }
+  async function saveCategoryConfiguration() {
+    if (!configuration || !onConfigurationSaved) return
+    setBusy(true)
+    try {
+      const saved = await updatePublicationSettings({
+        ...configuration,
+        projects_category_id: projectsCategoryId || null,
+        archive_category_id: archiveCategoryId || null,
+      })
+      await onConfigurationSaved(saved)
+      setNotice({ kind: 'success', text: 'Kategórie pre projekty a archív sú uložené.' })
+    } catch (error) {
+      setNotice({ kind: 'error', text: message(error) })
+    } finally {
+      setBusy(false)
+    }
+  }
   return (
-    <div className="settings-grid settings-grid-main">
-      <div className="settings-stack">
-        <Card>
-          <CardHeader>
-            <CardTitle>Nový projektový kanál</CardTitle>
-            <CardDescription>
-              Carlo vytvorí súkromný kanál vo vybranej povolenej kategórii.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="settings-fields">
-            <Field label="Kategória">
-              <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
-                <option value="">Nastavená pracovná kategória</option>
-                {directory.categories.map((category) => (
-                  <option value={category.id} key={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Názov kanála">
-              <Input
-                placeholder="nazov-projektu"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </Field>
-            <Field label="Emoji v názve">
-              <Input
-                value={emoji}
-                maxLength={16}
-                onChange={(event) => setEmoji(event.target.value)}
-              />
-            </Field>
-            <div className="inline-search">
-              <Input
-                placeholder="Vyhľadať človeka"
-                value={memberQuery}
-                onChange={(event) => setMemberQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    void search()
-                  }
-                }}
-              />
-              <Button variant="outline" onClick={() => void search()}>
-                <Search />
-                Hľadať
-              </Button>
+    <div className="channel-workspace">
+      <section className="channel-creation-card">
+        <div className="channel-section-heading">
+          <span className="section-icon">
+            <Plus />
+          </span>
+          <div>
+            <h2>Nový projektový kanál</h2>
+            <p>Súkromný textový priestor s presne určeným prístupom.</p>
+          </div>
+        </div>
+        {isAdmin && configuration && (
+          <div className="channel-placement-settings">
+            <div>
+              <strong>Pravidlá umiestnenia</strong>
+              <span>Predvolená cieľová kategória a archív patria k správe kanálov.</span>
             </div>
-            {members.length > 0 && (
-              <div className="channel-people-picker">
-                <Field label="Zodpovedná osoba">
-                  <select
-                    value={ownerId ?? ''}
-                    onChange={(event) => setOwnerId(event.target.value || null)}
-                  >
-                    <option value="">Ja – používateľ, ktorý kanál vytvára</option>
-                    {members.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.display_name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <div className="choice-cloud" aria-label="Ďalší ľudia s prístupom">
-                  {members.map((member) => (
-                    <button
-                      type="button"
-                      key={member.id}
-                      className={memberIds.includes(member.id) ? 'selected' : ''}
-                      onClick={() => setMemberIds(toggle(memberIds, member.id))}
-                    >
-                      {member.display_name}
-                      {memberIds.includes(member.id) && <Check />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <Field label="Roly s prístupom" hint="Viac rolí vyberiete s Ctrl/Cmd.">
+            <Field label="Projektová kategória">
               <select
-                multiple
-                value={roleIds}
-                onChange={(event) =>
-                  setRoleIds(
-                    Array.from(event.currentTarget.selectedOptions, (option) => option.value),
-                  )
-                }
+                value={projectsCategoryId}
+                onChange={(event) => setProjectsCategoryId(event.target.value)}
               >
-                {directory.roles
-                  .filter((role) => !role.managed && role.name !== '@everyone')
-                  .map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name}
+                <option value="">Nie je nastavená</option>
+                {directory.categories
+                  .filter(
+                    (category) =>
+                      category.voice_channel_count === 0 && category.id !== archiveCategoryId,
+                  )
+                  .map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
                     </option>
                   ))}
               </select>
             </Field>
-            <div className="permission-preview">
-              <ShieldCheck />
-              <div>
-                <strong>Náhľad prístupu</strong>
-                <span>
-                  @everyone kanál neuvidí · zodpovedná osoba a {memberIds.length} ďalších ľudí ·{' '}
-                  {roleIds.length} rolí
-                </span>
-              </div>
-            </div>
-            <Button disabled={busy || !name.trim() || !emoji.trim()} onClick={() => void create()}>
-              <Plus />
-              Vytvoriť kanál
+            <Field label="Archívna kategória">
+              <select
+                value={archiveCategoryId}
+                onChange={(event) => setArchiveCategoryId(event.target.value)}
+              >
+                <option value="">Nie je nastavená</option>
+                {directory.categories
+                  .filter(
+                    (category) =>
+                      category.voice_channel_count === 0 && category.id !== projectsCategoryId,
+                  )
+                  .map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+            <Button
+              variant="outline"
+              disabled={busy || !projectsCategoryId || !archiveCategoryId}
+              onClick={() => void saveCategoryConfiguration()}
+            >
+              <Check /> Uložiť kategórie
             </Button>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Archivácie</CardTitle>
-            <CardDescription>
-              Rozhodnutie je jednorazové a pri schválení sa oprávnenia zosúladia s archívom.
-            </CardDescription>
-            {isAdmin && recoverableArchives.length > 0 && (
-              <Button variant="outline" disabled={busy} onClick={() => void recoverArchives()}>
-                <RefreshCw /> Obnoviť rozpracované ({recoverableArchives.length})
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent className="archive-list">
-            {archives.length === 0 && (
-              <EmptyState
-                icon={Archive}
-                title="Nič nečaká na rozhodnutie"
-                text="Otvorené žiadosti sa zobrazia tu aj v kanáli moderátorov."
-              />
-            )}
-            {archives.map((item) => (
-              <article className="archive-row" key={item.id}>
-                <div>
-                  <strong>#{item.original_channel_name}</strong>
-                  <span>{item.reason}</span>
-                  <small>
-                    {item.state === 'pending'
-                      ? `Platí do ${dateTime(item.expires_at)}`
-                      : item.state === 'archiving'
-                        ? 'Schválené · čaká na bezpečné dokončenie'
-                        : 'Predchádzajúci pokus zlyhal · možno ho obnoviť'}
-                  </small>
-                </div>
-                {isAdmin && item.state === 'pending' && (
-                  <div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPendingDecision({ id: item.id, approve: false })}
-                    >
-                      Zamietnuť
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => setPendingDecision({ id: item.id, approve: true })}
-                    >
-                      Schváliť
-                    </Button>
-                  </div>
-                )}
-              </article>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-      <Card className="settings-side-card">
-        <CardHeader>
-          <CardTitle>Požiadať o archiváciu</CardTitle>
-          <CardDescription>Team Mod pripraví dôvod, Admin následne rozhodne.</CardDescription>
-        </CardHeader>
-        <CardContent className="settings-fields">
-          <ChannelSelect
-            label="Kanál"
-            value={archiveChannel || null}
-            channels={directory.channels}
-            onChange={(id) => setArchiveChannel(id ?? '')}
-          />
-          <Field label="Dôvod">
-            <Textarea
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              placeholder="Prečo sa projekt uzatvára?"
+          </div>
+        )}
+        <div className="channel-basics-grid">
+          <Field label="Kategória">
+            <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+              <option value="">
+                {defaultCategory ? `Predvolená · ${defaultCategory.name}` : 'Vyberte kategóriu'}
+              </option>
+              {availableCategories
+                .filter((category) => category.id !== defaultCategory?.id)
+                .map((category) => (
+                <option value={category.id} key={category.id}>
+                  {category.name} · {category.text_channel_count} textových kanálov
+                </option>
+                ))}
+            </select>
+          </Field>
+          <Field label="Názov kanála">
+            <Input
+              placeholder="nazov-projektu"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
             />
           </Field>
+          <Field label="Emoji v názve">
+            <Input
+              value={emoji}
+              maxLength={16}
+              onChange={(event) => setEmoji(event.target.value)}
+            />
+          </Field>
+        </div>
+        {availableCategories.length === 0 && (
+          <div className="category-note">
+            <MessageSquareMore />
+            <span>
+              Nenašla sa žiadna vhodná textová kategória. Archív a kategórie s hlasovými kanálmi
+              Carlo zámerne neponúka.
+            </span>
+          </div>
+        )}
+        <div className="access-builder">
+          <MemberPicker
+            label="Zodpovedná osoba"
+            description="Ak nikoho nevyberiete, zodpovednou osobou budete vy."
+            value={ownerId ? [ownerId] : []}
+            multiple={false}
+            emptyLabel="Vy – používateľ, ktorý kanál vytvára"
+            onChange={(ids) => {
+              const nextOwner = ids[0] ?? null
+              setOwnerId(nextOwner)
+              if (nextOwner) setMemberIds((current) => current.filter((id) => id !== nextOwner))
+            }}
+          />
+          <MemberPicker
+            label="Ďalší ľudia s prístupom"
+            description="Výsledky sa zobrazujú automaticky počas písania."
+            value={memberIds}
+            excludedIds={ownerId ? [ownerId] : []}
+            onChange={setMemberIds}
+          />
+          <RolePicker roles={directory.roles} value={roleIds} onChange={setRoleIds} />
+        </div>
+        <div className="channel-create-footer">
+          <div className="permission-preview">
+            <ShieldCheck />
+            <div>
+              <strong>Súkromný kanál</strong>
+              <span>
+                @everyone ho neuvidí · {peopleWithAccess} {peopleWord(peopleWithAccess)} ·{' '}
+                {roleIds.length} {roleWord(roleIds.length)}
+              </span>
+            </div>
+          </div>
           <Button
-            variant="outline"
-            disabled={busy || !archiveChannel || reason.trim().length < 3}
-            onClick={() => void requestArchive()}
+            disabled={busy || !name.trim() || !emoji.trim() || (!categoryId && !defaultCategory)}
+            onClick={() => void create()}
           >
-            <Archive />
-            Odoslať žiadosť
+            {busy ? <LoaderCircle className="spin" /> : <Plus />} Vytvoriť kanál
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
+
+      <section className="archive-workspace">
+        <div className="channel-section-heading archive-heading">
+          <span className="section-icon archive">
+            <Archive />
+          </span>
+          <div>
+            <h2>Archivácia kanálov</h2>
+            <p>Nová žiadosť aj rozhodnutia sú spolu v jednom plnohodnotnom pracovnom priestore.</p>
+          </div>
+          {isAdmin && recoverableArchives.length > 0 && (
+            <Button variant="outline" disabled={busy} onClick={() => void recoverArchives()}>
+              <RefreshCw /> Obnoviť rozpracované ({recoverableArchives.length})
+            </Button>
+          )}
+        </div>
+        <div className="archive-layout">
+          <div className="archive-request-form">
+            <h3>Nová žiadosť</h3>
+            <ChannelSelect
+              label="Kanál"
+              value={archiveChannel || null}
+              channels={archivableChannels}
+              onChange={(id) => setArchiveChannel(id ?? '')}
+            />
+            <Field label="Dôvod">
+              <Textarea
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                placeholder="Prečo sa projekt uzatvára?"
+              />
+            </Field>
+            <Button
+              variant="outline"
+              disabled={busy || !archiveChannel || reason.trim().length < 3}
+              onClick={() => void requestArchive()}
+            >
+              <Archive /> Odoslať žiadosť
+            </Button>
+          </div>
+          <div className="archive-queue">
+            <div className="archive-queue-heading">
+              <h3>Otvorené žiadosti</h3>
+              <Badge variant="secondary">{archives.length}</Badge>
+            </div>
+            <div className="archive-list">
+              {archives.length === 0 && (
+                <EmptyState
+                  icon={Archive}
+                  title="Nič nečaká na rozhodnutie"
+                  text="Nová žiadosť sa zobrazí tu aj v kanáli moderátorov."
+                />
+              )}
+              {archives.map((item) => (
+                <article className={`archive-row state-${item.state}`} key={item.id}>
+                  <span className="archive-state-mark">
+                    <Archive />
+                  </span>
+                  <div>
+                    <strong>#{item.original_channel_name}</strong>
+                    <span>{item.reason}</span>
+                    <small>
+                      {item.state === 'pending'
+                        ? `Čaká na rozhodnutie · platí do ${dateTime(item.expires_at)}`
+                        : item.state === 'archiving'
+                          ? 'Schválené · čaká na bezpečné dokončenie'
+                          : 'Predchádzajúci pokus zlyhal · možno ho obnoviť'}
+                    </small>
+                  </div>
+                  {isAdmin && item.state === 'pending' && (
+                    <div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPendingDecision({ id: item.id, approve: false })}
+                      >
+                        Zamietnuť
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => setPendingDecision({ id: item.id, approve: true })}
+                      >
+                        Schváliť
+                      </Button>
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
       <AlertDialog
         open={pendingDecision !== null}
         onOpenChange={(open) => {
@@ -1075,7 +1073,7 @@ function ChannelsPanel({
   )
 }
 
-function RolesPanel({
+export function RolesPanel({
   publication,
   setNotice,
 }: {
@@ -1084,19 +1082,33 @@ function RolesPanel({
 }) {
   const [query, setQuery] = useState('')
   const [members, setMembers] = useState<DiscordMemberOption[]>([])
+  const [searching, setSearching] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [pending, setPending] = useState<{
     member: DiscordMemberOption
     role: 'team_mod' | 'admin'
     enabled: boolean
   } | null>(null)
-  async function search() {
-    try {
-      setMembers(await searchDiscordMembers(query))
-    } catch (error) {
-      setNotice({ kind: 'error', text: message(error) })
+  useEffect(() => {
+    const normalized = query.trim()
+    if (!normalized) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      setSearching(true)
+      void searchDiscordMembers(normalized, controller.signal)
+        .then(setMembers)
+        .catch((error: unknown) => {
+          if (!controller.signal.aborted) setNotice({ kind: 'error', text: message(error) })
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setSearching(false)
+        })
+    }, 240)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
     }
-  }
+  }, [query, setNotice])
   async function change(member: DiscordMemberOption, role: 'team_mod' | 'admin', enabled: boolean) {
     setBusy(`${member.id}:${role}`)
     try {
@@ -1122,22 +1134,35 @@ function RolesPanel({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="member-search">
+          <div className="member-search picker-search-shell">
+            <Search aria-hidden="true" />
             <Input
               value={query}
-              placeholder="Meno člena servera"
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void search()
+              placeholder="Začnite písať meno alebo prezývku…"
+              onChange={(event) => {
+                const next = event.target.value
+                setQuery(next)
+                if (!next.trim()) {
+                  setMembers([])
+                  setSearching(false)
                 }
               }}
             />
-            <Button onClick={() => void search()} disabled={!query.trim()}>
-              <Search />
-              Vyhľadať
-            </Button>
+            {searching && <LoaderCircle className="spin" aria-label="Vyhľadávam" />}
+            {query && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Vymazať vyhľadávanie"
+                onClick={() => {
+                  setQuery('')
+                  setMembers([])
+                  setSearching(false)
+                }}
+              >
+                <X />
+              </Button>
+            )}
           </div>
           <div className="member-results">
             {members.map((member) => (
@@ -1149,11 +1174,18 @@ function RolesPanel({
                 onChange={(member, role, enabled) => setPending({ member, role, enabled })}
               />
             ))}
-            {members.length === 0 && (
+            {!query.trim() && members.length === 0 && (
               <EmptyState
                 icon={Users}
-                title="Vyhľadajte člena"
-                text="Zobrazíme jeho aktuálne Carlo roly priamo z Discordu."
+                title="Začnite písať meno"
+                text="Výsledky s avatarom a aktuálnymi oprávneniami sa zobrazia automaticky."
+              />
+            )}
+            {query.trim() && !searching && members.length === 0 && (
+              <EmptyState
+                icon={Users}
+                title="Nikto sa nenašiel"
+                text="Skúste inú časť mena alebo Discord prezývky."
               />
             )}
           </div>
@@ -1242,7 +1274,7 @@ function MemberRoleRow({
   )
 }
 
-function ReactionsPanel({
+export function ReactionsPanel({
   value,
   directory,
   onSaved,
@@ -1328,27 +1360,11 @@ function ReactionsPanel({
             })
           }
         >
-          <Field label="Kanály">
-            <select
-              multiple
-              value={draft.auto_reaction_channel_ids}
-              onChange={(event) =>
-                setDraft({
-                  ...draft,
-                  auto_reaction_channel_ids: Array.from(
-                    event.currentTarget.selectedOptions,
-                    (option) => option.value,
-                  ),
-                })
-              }
-            >
-              {directory.channels.map((channel) => (
-                <option key={channel.id} value={channel.id}>
-                  #{channel.name}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <ChannelMultiPicker
+            channels={directory.channels}
+            value={draft.auto_reaction_channel_ids}
+            onChange={(ids) => setDraft({ ...draft, auto_reaction_channel_ids: ids })}
+          />
         </ReactionCard>
       </div>
       <Card className="settings-side-card">
@@ -1591,7 +1607,7 @@ function EmptyState({
     </div>
   )
 }
-function NoticeBanner({ notice }: { notice: Exclude<Notice, null> }) {
+export function NoticeBanner({ notice }: { notice: Exclude<Notice, null> }) {
   return (
     <div className={`settings-notice ${notice.kind}`} role="status">
       {notice.kind === 'success' ? <Check /> : <MessageSquareMore />}
@@ -1628,9 +1644,6 @@ function PageError({ notice, onRetry }: { notice: Notice; onRetry: () => void })
     </section>
   )
 }
-function toggle(values: string[], value: string) {
-  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value]
-}
 function message(error: unknown) {
   return error instanceof ApiError ? error.message : 'Operáciu sa nepodarilo bezpečne dokončiť.'
 }
@@ -1654,4 +1667,12 @@ function nextPublicationLabel(settings: PublicationSettings) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(target)
+}
+
+function peopleWord(count: number) {
+  return count === 1 ? 'človek' : count < 5 ? 'ľudia' : 'ľudí'
+}
+
+function roleWord(count: number) {
+  return count === 1 ? 'rola' : count > 1 && count < 5 ? 'roly' : 'rolí'
 }

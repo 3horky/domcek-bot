@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from domcek_bot.application.alerts import ModeratorAlertTransport
@@ -27,6 +27,11 @@ class DiscordChannelOption:
     name: str
     kind: str
     category_id: int | None = None
+    text_channel_count: int = 0
+    voice_channel_count: int = 0
+    can_create_project_channel: bool = False
+    is_archive_category: bool = False
+    is_default_project_category: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,7 +102,26 @@ class DiscordAdministrationService:
             or Capability.MANAGE_CHANNELS in principal.capabilities
         ):
             principal.require(Capability.MANAGE_SETTINGS)
-        return await self._discord.directory(principal.guild_id)
+        directory = await self._discord.directory(principal.guild_id)
+        async with self._unit_of_work.transaction() as repositories:
+            config = await repositories.guild_configs.get(principal.guild_id)
+        archive_category_id = None if config is None else config.archive_category_id
+        return replace(
+            directory,
+            categories=tuple(
+                replace(
+                    category,
+                    can_create_project_channel=(
+                        category.id != archive_category_id and category.voice_channel_count == 0
+                    ),
+                    is_archive_category=category.id == archive_category_id,
+                    is_default_project_category=(
+                        config is not None and category.id == config.projects_category_id
+                    ),
+                )
+                for category in directory.categories
+            ),
+        )
 
     async def search_members(
         self, query: str, *, principal: Principal
