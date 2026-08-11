@@ -5,7 +5,7 @@
 ## Základné údaje
 
 - **Posledná aktualizácia:** 11. august 2026
-- **Celkový stav:** E0–E11 sú implementované a auditované; aktuálna lokálna regresia má 192 úspešných backendových testov a 1 opt-in skip, 13 frontendových testov, 34 desktop/mobile browser scenárov a 2 full-stack browser scenáre. Shadow runtime, praktická obnova aktuálneho databázového snapshotu, exact-source backend image a vzdialený CI run `31538894647` sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
+- **Celkový stav:** E0–E11 sú implementované a auditované; aktuálna lokálna regresia má 192 úspešných backendových testov a 1 opt-in skip, 13 frontendových testov, 34 desktop/mobile browser scenárov a 2 full-stack browser scenáre. Shadow runtime, praktická obnova aktuálneho databázového snapshotu, exact-source backend image a vzdialený CI run `31540172600` sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
 - **Aktuálna etapa:** E12 – popri otvorenom externom staging/UAT kroku je pripravený systematický UI/UX audit celej administrácie; prvé opravné etapy sú Reakcie, Roly a Nastavenia a režim `live` zostáva zakázaný
 - **Najbližší kontrolný bod:** pripraviť produkčne podobný HTTPS staging a vykonať/podpísať Admin, Team Mod, SDB/FMA, desktop/tablet/mobile/200 %/keyboard UAT podľa `docs/e12/KROKY_PRE_POUZIVATELA.md`; vyžaduje staging host/doménu a reálnych testerov. Režim `live` zostáva zakázaný
 - **Produkčný runtime:** pôvodný bot; jeho existujúci aplikačný kód nebol pri príprave zadania a plánu zmenený
@@ -52,6 +52,7 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 - Zdrojový audit pred plánom identifikoval konkrétne úvodné riziká: test Reakcií používa uloženú konfiguráciu namiesto viditeľného neuloženého draftu, Reakcie a Roly môžu po chybe zostať v loading vetve, Roly majú neúplný vyhľadávací/prístupnostný model a Nastavenia nemajú spoľahlivý dirty/reload model a stále obsahujú pracovnú operáciu ručného publikovania. Tieto body sú v pláne vedené ako hypotézy, ktoré musí potvrdiť reálny vizuálny audit.
 - Browser skill bol pri príprave plánu použitý na pokus o kontrolu živého lokálneho UI, ale relácia neposkytovala žiadny pripojený prehliadač. Plán preto výslovne vyžaduje desktopový, mobilný, klávesnicový a stavový browser baseline ako vstupnú bránu každej opravovanej oblasti; vizuálny audit sa nepovažuje za vykonaný iba na základe zdrojového kódu.
 - Nový plán má 19 kapitol a po vytvorení prešiel Prettier kontrolou, `git diff --check`, kontrolou postupnosti hlavných kapitol a existencie odkazovaných projektových dokumentov. `UI_UX_STANDARDY.md` bol spätne prepojený s realizačným plánom. Keďže v tomto kroku nevznikla runtime zmena, aplikačné testy sa neopakovali.
+- Commit plánu `ef06d9dd564eb3d70eacfaf38fd2ade23403a8d7` je na `origin/main`; vzdialený GitHub Actions run `31540172600` prešiel celý úspešne vrátane backendu, frontendu, browser/full-stack scenárov, produkčných image buildov a repository-safety.
 
 ### Potvrdené produktové rozhodnutia
 
