@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import unicodedata
 import uuid
 from dataclasses import dataclass, replace
@@ -20,7 +19,6 @@ from domcek_bot.application.unit_of_work import UnitOfWork
 from domcek_bot.domain.enums import ArchiveState, IntegrationTaskState
 
 CHANNEL_TASK = "discord_channel_create"
-CHANNEL_NAME = re.compile(r"[^a-z0-9-]+")
 CHANNEL_RECOVERY_AFTER = timedelta(minutes=5)
 
 
@@ -532,12 +530,37 @@ class ChannelManagementService:
 
 
 def normalize_channel_name(value: str) -> str:
-    ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
-    normalized = CHANNEL_NAME.sub("-", ascii_value.lower().strip()).strip("-")
-    normalized = re.sub(r"-{2,}", "-", normalized)[:100].rstrip("-")
+    result: list[str] = []
+    previous_was_dash = False
+    for character in unicodedata.normalize("NFC", value).lower().strip():
+        category = unicodedata.category(character)
+        if character.isalnum() or (category.startswith("M") and result and not previous_was_dash):
+            result.append(character)
+            previous_was_dash = False
+        elif result and not previous_was_dash:
+            result.append("-")
+            previous_was_dash = True
+    normalized = "".join(result)[:100].rstrip("-")
     if not normalized:
         raise ValueError("channel name is empty after normalization")
     return normalized
+
+
+def channel_alphabetical_key(name: str) -> str:
+    """Return the human-visible channel name without Carlo's leading emoji."""
+
+    _, separator, visible_name = name.partition("・")
+    comparable = visible_name if separator else name
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKD", comparable).casefold()
+        if not unicodedata.category(character).startswith("M")
+    )
+
+
+def channels_are_alphabetical(names: tuple[str, ...]) -> bool:
+    keys = tuple(channel_alphabetical_key(name) for name in names)
+    return keys == tuple(sorted(keys))
 
 
 def normalize_channel_emoji(value: str) -> str:

@@ -199,8 +199,8 @@ async def test_channel_creation_is_normalized_authorized_and_idempotent(
     )
 
     assert first == replay
-    assert first.name == "🛠️・novy-zlty-projekt"
-    assert gateway.created == [("🛠️・novy-zlty-projekt", (USER_ID, 11, 12), (21,))]
+    assert first.name == "🛠️・nový-žltý-projekt"
+    assert gateway.created == [("🛠️・nový-žltý-projekt", (USER_ID, 11, 12), (21,))]
     with pytest.raises(AuthorizationDenied):
         await service.create_channel(
             name="zakázané",
@@ -217,7 +217,7 @@ async def test_channel_creation_is_normalized_authorized_and_idempotent(
     assert len(tasks) == 1
     assert tasks[0].result_value == {
         "channel_id": 5000,
-        "name": "🛠️・novy-zlty-projekt",
+        "name": "🛠️・nový-žltý-projekt",
         "jump_url": f"https://discord.test/channels/{GUILD_ID}/5000",
         "category_id": PROJECTS_CATEGORY,
     }
@@ -367,7 +367,7 @@ async def test_archive_recovery_reconciles_effect_applied_before_process_failure
 
 
 def test_channel_names_are_deterministic_and_bounded() -> None:
-    assert normalize_channel_name("  Červený tím 2026 ") == "cerveny-tim-2026"
+    assert normalize_channel_name("  Červený tím + 2026 ") == "červený-tím-2026"
     assert len(archive_channel_name("x" * 150, NOW)) == 100
     with pytest.raises(ValueError, match="empty"):
         normalize_channel_name("♥♥♥")

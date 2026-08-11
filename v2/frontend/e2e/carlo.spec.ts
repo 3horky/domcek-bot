@@ -542,15 +542,14 @@ test('08 Admin vytvorí súkromný kanál', async ({ page }) => {
 
   const nameInput = dialog.getByLabel('Názov')
   await nameInput.fill('Letný Tábor 2026!')
-  await expect(nameInput).toHaveValue('letny-tabor-2026')
-  await expect(dialog.getByText('#⛺・letny-tabor-2026')).toBeVisible()
-  await dialog.getByRole('button', { name: 'Vybrať ďalšie emoji' }).click()
-  const emojiPicker = page.getByLabel('Ďalšie emoji')
-  await emojiPicker.getByRole('button', { name: 'Použiť 🎬' }).click()
-  await expect(dialog.getByText('#🎬・letny-tabor-2026')).toBeVisible()
-  await dialog.getByRole('button', { name: 'Vybrať ďalšie emoji' }).click()
-  await page.getByRole('button', { name: /Vyberať automaticky/ }).click()
-  await expect(dialog.getByText('#⛺・letny-tabor-2026')).toBeVisible()
+  await expect(nameInput).toHaveValue('letný-tábor-2026-')
+  await expect(dialog.getByText('#⛺・letný-tábor-2026')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Otvoriť všetky emoji' }).click()
+  const emojiSearch = page.getByPlaceholder('Hľadať emoji…')
+  await expect(emojiSearch).toBeFocused()
+  await emojiSearch.fill('camera')
+  await page.locator('button[data-unified="1f4f7"]').click()
+  await expect(dialog.getByText(/#📷・letný-tábor-2026/)).toBeVisible()
 
   const leaderPicker = dialog.locator('.discord-picker').filter({
     hasText: 'Kto bude kanál viesť?',
@@ -573,7 +572,12 @@ test('08 Admin vytvorí súkromný kanál', async ({ page }) => {
   await dialog.getByText('Pridať celú skupinu').click()
   const rolePicker = dialog.locator('.role-picker')
   await rolePicker.getByRole('option', { name: /Team Mod/ }).click()
+  await expect(dialog.getByText('1 vybratá')).toBeVisible()
   await expect(rolePicker.getByRole('button', { name: 'Team Mod' })).toBeVisible()
+  await dialog.getByText('Pridať celú skupinu').click()
+  await expect(dialog.getByText('1 vybratá')).toBeVisible()
+  await expect(rolePicker).not.toBeVisible()
+  await dialog.getByText('Pridať celú skupinu').click()
   await rolePicker.getByRole('button', { name: 'Zrušiť výber' }).click()
   await expect(
     rolePicker.getByText('Žiadna skupina – prístup dostanú iba vybraní ľudia.'),

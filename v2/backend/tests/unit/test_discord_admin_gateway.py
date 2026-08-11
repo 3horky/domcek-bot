@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
@@ -130,3 +132,129 @@ async def test_directory_marks_voice_categories_and_rejects_them_for_project_cha
         assert not await gateway.category_allows_project_channel(
             guild_id=GUILD_ID, category_id=VOICE_CATEGORY_ID
         )
+
+
+@pytest.mark.asyncio
+async def test_created_channel_is_inserted_alphabetically_when_category_was_sorted() -> None:
+    reads = 0
+    reorder_payloads: list[object] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal reads
+        path = request.url.path
+        if path == f"/api/v10/guilds/{GUILD_ID}/channels" and request.method == "GET":
+            reads += 1
+            channels = [
+                {
+                    "id": str(CHANNEL_ID),
+                    "name": "🌱・alfa",
+                    "type": 0,
+                    "parent_id": str(CATEGORY_ID),
+                    "position": 4,
+                },
+                {
+                    "id": str(CHANNEL_ID + 1),
+                    "name": "🌱・gama",
+                    "type": 0,
+                    "parent_id": str(CATEGORY_ID),
+                    "position": 5,
+                },
+            ]
+            if reads == 2:
+                channels.append(
+                    {
+                        "id": str(CHANNEL_ID + 2),
+                        "name": "🌱・beta",
+                        "type": 0,
+                        "parent_id": str(CATEGORY_ID),
+                        "position": 6,
+                    }
+                )
+            return httpx.Response(200, json=channels)
+        if path == f"/api/v10/guilds/{GUILD_ID}/channels" and request.method == "POST":
+            return httpx.Response(
+                201,
+                json={
+                    "id": str(CHANNEL_ID + 2),
+                    "name": "🌱・beta",
+                    "type": 0,
+                    "parent_id": str(CATEGORY_ID),
+                },
+            )
+        if path == f"/api/v10/guilds/{GUILD_ID}/channels" and request.method == "PATCH":
+            reorder_payloads.append(json.loads(request.content))
+            return httpx.Response(204)
+        return httpx.Response(404)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        gateway = DiscordHttpAdministrationGateway(bot_token="test", client=client)
+        await gateway.create_text_channel(
+            guild_id=GUILD_ID,
+            category_id=CATEGORY_ID,
+            name="🌱・beta",
+            member_ids=(),
+            role_ids=(),
+            operation_marker="operation",
+            reason="test",
+        )
+
+    assert reorder_payloads == [
+        [
+            {"id": str(CHANNEL_ID), "position": 4},
+            {"id": str(CHANNEL_ID + 2), "position": 5},
+            {"id": str(CHANNEL_ID + 1), "position": 6},
+        ]
+    ]
+
+
+@pytest.mark.asyncio
+async def test_created_channel_does_not_reorder_category_that_was_not_alphabetical() -> None:
+    methods: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        methods.append(request.method)
+        if request.method == "GET":
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": str(CHANNEL_ID),
+                        "name": "🌱・gama",
+                        "type": 0,
+                        "parent_id": str(CATEGORY_ID),
+                        "position": 4,
+                    },
+                    {
+                        "id": str(CHANNEL_ID + 1),
+                        "name": "🌱・alfa",
+                        "type": 0,
+                        "parent_id": str(CATEGORY_ID),
+                        "position": 5,
+                    },
+                ],
+            )
+        if request.method == "POST":
+            return httpx.Response(
+                201,
+                json={
+                    "id": str(CHANNEL_ID + 2),
+                    "name": "🌱・beta",
+                    "type": 0,
+                    "parent_id": str(CATEGORY_ID),
+                },
+            )
+        return httpx.Response(500)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        gateway = DiscordHttpAdministrationGateway(bot_token="test", client=client)
+        await gateway.create_text_channel(
+            guild_id=GUILD_ID,
+            category_id=CATEGORY_ID,
+            name="🌱・beta",
+            member_ids=(),
+            role_ids=(),
+            operation_marker="operation",
+            reason="test",
+        )
+
+    assert methods == ["GET", "POST"]

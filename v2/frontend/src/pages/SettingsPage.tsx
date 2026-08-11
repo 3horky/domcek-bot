@@ -20,6 +20,7 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
+import EmojiPicker, { Categories, EmojiStyle } from 'emoji-picker-react'
 import {
   cloneElement,
   useCallback,
@@ -91,24 +92,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Textarea } from '../components/ui/textarea'
 
 const weekdays = ['pondelok', 'utorok', 'streda', 'štvrtok', 'piatok', 'sobota', 'nedeľa']
-const primaryChannelEmojis = ['🏠', '🎨', '🌱', '🎭', '🛠️', '📚', '🎵']
-const additionalChannelEmojis = [
-  '⛺',
-  '🎬',
-  '⚽',
-  '🏐',
-  '🎲',
-  '🍲',
-  '☕',
-  '🎉',
-  '💬',
-  '📷',
-  '💡',
-  '❤️',
-  '🚲',
-  '🧭',
-  '🌍',
-  '✨',
+const defaultChannelEmojis = ['🏠', '💬', '✨', '🌿']
+const channelEmojiCategories = [
+  { category: Categories.SUGGESTED, name: 'Nedávne' },
+  { category: Categories.SMILEYS_PEOPLE, name: 'Ľudia a úsmevy' },
+  { category: Categories.ANIMALS_NATURE, name: 'Zvieratá a príroda' },
+  { category: Categories.FOOD_DRINK, name: 'Jedlo a nápoje' },
+  { category: Categories.TRAVEL_PLACES, name: 'Cestovanie a miesta' },
+  { category: Categories.ACTIVITIES, name: 'Aktivity' },
+  { category: Categories.OBJECTS, name: 'Predmety' },
+  { category: Categories.SYMBOLS, name: 'Symboly' },
+  { category: Categories.FLAGS, name: 'Vlajky' },
 ]
 
 export type Notice = { kind: 'success' | 'error'; text: string } | null
@@ -743,6 +737,7 @@ export function ChannelsPanel({
   const [busy, setBusy] = useState(false)
   const createButtonRef = useRef<HTMLButtonElement>(null)
   const archiveButtonRef = useRef<HTMLButtonElement>(null)
+  const nameComposition = useRef(false)
   const createInFlight = useRef(false)
   const createIdempotencyKey = useRef(crypto.randomUUID())
   const [pendingDecision, setPendingDecision] = useState<{ id: string; approve: boolean } | null>(
@@ -758,7 +753,9 @@ export function ChannelsPanel({
     (category) => category.is_default_project_category,
   )
   const selectedCategory = availableCategories.find((category) => category.id === categoryId)
-  const effectiveEmoji = emojiIsAutomatic ? suggestChannelEmoji(name) : emoji
+  const suggestedEmojis = useMemo(() => suggestChannelEmojis(name), [name])
+  const effectiveEmoji = emojiIsAutomatic ? (suggestedEmojis[0] ?? '🏠') : emoji
+  const finalChannelName = normalizeChannelName(name, true)
   const archiveCategoryIds = new Set(
     directory.categories.filter((category) => category.is_archive_category).map((item) => item.id),
   )
@@ -771,7 +768,7 @@ export function ChannelsPanel({
     setBusy(true)
     try {
       const result = await createDiscordChannel({
-        name,
+        name: finalChannelName,
         emoji: effectiveEmoji,
         owner_id: leaderIds[0] ?? null,
         member_ids: [...new Set([...leaderIds.slice(1), ...memberIds])],
@@ -988,7 +985,7 @@ export function ChannelsPanel({
               </div>
               <div className="channel-name-builder">
                 <div className="emoji-choice-grid" aria-label="Symbol kanála">
-                  {primaryChannelEmojis.map((option) => (
+                  {suggestedEmojis.map((option) => (
                     <button
                       type="button"
                       key={option}
@@ -1004,20 +1001,34 @@ export function ChannelsPanel({
                     </button>
                   ))}
                   <ChannelEmojiPicker
-                    value={effectiveEmoji}
-                    automatic={emojiIsAutomatic}
+                    selected={!emojiIsAutomatic && !suggestedEmojis.includes(emoji)}
                     onChange={(value) => {
                       setEmoji(value)
                       setEmojiIsAutomatic(false)
                     }}
-                    onAutomatic={() => setEmojiIsAutomatic(true)}
                   />
                 </div>
                 <Field label="Názov">
                   <Input
-                    placeholder="napriklad-letny-tabor"
+                    placeholder="napríklad-letný-tábor"
                     value={name}
-                    onChange={(event) => setName(normalizeChannelName(event.target.value))}
+                    onChange={(event) => {
+                      const nextValue = event.target.value
+                      setName(
+                        nameComposition.current || (event.nativeEvent as InputEvent).isComposing
+                          ? nextValue
+                          : normalizeChannelName(nextValue),
+                      )
+                    }}
+                    onCompositionStart={() => {
+                      nameComposition.current = true
+                    }}
+                    onCompositionEnd={(event) => {
+                      nameComposition.current = false
+                      setName(normalizeChannelName(event.currentTarget.value))
+                    }}
+                    onBlur={() => setName((current) => normalizeChannelName(current, true))}
+                    maxLength={100}
                     autoFocus
                   />
                 </Field>
@@ -1025,7 +1036,7 @@ export function ChannelsPanel({
               <div className="channel-name-preview" aria-live="polite">
                 <span>Názov na Discorde</span>
                 <strong>
-                  #{effectiveEmoji}・{name || 'nazov-kanala'}
+                  #{effectiveEmoji}・{finalChannelName || 'názov-kanála'}
                 </strong>
                 {emojiIsAutomatic && <small>Symbol vyberá Carlo podľa názvu</small>}
               </div>
@@ -1101,9 +1112,19 @@ export function ChannelsPanel({
                   <summary>
                     <UsersRound />
                     <span>Pridať celú skupinu</span>
+                    {roleIds.length > 0 && (
+                      <span className="selected-groups-count">
+                        {selectedGroupsLabel(roleIds.length)}
+                      </span>
+                    )}
                     <ChevronDown className="disclosure-caret" />
                   </summary>
-                  <RolePicker roles={directory.roles} value={roleIds} onChange={setRoleIds} />
+                  <RolePicker
+                    roles={directory.roles}
+                    value={roleIds}
+                    onChange={setRoleIds}
+                    showHeading={false}
+                  />
                 </details>
               </div>
             </section>
@@ -1114,7 +1135,10 @@ export function ChannelsPanel({
             </Button>
             <Button
               disabled={
-                busy || !name.trim() || !effectiveEmoji.trim() || (!categoryId && !defaultCategory)
+                busy ||
+                !finalChannelName ||
+                !effectiveEmoji.trim() ||
+                (!categoryId && !defaultCategory)
               }
               onClick={() => void create()}
             >
@@ -1209,15 +1233,11 @@ export function ChannelsPanel({
 }
 
 function ChannelEmojiPicker({
-  value,
-  automatic,
+  selected,
   onChange,
-  onAutomatic,
 }: {
-  value: string
-  automatic: boolean
+  selected: boolean
   onChange: (value: string) => void
-  onAutomatic: () => void
 }) {
   const [open, setOpen] = useState(false)
   return (
@@ -1226,58 +1246,30 @@ function ChannelEmojiPicker({
         render={
           <button
             type="button"
-            className={
-              !automatic && additionalChannelEmojis.includes(value)
-                ? 'selected more-emoji'
-                : 'more-emoji'
-            }
-            aria-label="Vybrať ďalšie emoji"
+            className={selected ? 'selected more-emoji' : 'more-emoji'}
+            aria-label="Otvoriť všetky emoji"
+            aria-pressed={selected}
           />
         }
       >
         <SmilePlus />
       </PopoverTrigger>
-      <PopoverContent className="channel-emoji-popover" aria-label="Ďalšie emoji">
-        <div className="channel-emoji-popover-heading">
-          <strong>Vyberte emoji</strong>
-          <span>Symbol sa zobrazí na začiatku názvu kanála.</span>
-        </div>
-        <div className="channel-emoji-more-grid">
-          {additionalChannelEmojis.map((option) => (
-            <button
-              type="button"
-              key={option}
-              className={!automatic && value === option ? 'selected' : ''}
-              aria-label={`Použiť ${option}`}
-              aria-pressed={!automatic && value === option}
-              onClick={() => {
-                onChange(option)
-                setOpen(false)
-              }}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          className={`automatic-emoji-choice ${automatic ? 'selected' : ''}`}
-          onClick={() => {
-            onAutomatic()
+      <PopoverContent className="channel-emoji-popover" aria-label="Všetky emoji">
+        <EmojiPicker
+          autoFocusSearch
+          lazyLoadEmojis
+          emojiStyle={EmojiStyle.NATIVE}
+          categories={channelEmojiCategories}
+          searchPlaceHolder="Hľadať emoji…"
+          searchClearButtonLabel="Vymazať hľadanie"
+          previewConfig={{ showPreview: false }}
+          width="100%"
+          height={390}
+          onEmojiClick={(selection) => {
+            onChange(selection.emoji)
             setOpen(false)
           }}
-        >
-          <Sparkles />
-          <span>
-            <strong>Vyberať automaticky</strong>
-            <small>Carlo navrhne symbol podľa názvu.</small>
-          </span>
-          {automatic && <Check />}
-        </button>
-        <p className="custom-emoji-limit">
-          Vlastné serverové emoji Discord v názvoch kanálov nezobrazuje, preto tu používame bežné
-          emoji.
-        </p>
+        />
       </PopoverContent>
     </Popover>
   )
@@ -1885,36 +1877,86 @@ function archiveRequestLabel(count: number) {
   return 'otvorených žiadostí'
 }
 
-function normalizeChannelName(value: string) {
-  const asciiValue = Array.from(value.normalize('NFKD'))
-    .filter((character) => character.charCodeAt(0) < 128)
-    .join('')
-  return asciiValue
-    .toLocaleLowerCase('en-US')
-    .trim()
-    .replace(/[^a-z0-9-]+/g, '-')
+function normalizeChannelName(value: string, final = false) {
+  const normalized = value
+    .normalize('NFC')
+    .toLocaleLowerCase('sk-SK')
+    .replace(/[^\p{L}\p{N}-]+/gu, '-')
     .replace(/-{2,}/g, '-')
+    .replace(/^-+/g, '')
     .slice(0, 100)
-    .replace(/-+$/g, '')
+  return final ? normalized.replace(/-+$/g, '') : normalized
 }
 
-function suggestChannelEmoji(name: string) {
-  const suggestions: Array<[string[], string]> = [
-    [['hudba', 'koncert', 'kapela', 'spev', 'zbor'], '🎵'],
-    [['divadlo', 'predstavenie', 'drama', 'tanec'], '🎭'],
-    [['kniha', 'citanie', 'skola', 'kurz', 'vzdelavanie'], '📚'],
-    [['zahrada', 'priroda', 'eko', 'rastlin', 'strom'], '🌱'],
-    [['umenie', 'tvoriv', 'malovanie', 'kreslenie'], '🎨'],
-    [['dielna', 'oprava', 'stavba', 'technika'], '🛠️'],
-    [['tabor', 'vylet', 'stanovanie'], '⛺'],
-    [['film', 'kino', 'video'], '🎬'],
-    [['futbal', 'sport', 'turnaj'], '⚽'],
-    [['varenie', 'kuchyna', 'jedlo'], '🍲'],
-    [['fot', 'kamera'], '📷'],
-    [['oslava', 'party', 'festival'], '🎉'],
+function suggestChannelEmojis(name: string) {
+  const searchableName = name.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase('sk-SK')
+  const suggestions: Array<[string[], string[]]> = [
+    [
+      ['hudba', 'koncert', 'kapela', 'spev', 'zbor'],
+      ['🎵', '🎤', '🎸', '🎧'],
+    ],
+    [
+      ['divadlo', 'predstavenie', 'drama', 'tanec'],
+      ['🎭', '💃', '🎬', '✨'],
+    ],
+    [
+      ['kniha', 'citanie', 'skola', 'kurz', 'vzdelavanie'],
+      ['📚', '✏️', '🧠', '💡'],
+    ],
+    [
+      ['zahrada', 'priroda', 'eko', 'rastlin', 'strom'],
+      ['🌱', '🌳', '🌍', '♻️'],
+    ],
+    [
+      ['umenie', 'tvoriv', 'malovanie', 'kreslenie'],
+      ['🎨', '🖌️', '✂️', '✨'],
+    ],
+    [
+      ['dielna', 'oprava', 'stavba', 'technika'],
+      ['🛠️', '🔧', '⚙️', '🧰'],
+    ],
+    [
+      ['tabor', 'vylet', 'stanovanie'],
+      ['⛺', '🌲', '🔥', '🧭'],
+    ],
+    [
+      ['film', 'kino', 'video'],
+      ['🎬', '🍿', '📽️', '🎞️'],
+    ],
+    [
+      ['futbal', 'sport', 'turnaj', 'cvicenie'],
+      ['⚽', '🏐', '🏀', '🏆'],
+    ],
+    [
+      ['varenie', 'kuchyna', 'jedlo', 'vecera'],
+      ['🍲', '🍽️', '☕', '🥕'],
+    ],
+    [
+      ['fot', 'kamera'],
+      ['📷', '📸', '🎞️', '🖼️'],
+    ],
+    [
+      ['oslava', 'party', 'festival'],
+      ['🎉', '🥳', '🎈', '✨'],
+    ],
+    [
+      ['hra', 'herny', 'gaming'],
+      ['🎲', '🎮', '🧩', '♟️'],
+    ],
+    [
+      ['bike', 'bicykel', 'cyklo'],
+      ['🚲', '🛞', '🗺️', '🏁'],
+    ],
   ]
   return (
-    suggestions.find(([keywords]) => keywords.some((keyword) => name.includes(keyword)))?.[1] ??
-    '🏠'
+    suggestions.find(([keywords]) =>
+      keywords.some((keyword) => searchableName.includes(keyword)),
+    )?.[1] ?? defaultChannelEmojis
   )
+}
+
+function selectedGroupsLabel(count: number) {
+  if (count === 1) return '1 vybratá'
+  if (count < 5) return `${count} vybraté`
+  return `${count} vybratých`
 }

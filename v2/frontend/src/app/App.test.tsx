@@ -424,16 +424,21 @@ describe('authenticated application shell', () => {
     fireEvent.click(screen.getByRole('button', { name: /Vytvoriť nový kanál/ }))
     const channelDialog = screen.getByRole('dialog', { name: 'Vytvoriť nový kanál' })
     const channelName = within(channelDialog).getByLabelText('Názov')
+    fireEvent.compositionStart(channelName)
+    fireEvent.change(channelName, { target: { value: 'Z\u030cltý ' } })
+    fireEvent.compositionEnd(channelName, { data: ' ' })
+    expect(channelName).toHaveValue('žltý-')
     fireEvent.change(channelName, {
       target: { value: 'Môj Projekt!' },
     })
-    expect(channelName).toHaveValue('moj-projekt')
-    expect(within(channelDialog).getByText('#🏠・moj-projekt')).toBeInTheDocument()
+    expect(channelName).toHaveValue('môj-projekt-')
+    expect(within(channelDialog).getByText('#🏠・môj-projekt')).toBeInTheDocument()
     fireEvent.click(within(channelDialog).getByRole('button', { name: /^Vytvoriť kanál/ }))
     expect(await screen.findByText('Dočasná chyba vytvorenia kanála.')).toBeInTheDocument()
     fireEvent.click(within(channelDialog).getByRole('button', { name: /^Vytvoriť kanál/ }))
     expect(await screen.findByText('Kanál #projekt bol vytvorený.')).toBeInTheDocument()
     expect(createCalls).toHaveLength(2)
+    expect(createCalls[0]?.name).toBe('môj-projekt')
     expect(createCalls[0]?.idempotency_key).toBe(createCalls[1]?.idempotency_key)
   })
 

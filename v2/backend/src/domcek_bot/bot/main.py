@@ -9,11 +9,14 @@ import signal
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import discord
 import structlog
 from discord import app_commands
+
+if TYPE_CHECKING:
+    from discord.types.guild import ChannelPositionUpdate
 
 from domcek_bot.application.alerts import AlertCategory, ConfiguredModeratorAlerts
 from domcek_bot.application.auth.authorization import (
@@ -28,6 +31,8 @@ from domcek_bot.application.channels import (
     ChannelOperationError,
     CreatedChannel,
     DiscordChannelGateway,
+    channel_alphabetical_key,
+    channels_are_alphabetical,
     normalize_channel_emoji,
     normalize_channel_name,
 )
@@ -179,6 +184,10 @@ class DiscordPyChannelGateway(DiscordChannelGateway):
         category = guild.get_channel(category_id)
         if not isinstance(category, discord.CategoryChannel):
             raise ChannelOperationError("projects category is unavailable")
+        before_channels = sorted(category.text_channels, key=lambda item: (item.position, item.id))
+        preserve_alphabetical_order = channels_are_alphabetical(
+            tuple(item.name for item in before_channels)
+        )
         overwrites: dict[
             discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite
         ] = {guild.default_role: discord.PermissionOverwrite(view_channel=False)}
@@ -211,6 +220,37 @@ class DiscordPyChannelGateway(DiscordChannelGateway):
             )
         except discord.HTTPException as exc:
             raise ChannelOperationError("Discord rejected channel creation") from exc
+        if preserve_alphabetical_order:
+            after_channels = sorted(
+                category.text_channels, key=lambda item: (item.position, item.id)
+            )
+            before_ids = [item.id for item in before_channels]
+            after_ids = [item.id for item in after_channels]
+            if (
+                set(after_ids) == {*before_ids, channel.id}
+                and [item_id for item_id in after_ids if item_id != channel.id] == before_ids
+            ):
+                ordered = sorted(
+                    after_channels,
+                    key=lambda item: (channel_alphabetical_key(item.name), item.id),
+                )
+                if [item.id for item in ordered] != after_ids:
+                    first_position = min(item.position for item in after_channels)
+                    payload: list[ChannelPositionUpdate] = [
+                        {"id": item.id, "position": first_position + index}
+                        for index, item in enumerate(ordered)
+                    ]
+                    try:
+                        await channel._state.http.bulk_channel_update(
+                            guild.id, payload, reason=reason
+                        )
+                    except discord.HTTPException:
+                        logger.warning(
+                            "channel.alphabetical_order_failed",
+                            guild_id=guild_id,
+                            category_id=category_id,
+                            channel_id=channel.id,
+                        )
         return CreatedChannel(channel.id, channel.name, channel.jump_url, channel.category_id)
 
     async def find_created_text_channel(

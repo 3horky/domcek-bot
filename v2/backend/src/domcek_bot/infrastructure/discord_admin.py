@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 
-from domcek_bot.application.channels import ChannelOperationError, CreatedChannel
+from domcek_bot.application.channels import (
+    ChannelOperationError,
+    CreatedChannel,
+    channel_alphabetical_key,
+    channels_are_alphabetical,
+)
 from domcek_bot.application.discord_admin import (
     DiscordAdministrationError,
     DiscordChannelOption,
@@ -24,6 +30,7 @@ VIEW_CHANNEL = 1 << 10
 READ_MESSAGE_HISTORY = 1 << 16
 ADD_REACTIONS = 1 << 6
 REQUIRED_REACTION_PERMISSIONS = VIEW_CHANNEL | READ_MESSAGE_HISTORY | ADD_REACTIONS
+logger = logging.getLogger(__name__)
 
 
 class DiscordHttpAdministrationGateway:
@@ -267,6 +274,17 @@ class DiscordHttpAdministrationGateway:
         operation_marker: str,
         reason: str,
     ) -> CreatedChannel:
+        before_channels: list[dict[str, Any]] = []
+        preserve_alphabetical_order = False
+        try:
+            before_channels = _category_text_channels(
+                _objects(await self._json("GET", f"/guilds/{guild_id}/channels")), category_id
+            )
+            preserve_alphabetical_order = channels_are_alphabetical(
+                tuple(str(item.get("name", "")) for item in before_channels)
+            )
+        except DiscordAdministrationError:
+            logger.warning("Could not inspect the channel order before creation")
         allow = str((1 << 10) | (1 << 11) | (1 << 16) | (1 << 6))
         overwrites: list[dict[str, object]] = [
             {"id": str(guild_id), "type": 0, "deny": str(1 << 10), "allow": "0"}
@@ -296,11 +314,66 @@ class DiscordHttpAdministrationGateway:
         except DiscordAdministrationError as exc:
             raise ChannelOperationError("Discord rejected channel creation") from exc
         channel_id = _snowflake(payload, "id")
+        if preserve_alphabetical_order:
+            try:
+                await self._restore_alphabetical_category_order(
+                    guild_id=guild_id,
+                    category_id=category_id,
+                    created_channel_id=channel_id,
+                    before_channels=before_channels,
+                    reason=reason,
+                )
+            except DiscordAdministrationError:
+                # Channel creation already succeeded. Never retry that irreversible effect merely
+                # because this best-effort cosmetic follow-up could not be completed.
+                logger.warning("Could not preserve alphabetical Discord channel order")
         return CreatedChannel(
             channel_id,
             str(payload["name"]),
             _jump_url(guild_id, channel_id),
             _optional_snowflake(payload.get("parent_id")),
+        )
+
+    async def _restore_alphabetical_category_order(
+        self,
+        *,
+        guild_id: int,
+        category_id: int,
+        created_channel_id: int,
+        before_channels: list[dict[str, Any]],
+        reason: str,
+    ) -> None:
+        after_channels = _category_text_channels(
+            _objects(await self._json("GET", f"/guilds/{guild_id}/channels")), category_id
+        )
+        before_ids = [_snowflake(item, "id") for item in before_channels]
+        after_ids = [_snowflake(item, "id") for item in after_channels]
+        if set(after_ids) != {*before_ids, created_channel_id}:
+            return
+        if [
+            channel_id for channel_id in after_ids if channel_id != created_channel_id
+        ] != before_ids:
+            return
+        ordered = sorted(
+            after_channels,
+            key=lambda item: (
+                channel_alphabetical_key(str(item.get("name", ""))),
+                _snowflake(item, "id"),
+            ),
+        )
+        ordered_ids = [_snowflake(item, "id") for item in ordered]
+        if ordered_ids == after_ids:
+            return
+        first_position = min(int(item.get("position", 0)) for item in after_channels)
+        await self._request(
+            "PATCH",
+            f"/guilds/{guild_id}/channels",
+            json=[
+                {"id": str(channel_id), "position": first_position + index}
+                for index, channel_id in enumerate(ordered_ids)
+            ],
+            headers={"X-Audit-Log-Reason": quote(reason[:512], safe="")},
+            expected={204},
         )
 
     async def find_created_text_channel(
@@ -436,6 +509,19 @@ def _member(payload: dict[str, Any]) -> DiscordMemberOption:
 
 def _channel_operation_topic(marker: str) -> str:
     return f"Carlo operation: {marker}"[:1024]
+
+
+def _category_text_channels(
+    channels: list[dict[str, Any]], category_id: int
+) -> list[dict[str, Any]]:
+    return sorted(
+        (
+            item
+            for item in channels
+            if item.get("type") == 0 and _optional_snowflake(item.get("parent_id")) == category_id
+        ),
+        key=lambda item: (int(item.get("position", 0)), _snowflake(item, "id")),
+    )
 
 
 def _channel_permissions(

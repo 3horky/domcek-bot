@@ -189,10 +189,12 @@ export function RolePicker({
   roles,
   value,
   onChange,
+  showHeading = true,
 }: {
   roles: DiscordRoleOption[]
   value: string[]
   onChange: (ids: string[]) => void
+  showHeading?: boolean
 }) {
   const [query, setQuery] = useState('')
   const available = useMemo(
@@ -208,17 +210,21 @@ export function RolePicker({
   const selected = roles.filter((role) => value.includes(role.id))
   return (
     <div className="discord-picker role-picker">
-      <div className="discord-picker-heading">
-        <div>
-          <label htmlFor="role-picker-search">Skupiny s prístupom</label>
-          <span>Voliteľné. Nemusíte vybrať žiadnu skupinu.</span>
+      {(showHeading || value.length > 0) && (
+        <div className={`discord-picker-heading ${showHeading ? '' : 'compact'}`}>
+          {showHeading && (
+            <div>
+              <label htmlFor="role-picker-search">Skupiny s prístupom</label>
+              <span>Voliteľné. Nemusíte vybrať žiadnu skupinu.</span>
+            </div>
+          )}
+          {value.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={() => onChange([])}>
+              <X /> Zrušiť výber
+            </Button>
+          )}
         </div>
-        {value.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => onChange([])}>
-            <X /> Zrušiť výber
-          </Button>
-        )}
-      </div>
+      )}
       {selected.length > 0 ? (
         <div className="picker-selections" aria-label="Vybrané skupiny">
           {selected.map((role) => (
