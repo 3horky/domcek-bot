@@ -8,7 +8,6 @@ import secrets
 import shutil
 from pathlib import Path
 
-
 V2_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = V2_ROOT.parent
 ENV_EXAMPLE = V2_ROOT / ".env.example"
