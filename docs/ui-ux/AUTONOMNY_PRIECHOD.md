@@ -2,19 +2,19 @@
 
 Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny postup je v kapitole 20 `PLAN_UI_UX_AUDITU.md`.
 
-| Etapa | Oblasť                             | Stav     | Aktuálny dôkaz         | Commit / CI |
-| ----- | ---------------------------------- | -------- | ---------------------- | ----------- |
-| UX0   | auditná infraštruktúra             | prebieha | pripravuje sa baseline | –           |
-| UX1   | Reakcie                            | čaká     | –                      | –           |
-| UX2   | Roly                               | čaká     | –                      | –           |
-| UX3   | Nastavenia                         | čaká     | –                      | –           |
-| UX4   | aplikačný rámec a spoločné stavy   | čaká     | –                      | –           |
-| UX5   | Prehľad                            | čaká     | –                      | –           |
-| UX6   | Redakčný pult a Discord náhľad     | čaká     | –                      | –           |
-| UX7   | Kanály                             | čaká     | –                      | –           |
-| UX8   | História publikácií a Audit        | čaká     | –                      | –           |
-| UX9   | Stav systému a systémové obrazovky | čaká     | –                      | –           |
-| UX10  | finálna konzistencia a regresia    | čaká     | –                      | –           |
+| Etapa | Oblasť                             | Stav      | Aktuálny dôkaz                     | Commit / CI    |
+| ----- | ---------------------------------- | --------- | ---------------------------------- | -------------- |
+| UX0   | auditná infraštruktúra             | hotovo    | lint, 15 unit, 46 browser scenárov | čaká na commit |
+| UX1   | Reakcie                            | nasleduje | baseline sa pripravuje             | –              |
+| UX2   | Roly                               | čaká      | –                                  | –              |
+| UX3   | Nastavenia                         | čaká      | –                                  | –              |
+| UX4   | aplikačný rámec a spoločné stavy   | čaká      | –                                  | –              |
+| UX5   | Prehľad                            | čaká      | –                                  | –              |
+| UX6   | Redakčný pult a Discord náhľad     | čaká      | –                                  | –              |
+| UX7   | Kanály                             | čaká      | –                                  | –              |
+| UX8   | História publikácií a Audit        | čaká      | –                                  | –              |
+| UX9   | Stav systému a systémové obrazovky | čaká      | –                                  | –              |
+| UX10  | finálna konzistencia a regresia    | čaká      | –                                  | –              |
 
 ## Pravidlá pokračovania
 
@@ -26,6 +26,6 @@ Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny post
 
 ## Posledný checkpoint
 
-- **Aktuálna etapa:** UX0
-- **Najbližší krok:** inventarizácia route, rolí, fixtures a existujúcich testovacích mechanizmov
+- **Aktuálna etapa:** UX0 uzavretá; nasleduje UX1
+- **Najbližší krok:** commit/push UX0, potom vizuálny a funkčný baseline Reakcií
 - **Okamžitý blokátor:** žiadny

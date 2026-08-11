@@ -5,9 +5,9 @@
 ## Základné údaje
 
 - **Posledná aktualizácia:** 12. august 2026
-- **Celkový stav:** E0–E11 sú implementované a auditované; aktuálna lokálna regresia má 192 úspešných backendových testov a 1 opt-in skip, 13 frontendových testov, 34 desktop/mobile browser scenárov a 2 full-stack browser scenáre. Shadow runtime, praktická obnova aktuálneho databázového snapshotu, exact-source backend image a vzdialený CI run `31544640803` sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
-- **Aktuálna etapa:** E12 zostáva externe otvorená; paralelne prebieha autonómny nočný UI/UX priechod UX0–UX10 bez priebežných otázok. UX0 pripravuje auditnú maticu, fixtures a automatické vynucovanie; režim `live` zostáva zakázaný
-- **Najbližší kontrolný bod:** uzavrieť UX0 s auditnou infraštruktúrou a zelenou regresiou, potom bez čakania pokračovať UX1 Reakcie → UX2 Roly → UX3 Nastavenia až po UX10. Produkčne podobný HTTPS staging a podpísaný ľudský UAT zostávajú odložené externé dôkazy
+- **Celkový stav:** E0–E11 sú implementované a auditované; aktuálna lokálna regresia má 192 úspešných backendových testov a 1 opt-in skip, 15 frontendových testov, 46 desktop/mobile browser scenárov a 2 full-stack browser scenáre. Shadow runtime, praktická obnova aktuálneho databázového snapshotu, exact-source backend image a vzdialený CI run `31544640803` sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
+- **Aktuálna etapa:** E12 zostáva externe otvorená; paralelne prebieha autonómny nočný UI/UX priechod UX0–UX10 bez priebežných otázok. UX0 je lokálne uzavretá a UX1 Reakcie nasleduje; režim `live` zostáva zakázaný
+- **Najbližší kontrolný bod:** commitnúť a pushnúť zelenú UX0 bránu, potom bez čakania pokračovať UX1 Reakcie → UX2 Roly → UX3 Nastavenia až po UX10. Produkčne podobný HTTPS staging a podpísaný ľudský UAT zostávajú odložené externé dôkazy
 - **Produkčný runtime:** pôvodný bot; jeho existujúci aplikačný kód nebol pri príprave zadania a plánu zmenený
 - **Nový runtime Carlo:** úplný auditovaný build API, Discord procesu, workera, frontendu a PostgreSQL beží lokálne pod `v2/` výhradne v režime `shadow`
 - **Orientačný postup implementácie:** 12 z 15 etáp lokálne dokončených; E12 je otvorená a E13–E14 sú pripravené, ale blokované
@@ -89,7 +89,9 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 
 - Kapitola 20 `PLAN_UI_UX_AUDITU.md` definuje rozhodovaciu hierarchiu, jedinú výnimku pre okamžitú otázku, uzavretý osemkrokový cyklus každej etapy, commit/CI bránu a kontinuitu po kompaktovaní.
 - Vznikol pracovný checkpoint `docs/ui-ux/AUTONOMNY_PRIECHOD.md`, auditná evidencia `docs/ui-ux/AUDIT_MATICA.md` a front odložených otázok `docs/ui-ux/ODLOZENE_ROZHODNUTIA.md`.
-- UX0 je rozpracovaná. Zatiaľ nevznikla implementačná zmena ani tvrdenie o splnení jej kontrolnej brány.
+- UX0 má implementované automatické minimum: ESLint používa `eslint-plugin-jsx-a11y`, Stylelint blokuje nové hex farby mimo tokenovej/legacy hranice, vlastný lint overuje priority checklistov a zakazuje natívny multiple select a Playwright spúšťa Axe na šiestich hlavných route v desktopovom aj mobilnom projekte.
+- Vznikol spoločný scenárový katalóg `docs/ui-ux/SCENARE.md`, adresár stabilných dôkazov a pilotný `AsyncState` s izolovanými testami pre loading, empty, error a retry. Browser scenár návratu fokusu zostáva zachovaný a ručné publikovanie dostalo explicitný `dblclick` dôkaz jediného requestu.
+- Prvý Axe prechod odhalil a implementácia opravila skutočné blokujúce nedostatky: mobilné odhlásenie bez prístupného názvu, nepomenované prepínače a listboxy Reakcií a viac kontrastných odchýlok sekundárneho textu. Finálna UX0 brána prešla všetkými vrstvami lint, TypeScript kontrolou, produkčným buildom, 15/15 Vitest testami a 46/46 desktop/mobile Playwright scenármi vrátane 12 Axe behov, dvojkliku a návratu fokusu.
 
 ### Následný E9 produktový overhaul správy servera
 

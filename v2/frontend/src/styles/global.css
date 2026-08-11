@@ -42,7 +42,7 @@
   --canvas: #f4f7f4;
   --surface: #ffffff;
   --ink: #17231b;
-  --ink-muted: #66736b;
+  --ink-muted: #5f6c64;
   --line: #dfe7e1;
   --brand: #2f7552;
   --brand-strong: #20543a;
@@ -287,7 +287,7 @@ p {
 .eyebrow,
 .card-label {
   margin: 1.1rem 0.65rem 0.4rem;
-  color: #839087;
+  color: var(--ink-muted);
   font-size: 0.66rem;
   font-weight: 690;
   letter-spacing: 0.09em;
@@ -1383,7 +1383,7 @@ label:has(input:disabled) {
 }
 .desk-section-label {
   margin: 0.5rem 0.55rem 0.35rem;
-  color: #7a867f;
+  color: var(--ink-muted);
   font-size: 0.64rem;
   font-weight: 700;
   letter-spacing: 0.075em;
@@ -1554,7 +1554,7 @@ label:has(input:disabled) {
   flex-wrap: wrap;
   gap: 0.3rem;
   margin-bottom: 0.22rem;
-  color: #7b8780;
+  color: var(--ink-muted);
   font-size: 0.64rem;
 }
 .desk-entry-copy h3 {
@@ -1669,7 +1669,7 @@ label:has(input:disabled) {
 }
 .discord-window-header > svg {
   width: 20px;
-  color: #949ba4;
+  color: #b5bac1;
 }
 .discord-window-header strong {
   color: #f2f3f5;
@@ -1720,7 +1720,7 @@ label:has(input:disabled) {
   line-height: 1.2;
 }
 .discord-message-header time {
-  color: #949ba4;
+  color: #b5bac1;
   font-size: 0.59rem;
 }
 .discord-window .discord-message-content {
@@ -1813,7 +1813,7 @@ label:has(input:disabled) {
   border-radius: 0.48rem;
   background: #383a40;
   padding: 0.85rem;
-  color: #949ba4;
+  color: #b5bac1;
   font-size: 0.7rem;
 }
 
@@ -3283,7 +3283,7 @@ label:has(input:disabled) {
 .picker-empty-selection {
   min-height: 27px;
   margin: 0.55rem 0;
-  color: #718078;
+  color: var(--ink-muted);
   font-size: 0.72rem;
 }
 .picker-selections {

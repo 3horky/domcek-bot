@@ -152,7 +152,13 @@ export function MemberPicker({
         {state === 'loading' && <LoaderCircle className="spin" aria-label="Vyhľadávam" />}
       </div>
       {query.trim() && (
-        <div className="picker-results" id={listId} role="listbox" aria-multiselectable={multiple}>
+        <div
+          className="picker-results"
+          id={listId}
+          role="listbox"
+          aria-label={`Výsledky vyhľadávania: ${label}`}
+          aria-multiselectable={multiple}
+        >
           {state === 'error' && <p>Členov sa nepodarilo načítať. Skúste písať znova.</p>}
           {state === 'ready' && results.length === 0 && <p>Nenašli sa žiadni členovia.</p>}
           {results
@@ -253,7 +259,12 @@ export function RolePicker({
           onChange={(event) => setQuery(event.target.value)}
         />
       </div>
-      <div className="picker-results role-results" role="listbox" aria-multiselectable="true">
+      <div
+        className="picker-results role-results"
+        role="listbox"
+        aria-label="Dostupné skupiny"
+        aria-multiselectable="true"
+      >
         {available.map((role) => {
           const isSelected = value.includes(role.id)
           return (
@@ -334,7 +345,12 @@ export function ChannelMultiPicker({
           onChange={(event) => setQuery(event.target.value)}
         />
       </div>
-      <div className="picker-results compact-results" role="listbox" aria-multiselectable="true">
+      <div
+        className="picker-results compact-results"
+        role="listbox"
+        aria-label="Dostupné kanály"
+        aria-multiselectable="true"
+      >
         {available.map((channel) => {
           const isSelected = value.includes(channel.id)
           return (

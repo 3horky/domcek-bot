@@ -1,4 +1,4 @@
-import { Hash, LoaderCircle, RefreshCw, ShieldCheck, SmilePlus } from 'lucide-react'
+import { Hash, RefreshCw, ShieldCheck, SmilePlus } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
 import {
@@ -11,6 +11,7 @@ import {
   getDiscordDirectory,
 } from '../api/client'
 import { useAuth } from '../auth/context'
+import { LoadingState } from '../components/AsyncState'
 import { Button } from '../components/ui/button'
 import {
   ChannelsPanel,
@@ -189,14 +190,6 @@ function AdministrationPage({
       {notice && <NoticeBanner notice={notice} />}
       {children}
     </section>
-  )
-}
-
-function LoadingState({ label }: { label: string }) {
-  return (
-    <div className="settings-loading">
-      <LoaderCircle className="spin" /> {label}
-    </div>
   )
 }
 

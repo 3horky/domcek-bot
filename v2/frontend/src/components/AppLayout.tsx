@@ -57,7 +57,12 @@ export function AppLayout() {
             <strong>{user.display_name}</strong>
             <small>{roleLabel(roles)}</small>
           </div>
-          <button className="logout-button" type="button" onClick={() => void auth.signOut()}>
+          <button
+            className="logout-button"
+            type="button"
+            aria-label="Odhlásiť"
+            onClick={() => void auth.signOut()}
+          >
             <LogOut aria-hidden="true" />
             <span>Odhlásiť</span>
           </button>

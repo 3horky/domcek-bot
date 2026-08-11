@@ -1647,6 +1647,7 @@ function ReactionCard({
         </div>
         <Switch
           checked={enabled}
+          aria-label={`${enabled ? 'Vypnúť' : 'Zapnúť'}: ${title}`}
           onCheckedChange={(checked) => onChange({ enabled: checked, unicode, emojiId })}
         />
       </CardHeader>

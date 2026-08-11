@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 
 type Role = 'admin' | 'team_mod' | 'publisher' | 'none'
 
@@ -525,13 +526,16 @@ test('06 používateľ vytvorí INFO oznam s inkluzívnou expiráciou', async ({
   expect(state.infoAnnouncements[0]?.valid_until).toBe('2026-08-20')
 })
 
-test('07 Admin ručne publikuje dvojkrokovo', async ({ page }) => {
+test('07 Admin ručne publikuje dvojkrokovo a dvojklik nevytvorí druhý účinok', async ({ page }) => {
   const state = await mockCarlo(page)
   await page.goto('/')
   await page.getByRole('button', { name: 'Pripraviť ručné zverejnenie' }).click()
-  await page.getByRole('button', { name: 'Potvrdiť a zverejniť' }).click()
+  await page.getByRole('button', { name: 'Potvrdiť a zverejniť' }).dblclick()
   await expect(page.getByText(/Publikovanie skončilo stavom succeeded_manual/)).toBeVisible()
   expect(state.published).toBe(true)
+  expect(
+    state.calls.filter((call) => call.path === '/api/v1/publication/manual/confirm'),
+  ).toHaveLength(1)
 })
 
 test('08 Admin vytvorí súkromný kanál', async ({ page }) => {
@@ -747,3 +751,27 @@ test('17 rešpektuje systémové nastavenie obmedzeného pohybu', async ({ page 
   expect(Number.parseFloat(timing.animationDuration)).toBeLessThanOrEqual(0.00001)
   expect(Number.parseFloat(timing.transitionDuration)).toBeLessThanOrEqual(0.00001)
 })
+
+for (const [name, path] of [
+  ['Prehľad', '/'],
+  ['Redakčný pult', '/oznamy'],
+  ['Kanály', '/kanaly'],
+  ['Roly', '/roly'],
+  ['Reakcie', '/reakcie'],
+  ['Nastavenia', '/nastavenia'],
+] as const) {
+  test(`18 Axe: ${name} nemá automaticky zistiteľné WCAG A/AA porušenie`, async ({ page }) => {
+    await mockCarlo(page)
+    await page.goto(path)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    const result = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze()
+    const violations = result.violations.map((violation) => ({
+      id: violation.id,
+      impact: violation.impact,
+      targets: violation.nodes.map((node) => node.target.join(' ')),
+    }))
+    expect(violations, `${path}: ${JSON.stringify(violations)}`).toEqual([])
+  })
+}
