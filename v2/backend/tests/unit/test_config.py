@@ -40,7 +40,8 @@ def test_bot_requires_discord_identity() -> None:
         settings.validate_for(ProcessKind.BOT)
 
 
-def test_secret_can_be_loaded_from_file(tmp_path: Path) -> None:
+def test_secret_can_be_loaded_from_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SESSION_SECRET", raising=False)
     secret_file = tmp_path / "session"
     secret_file.write_text("x" * 48, encoding="utf-8")
     settings = Settings(

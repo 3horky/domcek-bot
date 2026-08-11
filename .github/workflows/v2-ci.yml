@@ -153,5 +153,13 @@ jobs:
           -f compose.production.yaml config --quiet
       - name: Validate shell scripts
         run: find v2/scripts -type f -name '*.sh' -print0 | xargs -0 -r bash -n
+      - name: Stage representative systemd deployment layout
+        run: |
+          sudo install -d -m 0755 /opt/carlo/v2/scripts /etc/carlo
+          sudo install -m 0755 \
+            v2/scripts/backup_production.sh \
+            /opt/carlo/v2/scripts/backup_production.sh
+          printf '%s\n' 'CARLO_BACKUP_DIR=/tmp/carlo-backups' \
+            | sudo tee /etc/carlo/backup.env >/dev/null
       - name: Verify systemd backup units
         run: systemd-analyze verify v2/deploy/systemd/carlo-backup.service v2/deploy/systemd/carlo-backup.timer
