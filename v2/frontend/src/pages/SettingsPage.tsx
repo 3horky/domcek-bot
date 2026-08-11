@@ -875,9 +875,9 @@ export function ChannelsPanel({
               {availableCategories
                 .filter((category) => category.id !== defaultCategory?.id)
                 .map((category) => (
-                <option value={category.id} key={category.id}>
-                  {category.name} · {category.text_channel_count} textových kanálov
-                </option>
+                  <option value={category.id} key={category.id}>
+                    {category.name} · {category.text_channel_count} textových kanálov
+                  </option>
                 ))}
             </select>
           </Field>

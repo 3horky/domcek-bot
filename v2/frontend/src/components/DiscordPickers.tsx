@@ -131,28 +131,30 @@ export function MemberPicker({
         <div className="picker-results" id={listId} role="listbox" aria-multiselectable={multiple}>
           {state === 'error' && <p>Členov sa nepodarilo načítať. Skúste písať znova.</p>}
           {state === 'ready' && results.length === 0 && <p>Nenašli sa žiadni členovia.</p>}
-          {results.filter((member) => !excludedIds.includes(member.id)).map((member) => {
-            const selected = value.includes(member.id)
-            return (
-              <button
-                type="button"
-                role="option"
-                aria-selected={selected}
-                className={selected ? 'selected' : ''}
-                key={member.id}
-                onClick={() => toggleMember(member)}
-              >
-                <MemberAvatar member={member} />
-                <span>
-                  <strong>{member.display_name}</strong>
-                  <small>@{member.username}</small>
-                </span>
-                <span className="picker-result-state">
-                  {selected ? <Check /> : multiple ? 'Pridať' : 'Vybrať'}
-                </span>
-              </button>
-            )
-          })}
+          {results
+            .filter((member) => !excludedIds.includes(member.id))
+            .map((member) => {
+              const selected = value.includes(member.id)
+              return (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className={selected ? 'selected' : ''}
+                  key={member.id}
+                  onClick={() => toggleMember(member)}
+                >
+                  <MemberAvatar member={member} />
+                  <span>
+                    <strong>{member.display_name}</strong>
+                    <small>@{member.username}</small>
+                  </span>
+                  <span className="picker-result-state">
+                    {selected ? <Check /> : multiple ? 'Pridať' : 'Vybrať'}
+                  </span>
+                </button>
+              )
+            })}
         </div>
       )}
     </div>

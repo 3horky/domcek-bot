@@ -77,6 +77,7 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 - `ChannelManagementService` pred vytvorením znova overí, že cieľ existuje ako kategória bez voice/stage kanálov; archív zostáva samostatne blokovaný. Rovnaké pravidlo implementuje HTTP aj Discord.py gateway, takže zákaz nemožno obísť priamym API requestom.
 - Regresia tohto rezu: Ruff a mypy sú čisté; 190 backendových testov prešlo a 1 opt-in Google live test bol preskočený; frontendový Prettier, ESLint, TypeScript, 13 Vitest testov a produkčný build prešli; Playwright prešiel 34/34 desktop/mobile scenárov a 2/2 full-stack scenáre. Scenár nového kanála explicitne overuje skrytie archívu/voice kategórie, živé vyhľadanie člena, výber a úplné vyčistenie role a presné odoslané ID.
 - Lokálny Compose runtime bol po tomto reze rebuildnutý. Migrácia skončila s kódom 0, PostgreSQL/API/bot/worker sú healthy, frontend aj readiness odpovedajú HTTP 200 a worker má znovu explicitne potvrdený režim `shadow`.
+- Prvý vzdialený CI run tohto rezu `31470255011` potvrdil zelený backend a repository-safety, no frontend zastavil na Prettier checku dvoch súborov upravených po poslednom lokálnom formátovaní. Ide o čisto mechanický rozdiel bez zmeny správania; oba súbory boli preformátované a pred opravným pushom sa opakuje kompletný frontendový check.
 
 ### Implementačný plán
 
