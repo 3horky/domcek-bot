@@ -1,12 +1,12 @@
 # UI a UX štandardy aplikácie Carlo
 
-| Vlastnosť             | Hodnota                                             |
-| --------------------- | --------------------------------------------------- |
-| Stav                  | záväzný projektový štandard                         |
-| Rozsah                | webová administrácia Carlo a jej používateľské toky |
-| Vlastník              | produktový a frontendový návrh projektu Carlo       |
-| Posledná aktualizácia | 11. august 2026                                     |
-| Súvisiace dokumenty   | `ZADANIE.md`, `PLAN_IMPLEMENTACIE.md`, `STATUS.md`  |
+| Vlastnosť             | Hodnota                                                                    |
+| --------------------- | -------------------------------------------------------------------------- |
+| Stav                  | záväzný projektový štandard                                                |
+| Rozsah                | webová administrácia Carlo a jej používateľské toky                        |
+| Vlastník              | produktový a frontendový návrh projektu Carlo                              |
+| Posledná aktualizácia | 11. august 2026                                                            |
+| Súvisiace dokumenty   | `ZADANIE.md`, `PLAN_IMPLEMENTACIE.md`, `PLAN_UI_UX_AUDITU.md`, `STATUS.md` |
 
 ## 1. Účel a záväznosť dokumentu
 
@@ -1022,3 +1022,5 @@ Tento dokument sa musí aktualizovať, keď:
 Jednorazová vizuálna úprava konkrétnej stránky nemá automaticky meniť štandard. Najprv sa musí určiť, či ide o lokálnu potrebu alebo všeobecný vzor. Ak je vzor všeobecný, upraví sa tento dokument, spoločná implementácia a relevantné testy v jednom koordinovanom kroku.
 
 V každom review UI zmeny sa musí položiť otázka: „Ak by sa tento vzor zopakoval na ďalších piatich stránkach, bola by aplikácia stále jednoduchšia a konzistentnejšia?“ Ak odpoveď nie je jednoznačne áno, riešenie sa má prehodnotiť.
+
+Systematická kontrola existujúcej aplikácie a poradie nápravných etáp sa riadia dokumentom [`PLAN_UI_UX_AUDITU.md`](./PLAN_UI_UX_AUDITU.md). Tento plán neurčuje nižší kvalitatívny štandard; prevádza požiadavky tohto dokumentu na auditné dôkazy, priority, implementačné rezy a kontrolné brány.
