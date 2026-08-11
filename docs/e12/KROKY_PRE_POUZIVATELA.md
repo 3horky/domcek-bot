@@ -12,19 +12,13 @@ potvrdilo pôvodné hashe, prekryv udalosti, zachovanie redakčného popisu,
 recurrence, `stop carlo`, dva kalendáre, viacdňové udalosti a delenie správ.
 Rozhodnutie a kontrolné výsledky sú v `SHADOW_CYKLY.md`.
 
-## 2. Commit, push a vzdialený CI
+## 2. Commit, push a vzdialený CI – splnené
 
-Používateľ 11. augusta 2026 výslovne povolil commit a push na `origin/main`.
-Vznikol implementačný commit `6100cd63dea7136063a990cbbb5ec0f3a1a49d01`
-a nadväzujúce dokumentačné commity. Pracovný strom je čistý, ale HTTPS push sa
-na tomto hoste zastavil v `osxkeychain` bez sprístupnenia poverenia a existujúci
-SSH kľúč GitHub nepozná. Remote `origin/main` preto stále bezpečne zostáva na
-`48f301e91ebfb0f566b94ef462f557fa4e03d542`.
-
-Používateľ musí v lokálnom Termináli dokončiť autentifikovaný fast-forward push
-príkazom `git push origin main` alebo najprv odomknúť/povoliť macOS kľúčenku a
-nechať Codex push zopakovať. Token ani heslo sa nesmú posielať v konverzácii.
-Po pushnutí musí byť workflow `Domček Bot 2.0 CI` úplne zelený vrátane:
+Používateľ 11. augusta 2026 výslovne povolil commit a push na `origin/main` a
+následne dokončil prvý interaktívny push. Po troch transparentne opravených
+clean-run medzerách prešiel commit
+`e6ba7c4b51c4b8cfede6ccc166cf5d2ba46b631e` vo vzdialenom workflow
+`Domček Bot 2.0 CI` run `31463238397` úplne zeleno vrátane:
 
 - 188 backendových testov,
 - 13 Vitest testov,
@@ -32,8 +26,8 @@ Po pushnutí musí byť workflow `Domček Bot 2.0 CI` úplne zelený vrátane:
 - 2 full-stack browser behov proti izolovanému PostgreSQL,
 - backend/frontend image buildov a repository-safety jobu.
 
-Odkaz na konkrétny zelený beh a commit SHA treba doplniť do
-`KONTROLNA_BRANA.md`.
+Run: [31463238397](https://github.com/3horky/domcek-bot/actions/runs/31463238397).
+Presný commit aj dôkaz sú zaznamenané v `KONTROLNA_BRANA.md` a `STATUS.md`.
 
 ## 3. Produkčne podobný HTTPS staging
 

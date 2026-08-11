@@ -5,9 +5,9 @@
 ## Základné údaje
 
 - **Posledná aktualizácia:** 11. august 2026
-- **Celkový stav:** E0–E11 sú lokálne implementované a auditované; regresia s 188 backendovými testami, shadow runtime, praktická obnova aktuálneho databázového snapshotu, aktuálny exact-source backend image a izolovaný full-stack browser dôkaz sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; prvý vzdialený CI odhalil dve opravené test/runner medzery a čaká na zelený rerun, HTTPS staging a UAT
-- **Aktuálna etapa:** E12 – lokálne podklady sú pripravené; nasleduje staging/UAT a vzdialený CI bez aktivácie režimu `live`
-- **Najbližší kontrolný bod:** commitnúť a pushnúť lokálne overenú opravu prvého vzdialeného CI runu `31462206426`, odmonitorovať zelený rerun a doplniť jeho presný SHA/URL do brán E11–E13; potom nasleduje HTTPS staging/browser UAT podľa `docs/e12/KROKY_PRE_POUZIVATELA.md`. Režim `live` zostáva zakázaný
+- **Celkový stav:** E0–E11 sú implementované a auditované; regresia s 188 backendovými testami, shadow runtime, praktická obnova aktuálneho databázového snapshotu, exact-source backend image, full-stack browser dôkaz a vzdialený CI run `31463238397` sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
+- **Aktuálna etapa:** E12 – shadow/rehearsal a vzdialený CI sú splnené; nasleduje produkčne podobný HTTPS staging a podpísaný UAT bez aktivácie režimu `live`
+- **Najbližší kontrolný bod:** pripraviť produkčne podobný HTTPS staging a vykonať/podpísať Admin, Team Mod, SDB/FMA, desktop/tablet/mobile/200 %/keyboard UAT podľa `docs/e12/KROKY_PRE_POUZIVATELA.md`; vyžaduje staging host/doménu a reálnych testerov. Režim `live` zostáva zakázaný
 - **Produkčný runtime:** pôvodný bot; jeho existujúci aplikačný kód nebol pri príprave zadania a plánu zmenený
 - **Nový runtime Carlo:** úplný auditovaný build API, Discord procesu, workera, frontendu a PostgreSQL beží lokálne pod `v2/` výhradne v režime `shadow`
 - **Orientačný postup implementácie:** 12 z 15 etáp lokálne dokončených; E12 je otvorená a E13–E14 sú pripravené, ale blokované
@@ -146,8 +146,8 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 | E8 | Discord príkazy a interakcie | dokončená | Brána je splnená: štyri staging príkazy, bezpečné ephemeral flow, idempotentný publish/kanál a jednorazová persistentná archivácia sú overené |
 | E9 | Webová správa kanálov, rolí a reakcií | dokončená | Brána je splnená; spoločné Nastavenia, Discord operácie, kalendáre, roly, reakcie a ručný publish používajú zdieľané use cases |
 | E10 | Migrácia údajov | dokončená | Read-only inventarizácia, deterministické reporty a dve čisté idempotentné PostgreSQL skúšky sú overené |
-| E11 | Komplexné testovanie a hardening | lokálne dokončená | Gateway heartbeat oprava, 188 testov, runtime reconnect, current-head restore, exact-source image aj full-stack browser sú zelené; vzdialený CI ostáva externý |
-| E12 | Staging, tieňová prevádzka a akceptácia | rozpracovaná, externý vstup | Dvojcyklový rehearsal je prijatý bez živého odoslania; čaká produkčne podobné HTTPS, vzdialený CI a podpísaný rolový/responzívny UAT |
+| E11 | Komplexné testovanie a hardening | automatizovane dokončená | Gateway heartbeat oprava, 188 testov, runtime reconnect, current-head restore, exact-source image, full-stack browser aj vzdialený CI sú zelené |
+| E12 | Staging, tieňová prevádzka a akceptácia | rozpracovaná, externý vstup | Dvojcyklový rehearsal aj vzdialený CI sú splnené; čaká produkčne podobné HTTPS a podpísaný rolový/responzívny UAT |
 | E13 | Produkčné nasadenie a cutover | pripravená, blokovaná | Nasadzovacie artefakty a runbooky sú overené; vykonanie čaká na E12, produkčný host/doménu/secrets/digesty a súhlas |
 | E14 | Stabilizácia a ukončenie starej verzie | pripravená, čaká | Reporting a retirement postup sú hotové; vykonanie čaká na E13 a tri skutočné produkčné cykly |
 
@@ -346,14 +346,11 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 
 ## Aktuálne blokátory
 
-- Nie je známy nevyriešený lokálny stop-ship nález pre E0–E11; druhý audit, staging preflight, accessibility oprava a úplná regresia sú uzavreté. Vzdialený CI a ľudský UAT sú naďalej externé brány, nie lokálne tvrdené dôkazy.
+- Nie je známy nevyriešený automatizovaný stop-ship nález pre E0–E11; druhý audit, staging preflight, accessibility oprava, úplná regresia aj vzdialený CI sú uzavreté. Ľudský HTTPS staging UAT zostáva externou bránou, nie automatizovane tvrdeným dôkazom.
 - E12 nemožno pravdivo uzavrieť bez produkčne podobnej HTTPS domény/reverse proxy a podpísaného browser UAT pre Admin, Team Mod a SDB/FMA na desktope, tablete, mobile, pri 200 % zoome a pri ovládaní klávesnicou.
-- Celý nový v2 strom je zatiaľ necommitnutý. Používateľ 11. augusta 2026
-  výslovne povolil commit a push na `origin/main`; prebieha posledná kontrola
-  staged rozsahu a následne sa musí bez výnimiek vyhodnotiť vzdialený CI.
 - E13 vyžaduje produkčný Linux host, DNS/doménu, chránené produkčné secrets a Discord ID, nemenné image digesty, pomenovaných vlastníkov backupu/off-site prenosu/monitoringu a explicitný súhlas s konkrétnym cutover oknom.
 - E14 sa môže vyhodnotiť až po troch skutočných produkčných publikáciách, manuálnom porovnaní Discord výstupu a úspešnej restore rehearsal. Vyradenie legacy vyžaduje samostatné schválenie.
-- Produkčné systemd jednotky a timer pre backup prešli statickou a shell kontrolou, ale `systemd-analyze` na tomto macOS hoste nie je dostupný; finálne overenie patrí na cieľový Linux host.
+- Produkčné systemd jednotky a timer pre backup prešli shell kontrolou aj `systemd-analyze verify` na vzdialenom Ubuntu runneri; finálny runtime timer/restore dôkaz stále patrí na cieľový produkčný Linux host.
 - Oddelený testovací intro-generator credential nie je nakonfigurovaný. Carlo bezpečne používa otestovaný deterministický fallback; produkčný credential treba dodať iba vtedy, ak sa má používať generovaný úvod.
 
 Kým nie je uzavretá E12 a udelený výslovný cutover súhlas, `PUBLICATION_EXECUTION_MODE=live` zostáva zakázaný. Žiadny produkčný zásah ani živé publikovanie neboli vykonané.
@@ -365,10 +362,9 @@ Google API vracia pre oba testovacie kalendáre kanonické časové pásmo `Euro
 ## Najbližšie konkrétne kroky
 
 1. sprístupniť staging Carla cez produkčne podobnú HTTPS doménu a reverse proxy bez zapnutia režimu `live`,
-2. po výslovnom súhlase vytvoriť kontrolovaný commit/push a nechať bez výnimiek prejsť vzdialený CI workflow,
-3. vykonať a podpísať `docs/e12/UAT_CHECKLIST.md` so všetkými tromi rolami a požadovanými responzívnymi/accessibility variantmi,
-4. po uzavretí E12 doplniť produkčný release manifest o host, DNS, image digesty, vlastníkov a bezpečne uložené secrets; na Linux hoste overiť systemd backup timer a restore rehearsal,
-5. až po explicitnom schválení vykonať E13 cutover podľa runbooku; následne počas E14 vyhodnotiť tri reálne cykly a legacy vyradiť iba po samostatnom schválení.
+2. vykonať a podpísať `docs/e12/UAT_CHECKLIST.md` so všetkými tromi rolami a požadovanými responzívnymi/accessibility variantmi,
+3. po uzavretí E12 doplniť produkčný release manifest o host, DNS, image digesty, vlastníkov a bezpečne uložené secrets; na Linux hoste overiť systemd backup timer a restore rehearsal,
+4. až po explicitnom schválení vykonať E13 cutover podľa runbooku; následne počas E14 vyhodnotiť tri reálne cykly a legacy vyradiť iba po samostatnom schválení.
 
 ## Vykonané overenia
 
@@ -656,6 +652,7 @@ Pred pokračovaním treba vždy znovu overiť `git status`, pretože táto sekci
 - Ops import oprava bola pushnutá ako `ac34c43…`; run `31462886443` potvrdil zelený systemd/repository-safety, 188 backend testov, image build, healthcheck smoke aj 11 ops testov. Backend sa zastavil už iba na poslednom Ruff kroku: dva Python bootstrap/secret skripty mali shebang bez executable Git módu a samostatný ops profil vyžadoval štandardný import layout. Oba shebang skripty teraz dostanú mód `100755` a import spacing sa mechanicky zosúladí; zdrojová funkčnosť ani lint pravidlá sa neuvoľňujú.
 - Čistá reprodukcia ukázala, že aplikačný `backend/pyproject.toml` nad nadradenými ops fixtures zámerne aktivuje aj source-only security pravidlá (`assert` v pytestoch a testovacie secret literály), preto sa tento lokálny nepushnutý pokus nepoužije. Ops job zostáva na svojom pôvodnom samostatnom Ruff profile bez vypínania pravidiel; oba skripty majú správny mód `100755` a ich jediný default-profile import-spacing nález je mechanicky opravený. Presný CI príkaz sa opakuje v read-only kontajneri.
 - Presný `uv run --project backend ruff check scripts` príkaz následne prešiel bez nálezu v čistom read-only kontajneri s Pythonom 3.13.14; iba cache bola pri tejto lokálnej read-only reprodukcii presmerovaná do `/tmp`. Posledná známa backend CI medzera je tým lokálne uzavretá a čaká na push/rerun.
+- Posledná ops oprava bola pushnutá ako `e6ba7c4b51c4b8cfede6ccc166cf5d2ba46b631e`. GitHub Actions run `31463238397` (`https://github.com/3horky/domcek-bot/actions/runs/31463238397`) skončil úplne zeleno: `backend`, `frontend` aj `repository-safety` majú stav `success`. Vzdialený CI bod E11/E12 je tým splnený; E13 release manifest správne ešte neurčuje finálny release commit ani registry digesty pred HTTPS/UAT a schválením cutoveru.
 - E7 migrácia prešla upgrade, downgrade/upgrade cyklom a `alembic check` bez driftu. Aktuálna backendová sada má 125 úspešných testov a jeden korektne preskočený opt-in Google live test; nové scenáre overujú 11 udalostí/2 správy, retry po rate limite, fallback úvodu, nemennosť snapshotu, neistý efekt, reconcile, manual skip, token binding/expiráciu/replay a deduplikáciu alertu.
 - E8 otvorili dokumenty etapy, spoločná `ChannelManagementService`, idempotentná integračná úloha a repository pre archivačné žiadosti. Testy potvrdili normalizáciu a jediné vytvorenie kanála, jednu pending žiadosť, Admin-only compare-and-set rozhodnutie a synchronizované archívne meno.
 - Discord proces už poskytuje štyri guild-scoped príkazy: bezpečný náhľad, dvojkrokové publikovanie, UserSelect/RoleSelect tvorbu kanála a archiváciu s persistentnými schvaľovacími tlačidlami. Reálny staging sync potvrdil `command_count=4` a úspešné Gateway pripojenie.

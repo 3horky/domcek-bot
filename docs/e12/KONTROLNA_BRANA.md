@@ -4,8 +4,8 @@
 
 Technická staging a shadow implementácia je funkčná a fail-safe. Používateľ
 11. augusta 2026 výslovne prijal riadený rehearsal dôkaz ako ekvivalent dvoch
-odlišných shadow slotov. Brána zostáva otvorená pre HTTPS staging, vzdialený CI
-a podpísaný browser UAT oprávnených rolí.
+odlišných shadow slotov. Vzdialený CI je zelený; brána zostáva otvorená pre
+produkčne podobný HTTPS staging a podpísaný browser UAT oprávnených rolí.
 
 ## Splnené
 
@@ -30,6 +30,11 @@ a podpísaný browser UAT oprávnených rolí.
 - [x] úplná regresia: 188 backendových testov, 1 korektne preskočený opt-in
   Google live test, 13 Vitest testov, 34 mockovaných a 2 full-stack Playwright
   behov, statické kontroly a produkčný Vite build,
+- [x] schválený strom je pushnutý na `origin/main`; commit
+  `e6ba7c4b51c4b8cfede6ccc166cf5d2ba46b631e` prešiel všetkými troma jobmi
+  vzdialeného CI runu
+  [31463238397](https://github.com/3horky/domcek-bot/actions/runs/31463238397)
+  bez výnimky,
 - [x] UAT checklist pre Admin, Team Mod, SDB/FMA, mobil a accessibility.
 - [x] AC-01–AC-33 majú explicitnú mapu na automatizovaný, staging alebo UAT
   dôkaz v `AKCEPTACNE_KRITERIA.md`; AC-21 zostáva otvorené pre ľudský podpis.
@@ -37,7 +42,6 @@ a podpísaný browser UAT oprávnených rolí.
 ## Otvorené – stop-ship pre E13 cutover
 
 - [ ] staging web cez produkčne podobný reverse proxy a HTTPS doménu,
-- [ ] schválený commit/push nového stromu a zelený vzdialený CI beh bez výnimiek,
 - [ ] Admin podpísal všetky relevantné body `UAT_CHECKLIST.md`,
 - [ ] Team Mod podpísal svoju oprávnenostnú a obsahovú časť,
 - [ ] SDB/FMA podpísal preview a dvojkrokový publish do staging kanála,

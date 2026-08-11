@@ -1,6 +1,6 @@
 # Kontrolná brána E11
 
-## Stav: LOKÁLNE SPLNENÁ, ČAKÁ EXTERNÝ CI A E12 UAT
+## Stav: AUTOMATIZOVANÁ ČASŤ SPLNENÁ, ČAKÁ E12 UAT
 
 Druhý audit našiel lokálne stop-ship medzery, ktoré predchádzajúca regresia
 nepokrývala. Všetky boli opravené pred aktiváciou `live`; po poslednom
@@ -27,8 +27,9 @@ sada zopakovala.
 - [x] Exact-source produkčný backend image bol znovu zostavený po Gateway
   heartbeat oprave a image smoke potvrdil opravu, healthcheck entry point,
   neprivilegovaného používateľa aj zúžený obsah scripts.
-- [ ] Pripravený CI workflow prešiel na vzdialenom runneri po schválenom
-  commitnutí a pushnutí aktuálneho stromu.
+- [x] CI workflow prešiel na vzdialenom runneri po schválenom commitnutí a
+  pushnutí: commit `e6ba7c4b51c4b8cfede6ccc166cf5d2ba46b631e`, run
+  [31463238397](https://github.com/3horky/domcek-bot/actions/runs/31463238397).
 - [x] Všetkých 14 browser acceptance scenárov a doplnkové overflow,
   keyboard/focus a reduced-motion kontroly prešli v desktopovom aj mobilnom
   Chromiu nad deterministicky mockovanou HTTP hranicou.
@@ -40,7 +41,7 @@ sada zopakovala.
 
 ## Výsledok
 
-**Brána E11: LOKÁLNA ČASŤ SPLNENÁ; EXTERNÉ PODMIENKY ZOSTÁVAJÚ OTVORENÉ.**
+**Brána E11: AUTOMATIZOVANÁ ČASŤ SPLNENÁ; ĽUDSKÝ E12 UAT ZOSTÁVA OTVORENÝ.**
 
 Auditované opravy aj automatizovaná browserová vrstva sú implementované. Nový
 beh potvrdil 188 backendových testov, 13 Vitest testov, 34 Playwright behov,
@@ -54,9 +55,11 @@ kanonickým Dockerfile a smoke-testovaný; frontend ostáva aktuálny a prešiel
 odpoveď.
 Samostatný full-stack Playwright tok
 prešiel 2/2 na desktope a mobile cez skutočné FastAPI a PostgreSQL vrátane
-uloženia, reloadu, nového API čítania a overeného nulového cleanupu. Keďže strom
-nie je commitnutý ani pushnutý, vzdialený CI a ľudský staging UAT zostávajú
-externé podmienky E12. Produkčný cutover je dovtedy zakázaný.
+uloženia, reloadu, nového API čítania a overeného nulového cleanupu. Vzdialený
+CI run [31463238397](https://github.com/3horky/domcek-bot/actions/runs/31463238397)
+na commite `e6ba7c4…` následne prešiel backendovým,
+frontendovým aj repository-safety jobom bez výnimky. Ľudský staging UAT zostáva
+externou podmienkou E12 a produkčný cutover je dovtedy zakázaný.
 
 Záverečný prevádzkový rez navyše prešiel prísnym mypy nad 136 zdrojmi,
 pozitívnym aj negatívnym runtime healthcheck smoke. Aktuálny lokálny Compose

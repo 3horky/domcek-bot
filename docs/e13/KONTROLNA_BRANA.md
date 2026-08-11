@@ -13,6 +13,9 @@ a poskytnutím produkčnej infraštruktúry a schválenia.
 - [x] release, cutover a rollback runbook,
 - [x] kroková cutover evidencia s operátorom, časom, výsledkom a rollback
   rozhodnutím,
+- [x] kvalifikačný vzdialený CI pre commit `e6ba7c4…` prešiel backendovým,
+  frontendovým aj repository-safety jobom; finálny release commit a image
+  digesty sa určia až v schválenom release manifeste,
 - [ ] E12 kontrolná brána uzavretá,
 - [ ] produkčný host, DNS, secret files a nemenné image digesty,
 - [ ] vyplnený a schválený release manifest,
