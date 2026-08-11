@@ -65,7 +65,9 @@ jobs:
         run: docker run --rm carlo-backend:ci domcek-runtime-healthcheck --help
       - name: Test production configuration validator
         working-directory: v2
-        run: uv run --project backend pytest -q scripts/tests/test_validate_production_config.py
+        run: >-
+          uv run --project backend python -m pytest -q
+          scripts/tests/test_validate_production_config.py
       - name: Lint production operations scripts
         working-directory: v2
         run: uv run --project backend ruff check scripts
