@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock3,
   FolderArchive,
+  FolderTree,
   LoaderCircle,
   MessageSquareMore,
   Plus,
@@ -1057,7 +1058,11 @@ export function ChannelsPanel({
               </div>
               {availableCategories.length > 1 && (
                 <details className="channel-optional-control">
-                  <summary>Zmeniť umiestnenie</summary>
+                  <summary>
+                    <FolderTree />
+                    <span>Zmeniť umiestnenie</span>
+                    <ChevronDown className="disclosure-caret" />
+                  </summary>
                   <Field label="Časť servera">
                     <select
                       value={categoryId}

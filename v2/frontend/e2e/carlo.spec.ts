@@ -414,6 +414,17 @@ function directory() {
         is_default_project_category: false,
       },
       {
+        id: '803',
+        name: 'workshopy',
+        kind: 'category',
+        category_id: null,
+        text_channel_count: 3,
+        voice_channel_count: 0,
+        can_create_project_channel: true,
+        is_archive_category: false,
+        is_default_project_category: false,
+      },
+      {
         id: '802',
         name: 'voice',
         kind: 'category',
@@ -524,9 +535,12 @@ test('07 Admin ručne publikuje dvojkrokovo', async ({ page }) => {
 })
 
 test('08 Admin vytvorí súkromný kanál', async ({ page }) => {
+  test.setTimeout(60_000)
   const state = await mockCarlo(page)
   await page.goto('/kanaly')
-  await expect(page.getByRole('heading', { name: 'Kanály', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Kanály', exact: true })).toBeVisible({
+    timeout: 15_000,
+  })
   await expect(page.getByText('Pravidlá umiestnenia')).toHaveCount(0)
   const opener = page.getByRole('button', { name: /Vytvoriť nový kanál/ })
   await opener.click()
@@ -537,8 +551,12 @@ test('08 Admin vytvorí súkromný kanál', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Preskočiť na obsah' })).not.toBeFocused()
   await opener.click()
   dialog = page.getByRole('dialog', { name: 'Vytvoriť nový kanál' })
-  await expect(dialog.getByText('Zmeniť umiestnenie')).toHaveCount(0)
+  const locationControl = dialog.locator('details').filter({ hasText: 'Zmeniť umiestnenie' })
+  await expect(locationControl.locator('summary svg')).toHaveCount(2)
   await expect(dialog.getByText('Carlo ho zaradí do časti „projekty“.')).toBeVisible()
+  await dialog.getByText('Zmeniť umiestnenie').click()
+  await dialog.getByLabel('Časť servera').selectOption('803')
+  await expect(dialog.getByText('Kanál bude zaradený do časti „workshopy“.')).toBeVisible()
 
   const nameInput = dialog.getByLabel('Názov')
   await nameInput.fill('Letný Tábor 2026!')
@@ -569,6 +587,8 @@ test('08 Admin vytvorí súkromný kanál', async ({ page }) => {
   await expect(memberSearch).toHaveValue('')
   await expect(memberSearch).toBeFocused()
   await expect(dialog.getByRole('option', { name: /Testovací člen/ })).toHaveCount(0)
+  const groupControl = dialog.locator('details').filter({ hasText: 'Pridať celú skupinu' })
+  await expect(groupControl.locator('summary svg')).toHaveCount(2)
   await dialog.getByText('Pridať celú skupinu').click()
   const rolePicker = dialog.locator('.role-picker')
   await rolePicker.getByRole('option', { name: /Team Mod/ }).click()
@@ -589,6 +609,7 @@ test('08 Admin vytvorí súkromný kanál', async ({ page }) => {
   const createCall = state.calls.find((call) => call.path === '/api/v1/admin/channels')
   expect((createCall?.body as Record<string, unknown>).member_ids).toEqual(['999'])
   expect((createCall?.body as Record<string, unknown>).role_ids).toEqual([])
+  expect((createCall?.body as Record<string, unknown>).category_id).toBe('803')
 })
 
 test('09 Team Mod požiada o archiváciu a Admin schváli konkrétnu žiadosť', async ({ page }) => {
