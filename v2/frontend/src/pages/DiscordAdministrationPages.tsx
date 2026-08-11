@@ -24,29 +24,24 @@ export function ChannelsPage() {
   const auth = useAuth()
   const isAdmin =
     auth.status === 'authenticated' && auth.session.capabilities.includes('manage_roles')
-  const canConfigure =
-    auth.status === 'authenticated' && auth.session.capabilities.includes('manage_settings')
   const [directory, setDirectory] = useState<DiscordDirectory | null>(null)
   const [archives, setArchives] = useState<ArchiveRequest[]>([])
-  const [settings, setSettings] = useState<AdminSettings | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
   const [loading, setLoading] = useState(true)
   const load = useCallback(async () => {
     try {
-      const [nextDirectory, nextArchives, nextSettings] = await Promise.all([
+      const [nextDirectory, nextArchives] = await Promise.all([
         getDiscordDirectory(),
         getArchiveRequests(),
-        canConfigure ? getAdminSettings() : Promise.resolve(null),
       ])
       setDirectory(nextDirectory)
       setArchives(nextArchives)
-      setSettings(nextSettings)
     } catch (error) {
       setNotice({ kind: 'error', text: errorMessage(error) })
     } finally {
       setLoading(false)
     }
-  }, [canConfigure])
+  }, [])
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0)
     return () => window.clearTimeout(timer)
@@ -68,11 +63,6 @@ export function ChannelsPage() {
           directory={directory}
           archives={archives}
           isAdmin={isAdmin}
-          configuration={settings?.publication}
-          onConfigurationSaved={async (publication) => {
-            if (settings) setSettings({ ...settings, publication })
-            await load()
-          }}
           onArchivesChanged={setArchives}
           setNotice={setNotice}
         />

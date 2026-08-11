@@ -186,8 +186,8 @@ export function RolePicker({
     <div className="discord-picker role-picker">
       <div className="discord-picker-heading">
         <div>
-          <label htmlFor="role-picker-search">Roly s prístupom</label>
-          <span>Voliteľné. Kanál môže zostať bez vybratej roly.</span>
+          <label htmlFor="role-picker-search">Skupiny s prístupom</label>
+          <span>Voliteľné. Nemusíte vybrať žiadnu skupinu.</span>
         </div>
         {value.length > 0 && (
           <Button variant="ghost" size="sm" onClick={() => onChange([])}>
@@ -196,7 +196,7 @@ export function RolePicker({
         )}
       </div>
       {selected.length > 0 ? (
-        <div className="picker-selections" aria-label="Vybrané roly">
+        <div className="picker-selections" aria-label="Vybrané skupiny">
           {selected.map((role) => (
             <button
               type="button"
@@ -210,14 +210,16 @@ export function RolePicker({
           ))}
         </div>
       ) : (
-        <p className="picker-empty-selection">Žiadna rola – prístup dostanú iba vybraní ľudia.</p>
+        <p className="picker-empty-selection">
+          Žiadna skupina – prístup dostanú iba vybraní ľudia.
+        </p>
       )}
       <div className="picker-search-shell">
         <Search aria-hidden="true" />
         <Input
           id="role-picker-search"
           value={query}
-          placeholder="Filtrovať roly…"
+          placeholder="Nájsť skupinu…"
           onChange={(event) => setQuery(event.target.value)}
         />
       </div>
@@ -238,7 +240,7 @@ export function RolePicker({
               <span className="role-avatar">{role.name.slice(0, 1).toLocaleUpperCase('sk')}</span>
               <span>
                 <strong>{role.name}</strong>
-                <small>Discord rola</small>
+                <small>Skupina ľudí</small>
               </span>
               <span className="picker-result-state">{isSelected ? <Check /> : 'Pridať'}</span>
             </button>

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { App } from './App'
@@ -413,16 +413,22 @@ describe('authenticated application shell', () => {
     expect(screen.getByRole('tab', { name: /Kalendáre/ })).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: /Kanály/ })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Oznamy')).toHaveValue('700')
+    expect(screen.getByText('Pravidlá umiestnenia')).toBeInTheDocument()
+    expect(screen.getByLabelText('Nové projektové kanály')).toHaveValue('800')
+    expect(screen.getByLabelText('Archivované kanály')).toHaveValue('801')
     fireEvent.click(screen.getByRole('tab', { name: /Kalendáre/ }))
     expect(await screen.findByText('Zatiaľ nie je pripojený kalendár')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('link', { name: /Kanály/ }))
     expect(await screen.findByRole('heading', { name: 'Kanály' })).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Názov kanála'), {
+    expect(screen.queryByText('Pravidlá umiestnenia')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Vytvoriť nový kanál/ }))
+    const channelDialog = screen.getByRole('dialog', { name: 'Vytvoriť nový kanál' })
+    fireEvent.change(within(channelDialog).getByLabelText('Názov'), {
       target: { value: 'Projekt' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /Vytvoriť kanál/ }))
+    fireEvent.click(within(channelDialog).getByRole('button', { name: /^Vytvoriť kanál/ }))
     expect(await screen.findByText('Dočasná chyba vytvorenia kanála.')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Vytvoriť kanál/ }))
+    fireEvent.click(within(channelDialog).getByRole('button', { name: /^Vytvoriť kanál/ }))
     expect(await screen.findByText('Kanál #projekt bol vytvorený.')).toBeInTheDocument()
     expect(createCalls).toHaveLength(2)
     expect(createCalls[0]?.idempotency_key).toBe(createCalls[1]?.idempotency_key)

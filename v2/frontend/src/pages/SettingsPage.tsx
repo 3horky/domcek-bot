@@ -1,9 +1,11 @@
 import {
   Archive,
+  ArrowRight,
   CalendarDays,
   Check,
   ChevronRight,
   Clock3,
+  FolderArchive,
   LoaderCircle,
   MessageSquareMore,
   Plus,
@@ -11,7 +13,9 @@ import {
   Search,
   Settings2,
   ShieldCheck,
+  Sparkles,
   Users,
+  UsersRound,
   X,
 } from 'lucide-react'
 import {
@@ -69,6 +73,14 @@ import {
 } from '../components/ui/alert-dialog'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Switch } from '../components/ui/switch'
@@ -403,6 +415,30 @@ function PublicationPanel({
             channels={directory.channels}
             onChange={(id) => setDraft({ ...draft, command_channel_id: id })}
           />
+          <div className="settings-placement-block">
+            <div>
+              <strong>Pravidlá umiestnenia</strong>
+              <span>Kam Carlo pridáva nové projektové kanály a kam presúva tie ukončené.</span>
+            </div>
+            <ChannelSelect
+              label="Nové projektové kanály"
+              value={draft.projects_category_id}
+              channels={directory.categories.filter(
+                (category) =>
+                  category.voice_channel_count === 0 && category.id !== draft.archive_category_id,
+              )}
+              onChange={(id) => setDraft({ ...draft, projects_category_id: id })}
+            />
+            <ChannelSelect
+              label="Archivované kanály"
+              value={draft.archive_category_id}
+              channels={directory.categories.filter(
+                (category) =>
+                  category.voice_channel_count === 0 && category.id !== draft.projects_category_id,
+              )}
+              onChange={(id) => setDraft({ ...draft, archive_category_id: id })}
+            />
+          </div>
           <Button className="settings-save" disabled={saving} onClick={() => void save()}>
             {saving ? <LoaderCircle className="spin" /> : <Check />} Uložiť nastavenia
           </Button>
@@ -662,19 +698,17 @@ export function ChannelsPanel({
   directory,
   archives,
   isAdmin,
-  configuration,
-  onConfigurationSaved,
   onArchivesChanged,
   setNotice,
 }: {
   directory: DiscordDirectory
   archives: ArchiveRequest[]
   isAdmin: boolean
-  configuration?: PublicationSettings | null
-  onConfigurationSaved?: (value: PublicationSettings) => Promise<void>
   onArchivesChanged: (value: ArchiveRequest[]) => void
   setNotice: (notice: Notice) => void
 }) {
+  const [createOpen, setCreateOpen] = useState(false)
+  const [archiveOpen, setArchiveOpen] = useState(false)
   const [name, setName] = useState('')
   const [emoji, setEmoji] = useState('🏠')
   const [ownerId, setOwnerId] = useState<string | null>(null)
@@ -684,12 +718,6 @@ export function ChannelsPanel({
   const [archiveChannel, setArchiveChannel] = useState('')
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
-  const [projectsCategoryId, setProjectsCategoryId] = useState(
-    configuration?.projects_category_id ?? '',
-  )
-  const [archiveCategoryId, setArchiveCategoryId] = useState(
-    configuration?.archive_category_id ?? '',
-  )
   const createInFlight = useRef(false)
   const createIdempotencyKey = useRef(crypto.randomUUID())
   const [pendingDecision, setPendingDecision] = useState<{ id: string; approve: boolean } | null>(
@@ -704,7 +732,7 @@ export function ChannelsPanel({
   const defaultCategory = availableCategories.find(
     (category) => category.is_default_project_category,
   )
-  const peopleWithAccess = memberIds.length + 1
+  const selectedCategory = availableCategories.find((category) => category.id === categoryId)
   const archiveCategoryIds = new Set(
     directory.categories.filter((category) => category.is_archive_category).map((item) => item.id),
   )
@@ -730,6 +758,9 @@ export function ChannelsPanel({
       setOwnerId(null)
       setMemberIds([])
       setRoleIds([])
+      setCategoryId('')
+      setEmoji('🏠')
+      setCreateOpen(false)
       createIdempotencyKey.current = crypto.randomUUID()
     } catch (error) {
       setNotice({ kind: 'error', text: message(error) })
@@ -749,6 +780,8 @@ export function ChannelsPanel({
       })
       onArchivesChanged([...archives.filter((item) => item.id !== result.id), result])
       setReason('')
+      setArchiveChannel('')
+      setArchiveOpen(false)
       setNotice({ kind: 'success', text: 'Žiadosť čaká na rozhodnutie Admina.' })
     } catch (error) {
       setNotice({ kind: 'error', text: message(error) })
@@ -786,258 +819,308 @@ export function ChannelsPanel({
       setBusy(false)
     }
   }
-  async function saveCategoryConfiguration() {
-    if (!configuration || !onConfigurationSaved) return
-    setBusy(true)
-    try {
-      const saved = await updatePublicationSettings({
-        ...configuration,
-        projects_category_id: projectsCategoryId || null,
-        archive_category_id: archiveCategoryId || null,
-      })
-      await onConfigurationSaved(saved)
-      setNotice({ kind: 'success', text: 'Kategórie pre projekty a archív sú uložené.' })
-    } catch (error) {
-      setNotice({ kind: 'error', text: message(error) })
-    } finally {
-      setBusy(false)
-    }
-  }
   return (
-    <div className="channel-workspace">
-      <section className="channel-creation-card">
-        <div className="channel-section-heading">
-          <span className="section-icon">
-            <Plus />
+    <div className="channel-home">
+      <section className="channel-action-grid" aria-label="Čo chcete urobiť?">
+        <button
+          type="button"
+          className="channel-action-card primary"
+          onClick={() => setCreateOpen(true)}
+        >
+          <span className="channel-action-icon">
+            <Sparkles />
           </span>
+          <span>
+            <strong>Vytvoriť nový kanál</strong>
+            <small>Pripravte súkromný priestor pre nový projekt alebo tím.</small>
+          </span>
+          <ArrowRight />
+        </button>
+        <button type="button" className="channel-action-card" onClick={() => setArchiveOpen(true)}>
+          <span className="channel-action-icon archive">
+            <FolderArchive />
+          </span>
+          <span>
+            <strong>Archivovať kanál</strong>
+            <small>Ukončite hotový projekt a pošlite žiadosť na schválenie.</small>
+          </span>
+          <ArrowRight />
+        </button>
+      </section>
+
+      <section className="channel-request-board">
+        <div className="channel-request-heading">
           <div>
-            <h2>Nový projektový kanál</h2>
-            <p>Súkromný textový priestor s presne určeným prístupom.</p>
+            <p className="eyebrow">Prehľad</p>
+            <h2>Žiadosti o archiváciu</h2>
+            <p>Tu vidíte iba žiadosti, ktoré ešte potrebujú dokončiť.</p>
+          </div>
+          <div className="channel-request-count">
+            <strong>{archives.length}</strong>
+            <span>{archiveRequestLabel(archives.length)}</span>
           </div>
         </div>
-        {isAdmin && configuration && (
-          <div className="channel-placement-settings">
+        {isAdmin && recoverableArchives.length > 0 && (
+          <div className="archive-recovery-note">
             <div>
-              <strong>Pravidlá umiestnenia</strong>
-              <span>Predvolená cieľová kategória a archív patria k správe kanálov.</span>
+              <RefreshCw />
+              <span>Niektoré schválené archivácie sa nepodarilo dokončiť.</span>
             </div>
-            <Field label="Projektová kategória">
-              <select
-                value={projectsCategoryId}
-                onChange={(event) => setProjectsCategoryId(event.target.value)}
-              >
-                <option value="">Nie je nastavená</option>
-                {directory.categories
-                  .filter(
-                    (category) =>
-                      category.voice_channel_count === 0 && category.id !== archiveCategoryId,
-                  )
-                  .map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-              </select>
-            </Field>
-            <Field label="Archívna kategória">
-              <select
-                value={archiveCategoryId}
-                onChange={(event) => setArchiveCategoryId(event.target.value)}
-              >
-                <option value="">Nie je nastavená</option>
-                {directory.categories
-                  .filter(
-                    (category) =>
-                      category.voice_channel_count === 0 && category.id !== projectsCategoryId,
-                  )
-                  .map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-              </select>
-            </Field>
             <Button
               variant="outline"
-              disabled={busy || !projectsCategoryId || !archiveCategoryId}
-              onClick={() => void saveCategoryConfiguration()}
+              size="sm"
+              disabled={busy}
+              onClick={() => void recoverArchives()}
             >
-              <Check /> Uložiť kategórie
+              Skúsiť dokončiť
             </Button>
           </div>
         )}
-        <div className="channel-basics-grid">
-          <Field label="Kategória">
-            <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
-              <option value="">
-                {defaultCategory ? `Predvolená · ${defaultCategory.name}` : 'Vyberte kategóriu'}
-              </option>
-              {availableCategories
-                .filter((category) => category.id !== defaultCategory?.id)
-                .map((category) => (
-                  <option value={category.id} key={category.id}>
-                    {category.name} · {category.text_channel_count} textových kanálov
-                  </option>
-                ))}
-            </select>
-          </Field>
-          <Field label="Názov kanála">
-            <Input
-              placeholder="nazov-projektu"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
+        <div className="archive-list friendly-archive-list">
+          {archives.length === 0 && (
+            <EmptyState
+              icon={Check}
+              title="Všetko je vybavené"
+              text="Momentálne tu nie je žiadna žiadosť, ktorá čaká na rozhodnutie."
             />
-          </Field>
-          <Field label="Emoji v názve">
-            <Input
-              value={emoji}
-              maxLength={16}
-              onChange={(event) => setEmoji(event.target.value)}
-            />
-          </Field>
-        </div>
-        {availableCategories.length === 0 && (
-          <div className="category-note">
-            <MessageSquareMore />
-            <span>
-              Nenašla sa žiadna vhodná textová kategória. Archív a kategórie s hlasovými kanálmi
-              Carlo zámerne neponúka.
-            </span>
-          </div>
-        )}
-        <div className="access-builder">
-          <MemberPicker
-            label="Zodpovedná osoba"
-            description="Ak nikoho nevyberiete, zodpovednou osobou budete vy."
-            value={ownerId ? [ownerId] : []}
-            multiple={false}
-            emptyLabel="Vy – používateľ, ktorý kanál vytvára"
-            onChange={(ids) => {
-              const nextOwner = ids[0] ?? null
-              setOwnerId(nextOwner)
-              if (nextOwner) setMemberIds((current) => current.filter((id) => id !== nextOwner))
-            }}
-          />
-          <MemberPicker
-            label="Ďalší ľudia s prístupom"
-            description="Výsledky sa zobrazujú automaticky počas písania."
-            value={memberIds}
-            excludedIds={ownerId ? [ownerId] : []}
-            onChange={setMemberIds}
-          />
-          <RolePicker roles={directory.roles} value={roleIds} onChange={setRoleIds} />
-        </div>
-        <div className="channel-create-footer">
-          <div className="permission-preview">
-            <ShieldCheck />
-            <div>
-              <strong>Súkromný kanál</strong>
-              <span>
-                @everyone ho neuvidí · {peopleWithAccess} {peopleWord(peopleWithAccess)} ·{' '}
-                {roleIds.length} {roleWord(roleIds.length)}
+          )}
+          {archives.map((item) => (
+            <article className={`archive-row state-${item.state}`} key={item.id}>
+              <span className="archive-state-mark">
+                <Archive />
               </span>
-            </div>
-          </div>
-          <Button
-            disabled={busy || !name.trim() || !emoji.trim() || (!categoryId && !defaultCategory)}
-            onClick={() => void create()}
-          >
-            {busy ? <LoaderCircle className="spin" /> : <Plus />} Vytvoriť kanál
-          </Button>
+              <div>
+                <div className="archive-row-title">
+                  <strong>#{item.original_channel_name}</strong>
+                  <Badge variant="secondary">
+                    {item.state === 'pending'
+                      ? 'Čaká na schválenie'
+                      : item.state === 'archiving'
+                        ? 'Dokončuje sa'
+                        : 'Vyžaduje pozornosť'}
+                  </Badge>
+                </div>
+                <span>{item.reason}</span>
+                {item.state === 'pending' && (
+                  <small>Žiadosť platí do {dateTime(item.expires_at)}</small>
+                )}
+              </div>
+              {isAdmin && item.state === 'pending' && (
+                <div className="archive-row-actions">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPendingDecision({ id: item.id, approve: false })}
+                  >
+                    Zamietnuť
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setPendingDecision({ id: item.id, approve: true })}
+                  >
+                    Schváliť
+                  </Button>
+                </div>
+              )}
+            </article>
+          ))}
         </div>
       </section>
 
-      <section className="archive-workspace">
-        <div className="channel-section-heading archive-heading">
-          <span className="section-icon archive">
-            <Archive />
-          </span>
-          <div>
-            <h2>Archivácia kanálov</h2>
-            <p>Nová žiadosť aj rozhodnutia sú spolu v jednom plnohodnotnom pracovnom priestore.</p>
+      <Dialog open={createOpen} onOpenChange={(open) => !busy && setCreateOpen(open)}>
+        <DialogContent className="channel-dialog" showCloseButton={!busy}>
+          <DialogHeader className="channel-dialog-header">
+            <span className="channel-dialog-icon">
+              <Plus />
+            </span>
+            <div>
+              <DialogTitle>Vytvoriť nový kanál</DialogTitle>
+              <DialogDescription>
+                Stačí názov. Ľudí a skupiny môžete pridať podľa potreby.
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          <div className="channel-dialog-body">
+            <section className="channel-dialog-section">
+              <div className="channel-dialog-section-title">
+                <span>1</span>
+                <div>
+                  <strong>Ako sa má kanál volať?</strong>
+                  <small>Vyberte symbol a napíšte zrozumiteľný názov.</small>
+                </div>
+              </div>
+              <div className="channel-name-builder">
+                <div className="emoji-choice-grid" aria-label="Symbol kanála">
+                  {['🏠', '🎨', '🌱', '🎭', '🛠️', '📚', '🎵'].map((option) => (
+                    <button
+                      type="button"
+                      key={option}
+                      className={emoji === option ? 'selected' : ''}
+                      aria-label={`Použiť ${option}`}
+                      aria-pressed={emoji === option}
+                      onClick={() => setEmoji(option)}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+                <Field label="Názov">
+                  <Input
+                    placeholder="napríklad letný tábor"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    autoFocus
+                  />
+                </Field>
+              </div>
+              <details className="channel-optional-control">
+                <summary>Použiť iný symbol</summary>
+                <Field label="Vlastný symbol">
+                  <Input
+                    value={emoji}
+                    maxLength={16}
+                    onChange={(event) => setEmoji(event.target.value)}
+                  />
+                </Field>
+              </details>
+              <div
+                className={`channel-location-note ${defaultCategory || selectedCategory ? '' : 'warning'}`}
+              >
+                <MessageSquareMore />
+                <span>
+                  {selectedCategory
+                    ? `Kanál bude zaradený do časti „${selectedCategory.name}“.`
+                    : defaultCategory
+                      ? `Carlo ho zaradí do časti „${defaultCategory.name}“.`
+                      : 'Najprv vyberte miesto pre nové projektové kanály v Nastaveniach.'}
+                </span>
+                {!defaultCategory && !selectedCategory && (
+                  <a href="/nastavenia">Otvoriť Nastavenia</a>
+                )}
+              </div>
+              {availableCategories.length > 1 && (
+                <details className="channel-optional-control">
+                  <summary>Zmeniť umiestnenie</summary>
+                  <Field label="Časť servera">
+                    <select
+                      value={categoryId}
+                      onChange={(event) => setCategoryId(event.target.value)}
+                    >
+                      <option value="">
+                        {defaultCategory
+                          ? `Predvolené · ${defaultCategory.name}`
+                          : 'Vyberte miesto'}
+                      </option>
+                      {availableCategories
+                        .filter((category) => category.id !== defaultCategory?.id)
+                        .map((category) => (
+                          <option value={category.id} key={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
+                </details>
+              )}
+            </section>
+
+            <section className="channel-dialog-section">
+              <div className="channel-dialog-section-title">
+                <span>2</span>
+                <div>
+                  <strong>Kto má mať prístup?</strong>
+                  <small>Kanál bude súkromný. Vyberte iba ľudí, ktorí ho potrebujú.</small>
+                </div>
+              </div>
+              <div className="channel-access-stack">
+                <MemberPicker
+                  label="Kto bude kanál viesť?"
+                  description="Ak nikoho nevyberiete, budete to vy."
+                  value={ownerId ? [ownerId] : []}
+                  multiple={false}
+                  emptyLabel="Kanál budete viesť vy"
+                  onChange={(ids) => {
+                    const nextOwner = ids[0] ?? null
+                    setOwnerId(nextOwner)
+                    if (nextOwner)
+                      setMemberIds((current) => current.filter((id) => id !== nextOwner))
+                  }}
+                />
+                <MemberPicker
+                  label="Koho chcete pridať?"
+                  description="Píšte meno a vyberte ľudí zo zoznamu."
+                  value={memberIds}
+                  excludedIds={ownerId ? [ownerId] : []}
+                  onChange={setMemberIds}
+                />
+                <details className="channel-optional-control access-groups">
+                  <summary>
+                    <UsersRound /> Pridať celú skupinu
+                  </summary>
+                  <RolePicker roles={directory.roles} value={roleIds} onChange={setRoleIds} />
+                </details>
+              </div>
+            </section>
           </div>
-          {isAdmin && recoverableArchives.length > 0 && (
-            <Button variant="outline" disabled={busy} onClick={() => void recoverArchives()}>
-              <RefreshCw /> Obnoviť rozpracované ({recoverableArchives.length})
+          <DialogFooter className="channel-dialog-footer">
+            <Button variant="outline" disabled={busy} onClick={() => setCreateOpen(false)}>
+              Zrušiť
             </Button>
-          )}
-        </div>
-        <div className="archive-layout">
-          <div className="archive-request-form">
-            <h3>Nová žiadosť</h3>
+            <Button
+              disabled={busy || !name.trim() || !emoji.trim() || (!categoryId && !defaultCategory)}
+              onClick={() => void create()}
+            >
+              {busy ? <LoaderCircle className="spin" /> : <Plus />} Vytvoriť kanál
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={archiveOpen} onOpenChange={(open) => !busy && setArchiveOpen(open)}>
+        <DialogContent className="channel-dialog archive-dialog" showCloseButton={!busy}>
+          <DialogHeader className="channel-dialog-header">
+            <span className="channel-dialog-icon archive">
+              <FolderArchive />
+            </span>
+            <div>
+              <DialogTitle>Archivovať kanál</DialogTitle>
+              <DialogDescription>
+                Hotový projekt sa po schválení presunie do archívu.
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          <div className="channel-dialog-body compact">
             <ChannelSelect
-              label="Kanál"
+              label="Ktorý kanál chcete archivovať?"
               value={archiveChannel || null}
               channels={archivableChannels}
               onChange={(id) => setArchiveChannel(id ?? '')}
             />
-            <Field label="Dôvod">
+            <Field label="Prečo sa kanál archivuje?">
               <Textarea
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
-                placeholder="Prečo sa projekt uzatvára?"
+                placeholder="Napríklad: projekt je dokončený"
               />
             </Field>
+            <div className="archive-explanation">
+              <ShieldCheck />
+              <span>Žiadosť najprv skontroluje Admin. Dovtedy sa v kanáli nič nezmení.</span>
+            </div>
+          </div>
+          <DialogFooter className="channel-dialog-footer">
+            <Button variant="outline" disabled={busy} onClick={() => setArchiveOpen(false)}>
+              Zrušiť
+            </Button>
             <Button
-              variant="outline"
               disabled={busy || !archiveChannel || reason.trim().length < 3}
               onClick={() => void requestArchive()}
             >
-              <Archive /> Odoslať žiadosť
+              {busy ? <LoaderCircle className="spin" /> : <Archive />} Odoslať žiadosť
             </Button>
-          </div>
-          <div className="archive-queue">
-            <div className="archive-queue-heading">
-              <h3>Otvorené žiadosti</h3>
-              <Badge variant="secondary">{archives.length}</Badge>
-            </div>
-            <div className="archive-list">
-              {archives.length === 0 && (
-                <EmptyState
-                  icon={Archive}
-                  title="Nič nečaká na rozhodnutie"
-                  text="Nová žiadosť sa zobrazí tu aj v kanáli moderátorov."
-                />
-              )}
-              {archives.map((item) => (
-                <article className={`archive-row state-${item.state}`} key={item.id}>
-                  <span className="archive-state-mark">
-                    <Archive />
-                  </span>
-                  <div>
-                    <strong>#{item.original_channel_name}</strong>
-                    <span>{item.reason}</span>
-                    <small>
-                      {item.state === 'pending'
-                        ? `Čaká na rozhodnutie · platí do ${dateTime(item.expires_at)}`
-                        : item.state === 'archiving'
-                          ? 'Schválené · čaká na bezpečné dokončenie'
-                          : 'Predchádzajúci pokus zlyhal · možno ho obnoviť'}
-                    </small>
-                  </div>
-                  {isAdmin && item.state === 'pending' && (
-                    <div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPendingDecision({ id: item.id, approve: false })}
-                      >
-                        Zamietnuť
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => setPendingDecision({ id: item.id, approve: true })}
-                      >
-                        Schváliť
-                      </Button>
-                    </div>
-                  )}
-                </article>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <AlertDialog
         open={pendingDecision !== null}
         onOpenChange={(open) => {
@@ -1669,10 +1752,8 @@ function nextPublicationLabel(settings: PublicationSettings) {
   }).format(target)
 }
 
-function peopleWord(count: number) {
-  return count === 1 ? 'človek' : count < 5 ? 'ľudia' : 'ľudí'
-}
-
-function roleWord(count: number) {
-  return count === 1 ? 'rola' : count > 1 && count < 5 ? 'roly' : 'rolí'
+function archiveRequestLabel(count: number) {
+  if (count === 1) return 'otvorená žiadosť'
+  if (count > 1 && count < 5) return 'otvorené žiadosti'
+  return 'otvorených žiadostí'
 }

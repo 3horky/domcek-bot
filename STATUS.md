@@ -6,7 +6,7 @@
 
 - **Posledná aktualizácia:** 11. august 2026
 - **Celkový stav:** E0–E11 sú implementované a auditované; aktuálna regresia má 190 úspešných backendových testov a 1 opt-in skip, 13 frontendových testov, 34 desktop/mobile browser scenárov a 2 full-stack browser scenáre. Shadow runtime, praktická obnova aktuálneho databázového snapshotu, exact-source backend image a vzdialený CI run `31470687960` sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
-- **Aktuálna etapa:** E12 – popri otvorenom externom staging/UAT kroku bol dokončený následný produktový overhaul E9 administrácie kanálov, rolí a reakcií; režim `live` zostáva zakázaný
+- **Aktuálna etapa:** E12 – popri otvorenom externom staging/UAT kroku prebieha používateľsky validovaný produktový polish E9 administrácie; stránka Kanály bola druhýkrát prepracovaná na jednoduché úlohové rozhranie a režim `live` zostáva zakázaný
 - **Najbližší kontrolný bod:** pripraviť produkčne podobný HTTPS staging a vykonať/podpísať Admin, Team Mod, SDB/FMA, desktop/tablet/mobile/200 %/keyboard UAT podľa `docs/e12/KROKY_PRE_POUZIVATELA.md`; vyžaduje staging host/doménu a reálnych testerov. Režim `live` zostáva zakázaný
 - **Produkčný runtime:** pôvodný bot; jeho existujúci aplikačný kód nebol pri príprave zadania a plánu zmenený
 - **Nový runtime Carlo:** úplný auditovaný build API, Discord procesu, workera, frontendu a PostgreSQL beží lokálne pod `v2/` výhradne v režime `shadow`
@@ -62,15 +62,17 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 - Web má byť moderný, elegantný, responzívny a ľahko čitateľný.
 - Bot a jeho webová administrácia sa používateľsky volajú **Carlo**.
 - Kalendárové, manuálne a INFO oznamy sa spravujú v jednom spoločnom Redakčnom pulte s trvalo dostupným Discord náhľadom, nie na troch samostatných pracoviskách.
-- Nastavenia obsahujú iba publikovanie a Google kalendáre. Kanály, roly a automatické reakcie majú samostatné pracovné stránky v sekcii Správa servera.
+- Nastavenia obsahujú iba publikovanie vrátane pravidiel umiestnenia kanálov a Google kalendáre. Vytváranie/archivácia kanálov, roly a automatické reakcie majú samostatné pracovné stránky v sekcii Správa servera.
 - Výber ľudí na Discorde je priebežný počas písania, zobrazuje identitu a avatar a nevyžaduje samostatné tlačidlo Hľadať. Viacnásobné výbery ľudí, rolí a kanálov musia mať jednoznačný návrat na nulový výber.
 - Nový projektový kanál nemožno vytvoriť v archívnej kategórii ani v kategórii s hlasovými kanálmi; pravidlo vynucuje web aj serverová aplikačná vrstva.
 
 ### Následný E9 produktový overhaul správy servera
 
 - Navigácia dostala samostatnú sekciu `Správa servera` s routami `/kanaly`, `/roly`, `/reakcie` a `/nastavenia`; pôvodné karty Kanály, Roly a Reakcie boli z Nastavení odstránené.
-- `/nastavenia` obsahuje už iba záložky Publikovanie a Kalendáre. Konfigurácia predvolenej projektovej a archívnej kategórie sa presunula priamo do pracoviska Kanály.
-- `/kanaly` využíva široký responzívny pracovný panel. Tvorba kanála obsahuje oddelené základné údaje, zodpovednú osobu, ďalších ľudí, roly a čitateľný súhrn súkromného prístupu; archivácia má rovnocenný plnohodnotný blok s novou žiadosťou a radom otvorených rozhodnutí.
+- `/nastavenia` obsahuje už iba záložky Publikovanie a Kalendáre. Na základe používateľskej validácie sú v publikačných nastaveniach aj `Pravidlá umiestnenia`: zrozumiteľná voľba časti pre nové projektové kanály a archív.
+- Prvá verzia širokého kanálového pracoviska bola funkčná, ale pri používateľskej validácii odmietnutá ako príliš technická a komplikovaná. Aktuálna `/kanaly` už neukazuje trvalo otvorený formulár ani interné pravidlá kategórií: ponúka dve hlavné úlohy `Vytvoriť nový kanál` a `Archivovať kanál` a čistý prehľad nedokončených archivačných žiadostí.
+- Obe hlavné úlohy sa otvárajú v centrovanom responzívnom modale. Tvorba kanála používa bežný jazyk, výber symbolu, jediný povinný názov a postupné odhaľovanie voliteľnej zmeny umiestnenia či pridania celej skupiny; predvolené umiestnenie vysvetľuje jednou vetou. Archivácia žiada iba kanál a dôvod a jasne vysvetľuje, že do schválenia sa nič nemení.
+- Mobilný modal má vlastné rolovanie obsahu a stále dostupné akcie bez odrezania spodnej časti. Desktopový a mobilný render hlavnej stránky aj formulára bol vizuálne skontrolovaný po reálnom vykreslení v Chromium.
 - Vznikli spoločné ovládacie prvky pre ľudí, roly a kanály. Vyhľadávanie členov je debounceované a ruší zastarané requesty, výsledky ukazujú avatar, zobrazované meno a Discord meno; zvolené položky sú čipy odstrániteľné jednotlivo aj akciou `Zrušiť výber`.
 - Roly sa už nevyberajú natívnym viacnásobným selectom s Ctrl/Cmd. Používateľ ich filtruje, pridáva a môže výber bezpečne vyčistiť na nulu. Rovnaký model sa používa pri viacnásobnom výbere kanálov pre automatické reakcie.
 - Discord directory kontrakt obsahuje počty textových a hlasových kanálov v kategórii a príznaky predvolenej projektovej/archívnej kategórie. Web archív a voice kategórie pri tvorbe neponúka.
@@ -79,6 +81,8 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 - Lokálny Compose runtime bol po tomto reze rebuildnutý. Migrácia skončila s kódom 0, PostgreSQL/API/bot/worker sú healthy, frontend aj readiness odpovedajú HTTP 200 a worker má znovu explicitne potvrdený režim `shadow`.
 - Prvý vzdialený CI run tohto rezu `31470255011` potvrdil zelený backend a repository-safety, no frontend zastavil na Prettier checku dvoch súborov upravených po poslednom lokálnom formátovaní. Ide o čisto mechanický rozdiel bez zmeny správania; oba súbory boli preformátované a pred opravným pushom sa opakuje kompletný frontendový check.
 - Opravný vzdialený CI run `31470687960` nad commitom `10cd7f8a5d159d364735197eed0668fc6abf4fde` prešiel celý úspešne vrátane backendu, frontendového formátu/lintu/typov/testov, desktop/mobile browser E2E, full-stack E2E, produkčných image buildov a repository-safety.
+- Druhá UI revízia Kanálov prešla Prettierom, ESLintom, TypeScript kontrolou, produkčným buildom, všetkými 13 Vitest testami, 34/34 desktop/mobile Playwright scenármi a 2/2 desktop/mobile full-stack scenármi. Testy overujú aj to, že pravidlá umiestnenia sú v Nastaveniach a nie na stránke Kanály, modálny tok, bezpečné skrytie archívnej/voice kategórie, živé vyhľadanie človeka a návrat skupinového výberu na nulu. Vzdialený CI sa zaznamená po pushnutí tohto pracovného rezu.
+- Lokálny Compose po druhej UI revízii zostal zdravý: PostgreSQL, API, bot a worker hlásia `healthy`, frontendová route `/kanaly` odpovedá HTTP 200 a worker má explicitne potvrdený režim `shadow`.
 
 ### Implementačný plán
 
@@ -161,7 +165,7 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 | E6 | Webová administrácia | dokončená | Používateľ prijal aktuálny Redakčný pult; ďalší vizuálny a accessibility polish je priebežná QA a neblokuje E7 |
 | E7 | Publikačný engine a plánovač | dokončená | Brána splnená; snapshot, publisher, retry/recovery, scheduler, ručný trigger a dvoj-worker ochrana sú overené |
 | E8 | Discord príkazy a interakcie | dokončená | Brána je splnená: štyri staging príkazy, bezpečné ephemeral flow, idempotentný publish/kanál a jednorazová persistentná archivácia sú overené |
-| E9 | Webová správa kanálov, rolí a reakcií | dokončená | Samostatné responzívne pracoviská Kanály/Roly/Reakcie, živé avatarové vyhľadávanie, nulovateľné multi-pickery, rovnocenná archivácia a serverový zákaz archívnych/voice cieľov sú overené |
+| E9 | Webová správa kanálov, rolí a reakcií | dokončená, produktový polish | Kanály majú jednoduché úlohové rozhranie a modaly, pravidlá umiestnenia sú v Nastaveniach; živé avatarové vyhľadávanie, nulovateľné výbery a serverový zákaz archívnych/voice cieľov zostávajú zachované |
 | E10 | Migrácia údajov | dokončená | Read-only inventarizácia, deterministické reporty a dve čisté idempotentné PostgreSQL skúšky sú overené |
 | E11 | Komplexné testovanie a hardening | automatizovane dokončená | Gateway heartbeat oprava, 188 testov, runtime reconnect, current-head restore, exact-source image, full-stack browser aj vzdialený CI sú zelené |
 | E12 | Staging, tieňová prevádzka a akceptácia | rozpracovaná, externý vstup | Dvojcyklový rehearsal aj vzdialený CI sú splnené; čaká produkčne podobné HTTPS a podpísaný rolový/responzívny UAT |
