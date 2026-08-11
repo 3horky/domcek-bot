@@ -5,7 +5,7 @@
 ## Základné údaje
 
 - **Posledná aktualizácia:** 11. august 2026
-- **Celkový stav:** E0–E11 sú implementované a auditované; aktuálna regresia má 190 úspešných backendových testov a 1 opt-in skip, 13 frontendových testov, 34 desktop/mobile browser scenárov a 2 full-stack browser scenáre. Shadow runtime, praktická obnova aktuálneho databázového snapshotu, exact-source backend image a vzdialený CI run `31463238397` sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
+- **Celkový stav:** E0–E11 sú implementované a auditované; aktuálna regresia má 190 úspešných backendových testov a 1 opt-in skip, 13 frontendových testov, 34 desktop/mobile browser scenárov a 2 full-stack browser scenáre. Shadow runtime, praktická obnova aktuálneho databázového snapshotu, exact-source backend image a vzdialený CI run `31470687960` sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
 - **Aktuálna etapa:** E12 – popri otvorenom externom staging/UAT kroku bol dokončený následný produktový overhaul E9 administrácie kanálov, rolí a reakcií; režim `live` zostáva zakázaný
 - **Najbližší kontrolný bod:** pripraviť produkčne podobný HTTPS staging a vykonať/podpísať Admin, Team Mod, SDB/FMA, desktop/tablet/mobile/200 %/keyboard UAT podľa `docs/e12/KROKY_PRE_POUZIVATELA.md`; vyžaduje staging host/doménu a reálnych testerov. Režim `live` zostáva zakázaný
 - **Produkčný runtime:** pôvodný bot; jeho existujúci aplikačný kód nebol pri príprave zadania a plánu zmenený
@@ -78,6 +78,7 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 - Regresia tohto rezu: Ruff a mypy sú čisté; 190 backendových testov prešlo a 1 opt-in Google live test bol preskočený; frontendový Prettier, ESLint, TypeScript, 13 Vitest testov a produkčný build prešli; Playwright prešiel 34/34 desktop/mobile scenárov a 2/2 full-stack scenáre. Scenár nového kanála explicitne overuje skrytie archívu/voice kategórie, živé vyhľadanie člena, výber a úplné vyčistenie role a presné odoslané ID.
 - Lokálny Compose runtime bol po tomto reze rebuildnutý. Migrácia skončila s kódom 0, PostgreSQL/API/bot/worker sú healthy, frontend aj readiness odpovedajú HTTP 200 a worker má znovu explicitne potvrdený režim `shadow`.
 - Prvý vzdialený CI run tohto rezu `31470255011` potvrdil zelený backend a repository-safety, no frontend zastavil na Prettier checku dvoch súborov upravených po poslednom lokálnom formátovaní. Ide o čisto mechanický rozdiel bez zmeny správania; oba súbory boli preformátované a pred opravným pushom sa opakuje kompletný frontendový check.
+- Opravný vzdialený CI run `31470687960` nad commitom `10cd7f8a5d159d364735197eed0668fc6abf4fde` prešiel celý úspešne vrátane backendu, frontendového formátu/lintu/typov/testov, desktop/mobile browser E2E, full-stack E2E, produkčných image buildov a repository-safety.
 
 ### Implementačný plán
 
