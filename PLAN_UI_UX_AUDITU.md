@@ -497,3 +497,52 @@ Po schválení plánu sa začne UX0 v minimálnom rozsahu a bezprostredne UX1 �
 7. pokračovať na UX2 – Roly a UX3 – Nastavenia.
 
 Prvý implementačný krok nesmie začať plošným prepisovaním CSS. Začne dôkazom problému, cieľovým tokom a akceptačnými kritériami.
+
+## 20. Autonómny priechod UX0–UX10
+
+### 20.1 Prevádzkový režim
+
+Etapy UX0 až UX10 sa vykonajú bez priebežného vyžadovania používateľských rozhodnutí. Agent používa v tomto poradí:
+
+1. explicitné produktové rozhodnutia v `ZADANIE.md`,
+2. celý `UI_UX_DESTILAT.md` a príslušné celé kapitoly `UI_UX_STANDARDY.md`,
+3. existujúce prijaté správanie a spoločné komponenty,
+4. najbezpečnejší vratný predpoklad s najmenším rozsahom.
+
+Neistota, ktorá nebráni bezpečnej implementácii, sa zapíše do `docs/ui-ux/ODLOZENE_ROZHODNUTIA.md` s odporúčaním a pokračuje sa ďalej. Otázky sa zoskupia až do záverečného odovzdania. Neprítomnosť používateľa nie je dôvodom zastaviť inú nezávislú etapu.
+
+### 20.2 Jediná výnimka pre okamžitú otázku
+
+Otázka sa položí okamžite iba vtedy, ak súčasne platí, že:
+
+- odpoveď nemožno odvodiť z autoritatívnych dokumentov ani existujúceho prijatého správania,
+- bezpečný vratný variant neexistuje,
+- odklad by zablokoval všetku ďalšiu zmysluplnú prácu,
+- nesprávny predpoklad by mohol spôsobiť stratu dát, nezvratný externý účinok, porušenie oprávnení alebo zásadnú zmenu produktového významu.
+
+Ak je blokovaná iba jedna vetva, označí sa a pokračuje sa ostatnými etapami. Produkčný režim `live`, reálne publikovanie, mazanie existujúcich dát, cutover ani zmena externých oprávnení nie sú týmto autonómnym režimom autorizované.
+
+### 20.3 Uzavretý cyklus každej etapy
+
+Každá etapa vykoná bez preskakovania:
+
+1. načítanie povinných pravidiel a inventarizáciu route, úloh, rolí a stavov,
+2. baseline skutočného renderu a existujúcich automatických testov,
+3. zápis nálezov s ID, dôkazom, P0/P1/P2, **[BLOKUJE]** alebo **[BACKLOG]** a mechanizmom vynútenia,
+4. návrh najmenšieho uceleného cieľového toku,
+5. implementáciu vrátane potrebného backend kontraktu a systémových stavov,
+6. cielené testy, celý relevantný frontend/backend suite a renderovanú kontrolu,
+7. aktualizáciu auditnej matice, odložených rozhodnutí a `STATUS.md`,
+8. samostatný commit, push na `origin/main` a overenie vzdialeného CI pred prechodom na ďalšiu etapu.
+
+Neúspešná kontrola sa opravuje v tej istej etape. Existujúci **[BACKLOG]** sa smie preniesť iba s konkrétnou cieľovou etapou; nový alebo zhoršený bod **[BLOKUJE]** sa neprenáša.
+
+### 20.4 Nočná kontinuita a záverečné odovzdanie
+
+Autoritatívny priebežný stav je vždy v `STATUS.md` a `docs/ui-ux/AUDIT_MATICA.md`. Po kompaktovaní kontextu sa najprv načítajú tieto dva súbory, destilát a aktuálna etapa tohto plánu. Záver obsahuje:
+
+- výsledok každej etapy UX0–UX10 a odkazy na dôkazy,
+- zoznam commitov a CI behov,
+- všetky zostávajúce **[BACKLOG]** body,
+- jediný zoskupený zoznam odložených otázok,
+- jasné oddelenie automaticky overeného výsledku od ľudského pozorovania alebo produkčného kroku, ktorý agent nemôže pravdivo predstierať.

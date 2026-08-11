@@ -6,8 +6,8 @@
 
 - **Posledná aktualizácia:** 12. august 2026
 - **Celkový stav:** E0–E11 sú implementované a auditované; aktuálna lokálna regresia má 192 úspešných backendových testov a 1 opt-in skip, 13 frontendových testov, 34 desktop/mobile browser scenárov a 2 full-stack browser scenáre. Shadow runtime, praktická obnova aktuálneho databázového snapshotu, exact-source backend image a vzdialený CI run `31544640803` sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
-- **Aktuálna etapa:** E12 – popri otvorenom externom staging/UAT kroku je pripravený systematický UI/UX audit celej administrácie; jeho štandard bol doplnený o priority dodania, vynucovanie, prvé spustenie, ochrannú lehotu, bezpečné Undo a obnovu formulárov. Automatické vynucovacie mechanizmy sú iba naplánované, nie implementované; režim `live` zostáva zakázaný
-- **Najbližší kontrolný bod:** pripraviť produkčne podobný HTTPS staging a vykonať/podpísať Admin, Team Mod, SDB/FMA, desktop/tablet/mobile/200 %/keyboard UAT podľa `docs/e12/KROKY_PRE_POUZIVATELA.md`; vyžaduje staging host/doménu a reálnych testerov. Režim `live` zostáva zakázaný
+- **Aktuálna etapa:** E12 zostáva externe otvorená; paralelne prebieha autonómny nočný UI/UX priechod UX0–UX10 bez priebežných otázok. UX0 pripravuje auditnú maticu, fixtures a automatické vynucovanie; režim `live` zostáva zakázaný
+- **Najbližší kontrolný bod:** uzavrieť UX0 s auditnou infraštruktúrou a zelenou regresiou, potom bez čakania pokračovať UX1 Reakcie → UX2 Roly → UX3 Nastavenia až po UX10. Produkčne podobný HTTPS staging a podpísaný ľudský UAT zostávajú odložené externé dôkazy
 - **Produkčný runtime:** pôvodný bot; jeho existujúci aplikačný kód nebol pri príprave zadania a plánu zmenený
 - **Nový runtime Carlo:** úplný auditovaný build API, Discord procesu, workera, frontendu a PostgreSQL beží lokálne pod `v2/` výhradne v režime `shadow`
 - **Orientačný postup implementácie:** 12 z 15 etáp lokálne dokončených; E12 je otvorená a E13–E14 sú pripravené, ale blokované
@@ -82,6 +82,14 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 - Nedoručenie ochrannej DM publikovanie nezablokuje, ale musí vytvoriť moderátorské upozornenie. Prechod na zastavenie alebo verejné publikovanie musí byť atómový, idempotentný a bezpečný po reštarte. Toto správanie je zatiaľ iba zapísané v zadaní, štandarde, auditnom a implementačnom pláne; runtime ho ešte neimplementuje.
 - Vytvorenie kanála, archivácia a zmena roly majú mať časovo neobmedzené, ale stavovo bezpečné Undo. Presný návrat sa vykoná iba pri nezmenenom relevantnom stave a čerstvom oprávnení; zmenený alebo neprázdny nový kanál sa namiesto odstránenia bezpečne archivuje. Aj toto je zatiaľ špecifikácia, nie implementovaný runtime.
 - Prvé spustenie vedie správcu v poradí Discord miesta → voliteľný Google kalendár → harmonogram → kanonický náhľad; Carlo môže fungovať bez kalendára. Primárny profil je zatiaľ desktop/notebook s referenčnou šírkou 1440 px a pred väčším UI vydaním vykoná vlastník pevný 20–30-minútový pozorovací scenár.
+- Používateľ autorizoval autonómny priechod všetkých etáp UX0–UX10 bez priebežných otázok. Bezpečne odložiteľné otázky sa zhromažďujú do `docs/ui-ux/ODLOZENE_ROZHODNUTIA.md` a predložia až na konci; okamžitá otázka je prípustná iba pri neodvoditeľnom, nevratnom riziku, ktoré blokuje všetku ďalšiu prácu.
+- Autonómny režim neautorizuje produkčný `live`, reálne publikovanie, cutover, mazanie existujúcich dát ani zmeny externých oprávnení. Zablokovaná jednotlivá vetva nesmie zastaviť nezávislé etapy.
+
+### Autonómny UI/UX priechod UX0–UX10
+
+- Kapitola 20 `PLAN_UI_UX_AUDITU.md` definuje rozhodovaciu hierarchiu, jedinú výnimku pre okamžitú otázku, uzavretý osemkrokový cyklus každej etapy, commit/CI bránu a kontinuitu po kompaktovaní.
+- Vznikol pracovný checkpoint `docs/ui-ux/AUTONOMNY_PRIECHOD.md`, auditná evidencia `docs/ui-ux/AUDIT_MATICA.md` a front odložených otázok `docs/ui-ux/ODLOZENE_ROZHODNUTIA.md`.
+- UX0 je rozpracovaná. Zatiaľ nevznikla implementačná zmena ani tvrdenie o splnení jej kontrolnej brány.
 
 ### Následný E9 produktový overhaul správy servera
 
