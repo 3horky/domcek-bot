@@ -5,7 +5,7 @@
 ## Základné údaje
 
 - **Posledná aktualizácia:** 11. august 2026
-- **Celkový stav:** E0–E11 sú implementované a auditované; aktuálna regresia má 190 úspešných backendových testov a 1 opt-in skip, 13 frontendových testov, 34 desktop/mobile browser scenárov a 2 full-stack browser scenáre. Shadow runtime, praktická obnova aktuálneho databázového snapshotu, exact-source backend image a vzdialený CI run `31514820355` sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
+- **Celkový stav:** E0–E11 sú implementované a auditované; aktuálna regresia má 190 úspešných backendových testov a 1 opt-in skip, 13 frontendových testov, 34 desktop/mobile browser scenárov a 2 full-stack browser scenáre. Shadow runtime, praktická obnova aktuálneho databázového snapshotu, exact-source backend image a vzdialený CI run `31517641597` sú zelené. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
 - **Aktuálna etapa:** E12 – popri otvorenom externom staging/UAT kroku prebieha používateľsky validovaný produktový polish E9 administrácie; stránka Kanály bola druhýkrát prepracovaná na jednoduché úlohové rozhranie a režim `live` zostáva zakázaný
 - **Najbližší kontrolný bod:** pripraviť produkčne podobný HTTPS staging a vykonať/podpísať Admin, Team Mod, SDB/FMA, desktop/tablet/mobile/200 %/keyboard UAT podľa `docs/e12/KROKY_PRE_POUZIVATELA.md`; vyžaduje staging host/doménu a reálnych testerov. Režim `live` zostáva zakázaný
 - **Produkčný runtime:** pôvodný bot; jeho existujúci aplikačný kód nebol pri príprave zadania a plánu zmenený
@@ -89,6 +89,7 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 - Výber vedúcich podporuje viac osôb; prvá sa posiela ako vlastník a ďalší vedúci dostanú rovnaký individuálny prístup. Po výbere aj odstránení človeka sa dopyt a výsledky vyčistia a fokus sa vráti do príslušného vyhľadávania. Pilly majú rozmery zosúladené s avatarom. Rozbalenie skupín dostalo zreteľnú rotujúcu šípku a vnútorný blok s vlastným paddingom a okrajom.
 - Kanálové modaly majú explicitný návrat fokusu na správne otváracie tlačidlo. Skip link sa vizuálne odhaľuje iba cez `:focus-visible`, takže po zatvorení modalu už nemôže zostať nechcene zobrazené `Preskočiť na obsah`; legitímny klávesnicový skip tok zostáva zachovaný.
 - Tretia UI revízia prešla Prettierom, ESLintom, TypeScript kontrolou, produkčným buildom, 13/13 Vitest testami, 34/34 desktop/mobile Playwright scenármi a 2/2 desktop/mobile full-stack scenármi. Browser scenár overuje normalizáciu `Letný Tábor 2026!` → `letny-tabor-2026`, automatický návrh `⛺`, ručný emoji picker a návrat na automatiku, vyčistenie a fokus oboch výberov ľudí, odstránenie pillu, nulovanie skupín a návrat fokusu po zatvorení modalu. Desktopový aj mobilný render emoji popoveru, pillu a otvorenej skupinovej sekcie bol vizuálne skontrolovaný.
+- Kódový commit tretej revízie `4b302aab630eb98e4d62e3354b77a9e147ff7609` je na `origin/main`; GitHub Actions run `31517641597` prešiel celý úspešne vrátane backendu, frontendových browser/full-stack testov, oboch produkčných image buildov a repository-safety.
 
 ### Implementačný plán
 
