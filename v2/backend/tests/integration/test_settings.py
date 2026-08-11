@@ -69,6 +69,7 @@ class FakeDiscordAdministration:
 
     def __init__(self) -> None:
         self.changes = []
+        self.reaction_tests: list[tuple[int, int, str]] = []
 
     async def directory(self, guild_id: int) -> DiscordDirectory:
         del guild_id
@@ -100,7 +101,7 @@ class FakeDiscordAdministration:
         return DiscordMemberOption(member_id, "member", "Member", None, ())
 
     async def test_reaction(self, guild_id: int, channel_id: int, emoji: str) -> int:
-        del guild_id, channel_id, emoji
+        self.reaction_tests.append((guild_id, channel_id, emoji))
         return 123
 
 
@@ -445,6 +446,42 @@ async def test_role_management_protects_last_admin_and_uses_configured_roles(
         "last_admin_protection",
         "AuthorizationDenied",
     }
+
+
+async def test_reaction_test_uses_explicit_visible_draft_emoji(database: Database) -> None:
+    uow = SqlAlchemyUnitOfWork(database)
+    async with uow.transaction() as repositories:
+        await repositories.guild_configs.add(GuildConfigRecord(guild_id=GUILD_ID))
+    gateway = FakeDiscordAdministration()
+    service = DiscordAdministrationService(uow, gateway)
+
+    message_id = await service.test_configured_reaction(
+        kind="seen",
+        channel_id=111,
+        emoji_id=None,
+        emoji_unicode="🎉",
+        principal=_principal(),
+        correlation_id="visible-draft-reaction",
+    )
+
+    assert message_id == 123
+    assert gateway.reaction_tests == [(GUILD_ID, 111, "🎉")]
+    async with database.transaction() as connection:
+        audit = await connection.scalar(
+            select(AuditLogModel.after_value).where(AuditLogModel.action == "reaction.tested")
+        )
+    assert audit is not None
+    assert audit["emoji_unicode"] == "🎉"
+
+    with pytest.raises(ValueError, match="two emoji"):
+        await service.test_configured_reaction(
+            kind="seen",
+            channel_id=111,
+            emoji_id=987,
+            emoji_unicode="🎉",
+            principal=_principal(),
+            correlation_id="invalid-double-emoji",
+        )
 
 
 async def test_concurrent_admin_removals_cannot_remove_both_admins(database: Database) -> None:

@@ -11,15 +11,10 @@ import {
   getDiscordDirectory,
 } from '../api/client'
 import { useAuth } from '../auth/context'
-import { LoadingState } from '../components/AsyncState'
+import { LoadErrorState, LoadingState } from '../components/AsyncState'
 import { Button } from '../components/ui/button'
-import {
-  ChannelsPanel,
-  NoticeBanner,
-  ReactionsPanel,
-  RolesPanel,
-  type Notice,
-} from './SettingsPage'
+import { ReactionsPanel } from './ReactionsPanel'
+import { ChannelsPanel, NoticeBanner, RolesPanel, type Notice } from './SettingsPage'
 
 export function ChannelsPage() {
   const auth = useAuth()
@@ -112,8 +107,11 @@ export function ReactionsPage() {
   const [settings, setSettings] = useState<AdminSettings | null>(null)
   const [directory, setDirectory] = useState<DiscordDirectory | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const load = useCallback(async () => {
+    setLoading(true)
+    setLoadError(null)
     try {
       const [nextSettings, nextDirectory] = await Promise.all([
         getAdminSettings(),
@@ -122,7 +120,7 @@ export function ReactionsPage() {
       setSettings(nextSettings)
       setDirectory(nextDirectory)
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error) })
+      setLoadError(errorMessage(error))
     } finally {
       setLoading(false)
     }
@@ -141,8 +139,13 @@ export function ReactionsPage() {
       notice={notice}
       onReload={load}
     >
-      {loading || !settings || !directory ? (
+      {loading ? (
         <LoadingState label="Načítavam reakcie a emoji…" />
+      ) : loadError || !settings || !directory ? (
+        <LoadErrorState
+          detail={loadError ?? 'Carlo neposlal úplné nastavenie reakcií.'}
+          onRetry={() => void load()}
+        />
       ) : (
         <ReactionsPanel
           value={settings.reactions}

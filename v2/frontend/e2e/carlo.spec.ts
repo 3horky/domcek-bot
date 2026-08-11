@@ -14,6 +14,8 @@ interface MockState {
   archives: Record<string, unknown>[]
   memberRoles: string[]
   extraEvents: number
+  reactions: Record<string, unknown>
+  settingsFailureStatus: number | null
 }
 
 const normalEvent = {
@@ -83,10 +85,18 @@ async function mockCarlo(page: Page, role: Role = 'admin'): Promise<MockState> {
     archives: [],
     memberRoles: [],
     extraEvents: 0,
+    reactions: defaultReactionSettings(),
+    settingsFailureStatus: null,
   }
   await page
     .context()
     .addCookies([{ name: 'domcek_csrf', value: 'e2e-csrf', url: 'http://127.0.0.1:4174' }])
+  await page.route('https://cdn.discordapp.com/emojis/**', (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><circle cx="32" cy="32" r="28" fill="#2f7552"/></svg>',
+    }),
+  )
   await page.route('**/api/v1/**', async (route) => handleApi(route, state))
   return state
 }
@@ -197,7 +207,24 @@ async function handleApi(route: Route, state: MockState) {
     state.published = true
     return json({ run_id: 'run-1', state: 'succeeded_manual', slot_key: 'slot-1' })
   }
-  if (path === '/api/v1/admin/settings') return json(adminSettings())
+  if (path === '/api/v1/admin/settings') {
+    if (!capabilities(role).includes('manage_settings'))
+      return json({ detail: 'Na správu reakcií nemáte oprávnenie.' }, 403)
+    if (state.settingsFailureStatus)
+      return json(
+        { detail: 'Nastavenia reakcií sa teraz nedajú načítať.' },
+        state.settingsFailureStatus,
+      )
+    return json(adminSettings(state))
+  }
+  if (path === '/api/v1/admin/settings/reactions' && method === 'PUT') {
+    const values = body as Record<string, unknown>
+    state.reactions = { ...values, guild_id: '456', version: Number(values.expected_version) + 1 }
+    delete state.reactions.expected_version
+    return json(state.reactions)
+  }
+  if (path === '/api/v1/admin/discord/reactions/test' && method === 'POST')
+    return json({ message_id: 'reaction-test-message' })
   if (path === '/api/v1/admin/discord/directory') return json(directory())
   if (path === '/api/v1/admin/archives' && method === 'GET') return json(state.archives)
   if (path === '/api/v1/admin/archives' && method === 'POST') {
@@ -319,7 +346,7 @@ function draft(state: MockState) {
   }
 }
 
-function adminSettings() {
+function adminSettings(state: MockState) {
   return {
     publication: {
       guild_id: '456',
@@ -348,20 +375,24 @@ function adminSettings() {
       version: 1,
     },
     calendars: [],
-    reactions: {
-      guild_id: '456',
-      seen_enabled: true,
-      seen_emoji_id: null,
-      seen_emoji_unicode: '✅',
-      auto_reaction_enabled: false,
-      auto_reaction_emoji_id: null,
-      auto_reaction_emoji_unicode: null,
-      mention_reaction_enabled: false,
-      mention_reaction_emoji_id: null,
-      mention_reaction_emoji_unicode: null,
-      auto_reaction_channel_ids: [],
-      version: 1,
-    },
+    reactions: state.reactions,
+  }
+}
+
+function defaultReactionSettings() {
+  return {
+    guild_id: '456',
+    seen_enabled: true,
+    seen_emoji_id: null,
+    seen_emoji_unicode: '✅',
+    auto_reaction_enabled: false,
+    auto_reaction_emoji_id: null,
+    auto_reaction_emoji_unicode: null,
+    mention_reaction_enabled: false,
+    mention_reaction_emoji_id: null,
+    mention_reaction_emoji_unicode: null,
+    auto_reaction_channel_ids: [],
+    version: 1,
   }
 }
 
@@ -438,7 +469,10 @@ function directory() {
       },
     ],
     roles: [{ id: '901', name: 'Team Mod', position: 2, managed: false }],
-    emojis: [],
+    emojis: [
+      { id: '990', name: 'seen', animated: false, available: true },
+      { id: '991', name: 'old', animated: false, available: false },
+    ],
   }
 }
 
@@ -760,10 +794,18 @@ for (const [name, path] of [
   ['Reakcie', '/reakcie'],
   ['Nastavenia', '/nastavenia'],
 ] as const) {
-  test(`18 Axe: ${name} nemá automaticky zistiteľné WCAG A/AA porušenie`, async ({ page }) => {
+  test(`18 Axe: ${name} nemá automaticky zistiteľné WCAG A/AA porušenie`, async ({
+    page,
+  }, testInfo) => {
     await mockCarlo(page)
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    if (process.env.CARLO_VISUAL_AUDIT_DIR && name === 'Reakcie') {
+      await page.screenshot({
+        path: `${process.env.CARLO_VISUAL_AUDIT_DIR}/reakcie--baseline--${testInfo.project.name}.png`,
+        fullPage: true,
+      })
+    }
     const result = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze()
@@ -775,3 +817,93 @@ for (const [name, path] of [
     expect(violations, `${path}: ${JSON.stringify(violations)}`).toEqual([])
   })
 }
+
+test('19 Reakcie upravujú, testujú a ukladajú práve viditeľné emoji', async ({ page }) => {
+  const state = await mockCarlo(page)
+  await page.goto('/reakcie')
+  await expect(page.getByRole('heading', { name: 'Čo má Carlo označiť emoji?' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3 })).toHaveCount(3)
+
+  await page.getByRole('switch', { name: 'Zapnúť: Reakcia pri označení Carla' }).click()
+  await expect(page.getByText('Máte neuložené zmeny')).toBeVisible()
+
+  await page.getByRole('link', { name: 'Roly' }).click()
+  await expect(page.getByRole('alertdialog')).toContainText('Zahodiť neuložené zmeny?')
+  await page.getByRole('button', { name: 'Zostať a dokončiť' }).click()
+  await expect(page).toHaveURL(/\/reakcie$/)
+
+  await page.getByRole('button', { name: 'Reakcia pri označení Carla: zmeniť emoji' }).click()
+  const emojiSearch = page.getByPlaceholder('Hľadať emoji…')
+  await emojiSearch.fill('party')
+  await page.getByRole('button', { name: 'party popper' }).click()
+
+  const mentionRule = page.locator('.reaction-rule').filter({
+    has: page.getByRole('heading', { name: 'Reakcia pri označení Carla' }),
+  })
+  await mentionRule.getByRole('button', { name: 'Vyskúšať' }).click()
+  await expect(
+    page.getByRole('dialog', { name: 'Vyskúšať: Reakcia pri označení Carla' }),
+  ).toContainText('presne emoji, ktoré práve vidíte')
+  await page.getByRole('button', { name: 'Poslať skúšobnú správu' }).dblclick()
+  await expect(page.getByText(/Skúšobná správa s aktuálne zobrazeným emoji/)).toBeVisible()
+
+  const testCalls = state.calls.filter(
+    (call) => call.path === '/api/v1/admin/discord/reactions/test',
+  )
+  expect(testCalls).toHaveLength(1)
+  expect(testCalls[0]?.body).toMatchObject({
+    kind: 'mention',
+    channel_id: '700',
+  })
+  const testedEmoji = testCalls[0]?.body as Record<string, unknown>
+  expect(Boolean(testedEmoji.emoji_id) !== Boolean(testedEmoji.emoji_unicode)).toBe(true)
+
+  await page.getByRole('button', { name: 'Uložiť zmeny' }).click()
+  await expect(page.getByText('Všetky zmeny sú uložené')).toBeVisible()
+  await page.reload()
+  await expect(
+    page.getByRole('switch', { name: 'Vypnúť: Reakcia pri označení Carla' }),
+  ).toBeChecked()
+
+  const automaticRule = page.locator('.reaction-rule').filter({
+    has: page.getByRole('heading', { name: 'Automatická reakcia vo vybraných kanáloch' }),
+  })
+  await automaticRule.getByPlaceholder('Filtrovať kanály…').fill('moder')
+  await automaticRule.getByRole('option', { name: /#moderatori/ }).click()
+  await expect(automaticRule.getByText('moderatori', { exact: true })).toBeVisible()
+  await automaticRule.getByRole('button', { name: 'Zrušiť výber' }).click()
+  await expect(automaticRule.getByText('Žiadny kanál nie je vybraný.')).toBeVisible()
+})
+
+test('20 Reakcie ponúknu náhradu za nedostupné serverové emoji', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.reactions = {
+    ...state.reactions,
+    seen_emoji_id: '991',
+    seen_emoji_unicode: null,
+  }
+  await page.goto('/reakcie')
+  await expect(page.getByText('Toto emoji už na serveri nie je dostupné.')).toBeVisible()
+  await page.getByRole('button', { name: 'Reakcia pod prehľadom: zmeniť emoji' }).click()
+  await page.getByPlaceholder('Hľadať emoji…').fill('seen')
+  await page.locator('.reaction-emoji-popover .epr-emoji').first().click()
+  await expect(page.getByText('Toto emoji už na serveri nie je dostupné.')).toHaveCount(0)
+})
+
+test('21 Reakcie pri chybe ponúknu obnovu namiesto nekonečného načítania', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.settingsFailureStatus = 503
+  await page.goto('/reakcie')
+  await expect(page.getByRole('alert')).toContainText('Nastavenia reakcií sa teraz nedajú načítať.')
+  await expect(page.getByText('Načítavam reakcie a emoji…')).toHaveCount(0)
+  state.settingsFailureStatus = null
+  await page.getByRole('button', { name: 'Skúsiť znova' }).click()
+  await expect(page.getByRole('heading', { name: 'Čo má Carlo označiť emoji?' })).toBeVisible()
+})
+
+test('22 Reakcie pri chýbajúcom oprávnení zobrazia zrozumiteľný zákaz', async ({ page }) => {
+  await mockCarlo(page, 'team_mod')
+  await page.goto('/reakcie')
+  await expect(page.getByRole('alert')).toContainText('Na správu reakcií nemáte oprávnenie.')
+  await expect(page.getByText('Načítavam reakcie a emoji…')).toHaveCount(0)
+})

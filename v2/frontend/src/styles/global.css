@@ -3046,21 +3046,320 @@ label:has(input:disabled) {
 .role-footnote svg {
   width: 16px;
 }
-.reaction-heading {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-.reaction-heading > div {
+.reaction-workspace {
   display: grid;
-  gap: 0.35rem;
+  width: min(100%, 1120px);
+  gap: 1rem;
 }
-.reaction-fields {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.reaction-intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.25rem 0.1rem 0.45rem;
 }
-.reaction-fields > :last-child:nth-child(3) {
-  grid-column: 1 / -1;
+.reaction-intro .eyebrow {
+  margin: 0 0 0.3rem;
+}
+.reaction-intro h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: -0.025em;
+}
+.reaction-intro p:last-child {
+  margin: 0.3rem 0 0;
+  color: var(--ink-muted);
+  font-size: 0.84rem;
+}
+.reaction-save-status {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  padding: 0.42rem 0.72rem;
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+.reaction-save-status.is-dirty {
+  border-color: color-mix(in srgb, var(--warning) 38%, var(--line));
+  background: color-mix(in srgb, var(--warning) 7%, var(--surface));
+  color: var(--warning);
+}
+.reaction-rule-list {
+  display: grid;
+  gap: 0.85rem;
+}
+.reaction-rule {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+.reaction-rule.is-enabled {
+  border-color: color-mix(in srgb, var(--brand) 30%, var(--line));
+}
+.reaction-rule.is-disabled {
+  background: color-mix(in srgb, var(--canvas) 45%, var(--surface));
+}
+.reaction-rule-header {
+  display: grid;
+  align-items: center;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 0.9rem;
+  padding: 1.05rem 1.15rem;
+}
+.reaction-rule-icon {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 0.85rem;
+  background: var(--brand-soft);
+}
+.reaction-rule.is-disabled .reaction-rule-icon {
+  background: var(--muted);
+  filter: grayscale(0.35);
+}
+.reaction-rule-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.28rem;
+}
+.reaction-rule-copy > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.reaction-rule-copy h3 {
+  margin: 0 0.25rem 0 0;
+  font-size: 0.96rem;
+  letter-spacing: -0.012em;
+}
+.reaction-rule-copy p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.79rem;
+}
+.reaction-rule-state,
+.reaction-rule-dirty {
+  border-radius: 999px;
+  background: var(--muted);
+  padding: 0.22rem 0.48rem;
+  color: var(--ink-muted);
+  font-size: 0.63rem;
+  font-weight: 700;
+}
+.reaction-rule-state.enabled {
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+.reaction-rule-dirty {
+  background: color-mix(in srgb, var(--warning) 9%, var(--surface));
+  color: var(--warning);
+}
+.reaction-rule-body {
+  display: grid;
+  gap: 1rem;
+  border-top: 1px solid var(--line);
+  padding: 1rem 1.15rem;
+}
+.reaction-emoji-control {
+  display: grid;
+  justify-items: start;
+  gap: 0.45rem;
+}
+.reaction-emoji-trigger {
+  width: min(100%, 320px);
+  height: auto;
+  min-height: 52px;
+  justify-content: flex-start;
+  padding: 0.48rem 0.62rem;
+  text-align: left;
+}
+.reaction-emoji-trigger > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 0.05rem;
+}
+.reaction-emoji-trigger strong,
+.reaction-emoji-trigger small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reaction-emoji-trigger small {
+  color: var(--ink-muted);
+  font-size: 0.67rem;
+  font-weight: 500;
+}
+.reaction-emoji-trigger > svg:last-child {
+  width: 16px;
+  margin-left: auto;
+  color: var(--ink-muted);
+}
+.reaction-emoji-visual {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 0.6rem;
+  object-fit: contain;
+  font-size: 1.35rem;
+}
+.reaction-emoji-visual svg {
+  width: 20px;
+  color: var(--ink-muted);
+}
+.reaction-emoji-visual.large {
+  width: 46px;
+  height: 46px;
+  font-size: 1.8rem;
+}
+.reaction-emoji-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.72rem;
+}
+.reaction-emoji-warning svg {
+  width: 16px;
+}
+.reaction-emoji-popover {
+  width: min(420px, calc(100vw - 2rem));
+  padding: 0.7rem;
+}
+.reaction-emoji-popover-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.2rem 0.2rem 0.7rem;
+}
+.reaction-emoji-popover-heading > svg {
+  width: 22px;
+  color: var(--brand);
+}
+.reaction-emoji-popover-heading > div {
+  display: grid;
+  gap: 0.08rem;
+}
+.reaction-emoji-popover-heading span {
+  color: var(--ink-muted);
+  font-size: 0.69rem;
+}
+.reaction-emoji-popover .epr-main {
+  border-color: var(--line) !important;
+  box-shadow: none !important;
+}
+.reaction-rule .channel-picker {
+  border-top: 1px solid var(--line);
+  padding-top: 0.9rem;
+}
+.reaction-rule-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--line);
+  background: var(--muted);
+  padding: 0.75rem 1.15rem;
+}
+.reaction-rule-footer > span {
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+}
+.reaction-save-bar {
+  position: sticky;
+  z-index: 10;
+  bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  padding: 0.72rem 0.8rem;
+  box-shadow: var(--shadow-modal);
+  backdrop-filter: blur(14px);
+}
+.reaction-save-bar.is-dirty {
+  border-color: color-mix(in srgb, var(--warning) 35%, var(--line));
+}
+.reaction-save-bar > div {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.reaction-save-bar > div:first-child > svg {
+  width: 19px;
+  color: var(--brand);
+}
+.reaction-save-bar.is-dirty > div:first-child > svg {
+  color: var(--warning);
+}
+.reaction-save-bar > div:first-child > span {
+  display: grid;
+  gap: 0.04rem;
+}
+.reaction-save-bar strong {
+  font-size: 0.78rem;
+}
+.reaction-save-bar small {
+  color: var(--ink-muted);
+  font-size: 0.67rem;
+}
+.reaction-test-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.reaction-test-heading > div:last-child {
+  display: grid;
+  gap: 0.2rem;
+}
+.reaction-test-body {
+  display: grid;
+  gap: 0.55rem;
+  padding-block: 0.25rem;
+}
+.reaction-test-body > label {
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.reaction-test-body > select {
+  min-height: 40px;
+  border: 1px solid var(--input);
+  border-radius: 0.65rem;
+  background: var(--surface);
+  padding: 0.45rem 0.65rem;
+}
+.reaction-test-summary {
+  display: grid;
+  align-items: start;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem;
+  margin-top: 0.4rem;
+  border-radius: 0.7rem;
+  background: var(--brand-soft);
+  padding: 0.75rem;
+  color: var(--brand-strong);
+}
+.reaction-test-summary svg {
+  width: 18px;
+}
+.reaction-test-summary p {
+  margin: 0;
+  font-size: 0.73rem;
 }
 .settings-loading,
 .settings-error {
@@ -3120,8 +3419,47 @@ label:has(input:disabled) {
   .settings-tabs button svg {
     width: 18px;
   }
-  .settings-form-grid,
-  .reaction-fields {
+  .settings-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .reaction-intro,
+  .reaction-rule-footer,
+  .reaction-save-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .reaction-save-status {
+    align-self: flex-start;
+  }
+  .reaction-rule-header {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: 0.7rem;
+    padding: 0.9rem;
+  }
+  .reaction-rule-icon {
+    width: 44px;
+    height: 44px;
+  }
+  .reaction-rule-body,
+  .reaction-rule-footer {
+    padding-inline: 0.9rem;
+  }
+  .reaction-rule-footer > button,
+  .reaction-emoji-trigger {
+    width: 100%;
+  }
+  .reaction-save-bar {
+    bottom: 4.8rem;
+  }
+  .reaction-save-bar > div:last-child,
+  .reaction-save-bar > div:last-child > button {
+    width: 100%;
+  }
+  .reaction-save-bar > div:last-child {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .reaction-save-bar > div:last-child:has(> :only-child) {
     grid-template-columns: 1fr;
   }
   .calendar-row,
@@ -3528,10 +3866,6 @@ label:has(input:disabled) {
 .roles-card .member-row {
   padding: 0.8rem 1rem;
 }
-.administration-page .reaction-fields .discord-picker {
-  grid-column: 1 / -1;
-}
-
 @media (max-width: 1240px) {
   .channel-placement-settings {
     grid-template-columns: repeat(2, minmax(0, 1fr));

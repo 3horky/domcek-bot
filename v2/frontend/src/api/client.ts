@@ -690,10 +690,14 @@ export function setDiscordRole(memberId: string, role: 'team_mod' | 'admin', ena
   })
 }
 
-export function testDiscordReaction(kind: 'seen' | 'auto' | 'mention', channelId: string) {
+export function testDiscordReaction(
+  kind: 'seen' | 'auto' | 'mention',
+  channelId: string,
+  emoji: { emoji_id: string | null; emoji_unicode: string | null },
+) {
   return requestJson<{ message_id: string }>('/api/v1/admin/discord/reactions/test', {
     method: 'POST',
-    body: JSON.stringify({ kind, channel_id: channelId }),
+    body: JSON.stringify({ kind, channel_id: channelId, ...emoji }),
   })
 }
 

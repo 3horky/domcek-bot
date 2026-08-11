@@ -91,6 +91,8 @@ class RoleMutationBody(BaseModel):
 class ReactionTestBody(BaseModel):
     kind: Literal["seen", "auto", "mention"]
     channel_id: str
+    emoji_id: str | None = None
+    emoji_unicode: str | None = Field(default=None, max_length=32)
 
 
 class ChannelCreateBody(BaseModel):
@@ -372,6 +374,8 @@ async def test_reaction(
         message_id = await service.test_configured_reaction(
             kind=body.kind,
             channel_id=_required_id(body.channel_id),
+            emoji_id=_id(body.emoji_id),
+            emoji_unicode=body.emoji_unicode,
             principal=context.principal,
             correlation_id=request.state.correlation_id,
         )

@@ -125,6 +125,11 @@ class MatrixRoleAdministration:
             (),
         )
 
+    async def test_configured_reaction(self, **values: Any) -> int:
+        principal = cast(Principal, values["principal"])
+        principal.require(Capability.MANAGE_SETTINGS)
+        return 123
+
 
 @pytest.fixture
 async def database() -> AsyncIterator[Database]:
@@ -442,6 +447,20 @@ async def test_direct_api_role_matrix(database: Database, tmp_path: Path) -> Non
             "PUT",
             "/api/v1/admin/settings/reactions",
             json=reaction_body,
+        )
+        assert response.status_code == expected
+
+    for role_id, expected in zip(roles, expected_settings, strict=True):
+        response = await request(
+            role_id,
+            "POST",
+            "/api/v1/admin/discord/reactions/test",
+            json={
+                "kind": "seen",
+                "channel_id": "111",
+                "emoji_id": None,
+                "emoji_unicode": "🎉",
+            },
         )
         assert response.status_code == expected
 

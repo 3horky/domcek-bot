@@ -8,7 +8,6 @@ from typing import Protocol
 from domcek_bot.application.alerts import ModeratorAlertTransport
 from domcek_bot.application.audit import AuditWriter
 from domcek_bot.application.auth.authorization import Capability, Principal
-from domcek_bot.application.records import ReactionConfigRecord
 from domcek_bot.application.repositories import AuditLogRepository
 from domcek_bot.application.unit_of_work import UnitOfWork
 
@@ -329,18 +328,15 @@ class DiscordAdministrationService:
         *,
         kind: str,
         channel_id: int,
+        emoji_id: int | None,
+        emoji_unicode: str | None,
         principal: Principal,
         correlation_id: str,
     ) -> int:
         principal.require(Capability.MANAGE_SETTINGS)
         if kind not in {"seen", "auto", "mention"} or channel_id <= 0:
             raise ValueError("reaction test is invalid")
-        async with self._unit_of_work.transaction() as repositories:
-            config = await repositories.reaction_configs.get(principal.guild_id)
-        config = config or ReactionConfigRecord(guild_id=principal.guild_id)
-        emoji = _configured_emoji(config, kind)
-        if emoji is None:
-            raise ValueError("selected reaction has no configured emoji")
+        emoji = _selected_emoji(emoji_id, emoji_unicode)
         message_id = await self._discord.test_reaction(principal.guild_id, channel_id, emoji)
         async with self._unit_of_work.transaction() as repositories:
             await AuditWriter(repositories.audit_logs).success(
@@ -350,16 +346,24 @@ class DiscordAdministrationService:
                 object_type="discord_message",
                 object_id=str(message_id),
                 correlation_id=correlation_id,
-                after_value={"kind": kind, "channel_id": channel_id},
+                after_value={
+                    "kind": kind,
+                    "channel_id": channel_id,
+                    "emoji_id": emoji_id,
+                    "emoji_unicode": emoji_unicode,
+                },
             )
         return message_id
 
 
-def _configured_emoji(config: ReactionConfigRecord, kind: str) -> str | None:
-    values = {
-        "seen": (config.seen_emoji_id, config.seen_emoji_unicode),
-        "auto": (config.auto_reaction_emoji_id, config.auto_reaction_emoji_unicode),
-        "mention": (config.mention_reaction_emoji_id, config.mention_reaction_emoji_unicode),
-    }
-    emoji_id, unicode_value = values[kind]
-    return f"_:{emoji_id}" if emoji_id is not None else unicode_value
+def _selected_emoji(emoji_id: int | None, unicode_value: str | None) -> str:
+    normalized = None if unicode_value is None else unicode_value.strip()
+    if emoji_id is not None and emoji_id <= 0:
+        raise ValueError("selected reaction emoji ID is invalid")
+    if emoji_id is not None and normalized:
+        raise ValueError("selected reaction cannot use two emoji values")
+    if emoji_id is not None:
+        return f"_:{emoji_id}"
+    if not normalized or len(normalized) > 32 or any(value in normalized for value in "\r\n"):
+        raise ValueError("selected reaction has no valid emoji")
+    return normalized

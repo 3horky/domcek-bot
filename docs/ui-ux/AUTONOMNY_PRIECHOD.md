@@ -4,9 +4,9 @@ Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny post
 
 | Etapa | Oblasť                             | Stav      | Aktuálny dôkaz                     | Commit / CI    |
 | ----- | ---------------------------------- | --------- | ---------------------------------- | -------------- |
-| UX0   | auditná infraštruktúra             | hotovo    | lint, 15 unit, 46 browser scenárov | čaká na commit |
-| UX1   | Reakcie                            | nasleduje | baseline sa pripravuje             | –              |
-| UX2   | Roly                               | čaká      | –                                  | –              |
+| UX0   | auditná infraštruktúra             | hotovo    | lint, 15 unit, 46 browser scenárov | `87cb6ec`      |
+| UX1   | Reakcie                            | hotovo    | 193 backend, 15 unit, 54 browser   | čaká na commit |
+| UX2   | Roly                               | nasleduje | baseline sa pripraví               | –              |
 | UX3   | Nastavenia                         | čaká      | –                                  | –              |
 | UX4   | aplikačný rámec a spoločné stavy   | čaká      | –                                  | –              |
 | UX5   | Prehľad                            | čaká      | –                                  | –              |
@@ -26,6 +26,6 @@ Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny post
 
 ## Posledný checkpoint
 
-- **Aktuálna etapa:** UX0 uzavretá; nasleduje UX1
-- **Najbližší krok:** commit/push UX0, potom vizuálny a funkčný baseline Reakcií
+- **Aktuálna etapa:** UX1 uzavretá; nasleduje UX2
+- **Najbližší krok:** commit/push UX1, potom vizuálny a funkčný baseline Rolí
 - **Okamžitý blokátor:** žiadny

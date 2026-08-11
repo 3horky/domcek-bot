@@ -17,11 +17,21 @@ Inventár východiskového dlhu: 241 hex výskytov v monolitickom `global.css`, 
 
 ## UX1 – Reakcie
 
-Nasleduje po uzavretom UX0.
+| ID     | Etapa | Oblasť a úloha                                         | Štandard      | Závažnosť | Dodanie | Stav súladu         | Dôkaz                            | Dopad                                                     | Cieľové správanie                                                 | Akceptácia                                           | Vynútenie | Plánovaná etapa | Stav opravy |
+| ------ | ----- | ------------------------------------------------------ | ------------- | --------- | ------- | ------------------- | -------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------- | --------- | --------------- | ----------- |
+| UX1-01 | UX1   | skúška reakcie používala uložené, nie viditeľné emoji  | 3.4, 10.3     | P0        | BLOKUJE | opravené            | browser 19 + backend integration | skúška mohla potvrdiť iné správanie, než používateľ videl | skúška posiela presne emoji z aktuálneho neuloženého návrhu       | request obsahuje práve jedno viditeľné emoji         | test      | UX1             | hotovo      |
+| UX1-02 | UX1   | dvojklik na skúšobné odoslanie                         | 3.6, 10.2     | P0        | BLOKUJE | opravené            | browser 19                       | mohol vzniknúť duplicitný externý účinok                  | počas requestu je akcia busy a opakovanie nevytvorí ďalší request | `dblclick` vytvorí presne jeden request              | test      | UX1             | hotovo      |
+| UX1-03 | UX1   | technický výber typu a hodnoty emoji                   | 5, 10.6       | P1        | BACKLOG | opravené            | desktop/mobile vizuálna kontrola | používateľ musel poznať rozdiel Unicode/serverové emoji   | jediný katalóg spája bežné aj dostupné serverové emoji            | výber nevyžaduje technické rozhodnutie               | človek    | UX1             | hotovo      |
+| UX1-04 | UX1   | chyba načítania zostala v nekonečnom loadingu          | 11, 15        | P0        | BLOKUJE | opravené            | browser 21                       | rozhranie klamalo, že stále pracuje                       | zrozumiteľná chyba ponúkne bezpečné opakovanie                    | 503 zobrazí alert a funkčné `Skúsiť znova`           | test      | UX1             | hotovo      |
+| UX1-05 | UX1   | odchod zahodil neuložené pravidlá bez ochrany          | 3.5, 10.9, 15 | P0        | BLOKUJE | opravené            | browser 19                       | správca mohol bez varovania stratiť rozpracovanú prácu    | interná navigácia aj zatvorenie karty chránia dirty formulár      | odchod otvorí dialóg a zotrvanie zachová draft       | test      | UX1             | hotovo      |
+| UX1-06 | UX1   | uložené serverové emoji už na serveri neexistuje       | 11, 15        | P1        | BACKLOG | opravené            | browser 20                       | pravidlo nemalo jasnú cestu k náprave                     | karta vysvetlí stav a ponúkne okamžitý výber náhrady              | náhradné emoji odstráni varovanie                    | test      | UX1             | hotovo      |
+| UX1-07 | UX1   | nejednoznačné pomenovanie ovládacích prvkov            | 10.7, 14      | P0        | BLOKUJE | opravené            | Axe desktop/mobile + browser 18  | hlavný tok nebol plne dostupný asistívnej technológii     | pravidlá, prepínače, picker a modal majú významové názvy          | Axe nemá WCAG A/AA nález                             | test      | UX1             | hotovo      |
+| UX1-08 | UX1   | kanály sa nedali rýchlo filtrovať a vynulovať          | 3.3, 10.6     | P1        | BACKLOG | opravené            | browser 19                       | viacnásobný výber bol ťažkopádny                          | živý filter, odstránenie položky a jednoznačný nulový stav        | filtrovanie, výber a `Zrušiť výber` prejdú           | test      | UX1             | hotovo      |
+| UX1-09 | UX1   | interné screen-reader texty emoji katalógu sú anglické | 6, 14         | P2        | BACKLOG | otvorené, evidované | manuálna kontrola knižnice       | lokalizácia asistívneho toku nie je úplne konzistentná    | všetky živé hlásenia a pomocné názvy katalógu sú po slovensky     | overiť po aktualizácii alebo náhrade picker knižnice | človek    | UX10            | backlog     |
 
 ## UX2 – Roly
 
-Čaká na UX1.
+Nasleduje po uzavretom UX1.
 
 ## UX3 – Nastavenia
 

@@ -21,7 +21,7 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
-import EmojiPicker, { Categories, EmojiStyle } from 'emoji-picker-react'
+import EmojiPicker, { EmojiStyle } from 'emoji-picker-react'
 import {
   cloneElement,
   useCallback,
@@ -31,7 +31,6 @@ import {
   useRef,
   useState,
   type ReactElement,
-  type ReactNode,
 } from 'react'
 
 import {
@@ -43,7 +42,6 @@ import {
   type DiscordMemberOption,
   type ManualPublicationPreview,
   type PublicationSettings,
-  type ReactionSettings,
   createArchiveRequest,
   createCalendarSource,
   createDiscordChannel,
@@ -56,14 +54,13 @@ import {
   searchDiscordMembers,
   setDiscordRole,
   syncCalendarSource,
-  testDiscordReaction,
   updateCalendarSource,
   updatePublicationSettings,
-  updateReactionSettings,
 } from '../api/client'
 import { useAuth } from '../auth/context'
 import { DiscordPreview } from '../components/DiscordPreview'
-import { ChannelMultiPicker, MemberPicker, RolePicker } from '../components/DiscordPickers'
+import { MemberPicker, RolePicker } from '../components/DiscordPickers'
+import { carloEmojiCategories } from '../lib/emoji'
 import { Badge } from '../components/ui/badge'
 import {
   AlertDialog,
@@ -94,17 +91,6 @@ import { Textarea } from '../components/ui/textarea'
 
 const weekdays = ['pondelok', 'utorok', 'streda', 'štvrtok', 'piatok', 'sobota', 'nedeľa']
 const defaultChannelEmojis = ['🏠', '💬', '✨', '🌿']
-const channelEmojiCategories = [
-  { category: Categories.SUGGESTED, name: 'Nedávne' },
-  { category: Categories.SMILEYS_PEOPLE, name: 'Ľudia a úsmevy' },
-  { category: Categories.ANIMALS_NATURE, name: 'Zvieratá a príroda' },
-  { category: Categories.FOOD_DRINK, name: 'Jedlo a nápoje' },
-  { category: Categories.TRAVEL_PLACES, name: 'Cestovanie a miesta' },
-  { category: Categories.ACTIVITIES, name: 'Aktivity' },
-  { category: Categories.OBJECTS, name: 'Predmety' },
-  { category: Categories.SYMBOLS, name: 'Symboly' },
-  { category: Categories.FLAGS, name: 'Vlajky' },
-]
 
 export type Notice = { kind: 'success' | 'error'; text: string } | null
 
@@ -1264,8 +1250,8 @@ function ChannelEmojiPicker({
           autoFocusSearch
           lazyLoadEmojis
           emojiStyle={EmojiStyle.NATIVE}
-          categories={channelEmojiCategories}
-          searchPlaceHolder="Hľadať emoji…"
+          categories={carloEmojiCategories}
+          searchPlaceholder="Hľadať emoji…"
           searchClearButtonLabel="Vymazať hľadanie"
           previewConfig={{ showPreview: false }}
           width="100%"
@@ -1478,231 +1464,6 @@ function MemberRoleRow({
         />
       </div>
     </article>
-  )
-}
-
-export function ReactionsPanel({
-  value,
-  directory,
-  onSaved,
-  setNotice,
-}: {
-  value: ReactionSettings
-  directory: DiscordDirectory
-  onSaved: (value: ReactionSettings) => void
-  setNotice: (notice: Notice) => void
-}) {
-  const [draft, setDraft] = useState(value)
-  const [testChannel, setTestChannel] = useState(directory.channels[0]?.id ?? '')
-  const [saving, setSaving] = useState(false)
-  async function save() {
-    setSaving(true)
-    try {
-      const result = await updateReactionSettings(draft)
-      onSaved(result)
-      setDraft(result)
-      setNotice({ kind: 'success', text: 'Reakcie sú uložené a bot ich použije bez reštartu.' })
-    } catch (error) {
-      setNotice({ kind: 'error', text: message(error) })
-    } finally {
-      setSaving(false)
-    }
-  }
-  async function test(kind: 'seen' | 'auto' | 'mention') {
-    try {
-      await testDiscordReaction(kind, testChannel)
-      setNotice({ kind: 'success', text: 'Carlo poslal skúšobnú správu a pridal reakciu.' })
-    } catch (error) {
-      setNotice({ kind: 'error', text: message(error) })
-    }
-  }
-  return (
-    <div className="settings-grid settings-grid-main">
-      <div className="settings-stack">
-        <ReactionCard
-          title="Seen reakcia"
-          description="Pridá sa na poslednú správu úspešného prehľadu."
-          enabled={draft.seen_enabled}
-          unicode={draft.seen_emoji_unicode}
-          emojiId={draft.seen_emoji_id}
-          emojis={directory.emojis}
-          onChange={(change) =>
-            setDraft({
-              ...draft,
-              seen_enabled: change.enabled,
-              seen_emoji_unicode: change.unicode,
-              seen_emoji_id: change.emojiId,
-            })
-          }
-        />
-        <ReactionCard
-          title="Reakcia pri označení Carla"
-          description="Carlo zareaguje, keď ho niekto označí v správe."
-          enabled={draft.mention_reaction_enabled}
-          unicode={draft.mention_reaction_emoji_unicode}
-          emojiId={draft.mention_reaction_emoji_id}
-          emojis={directory.emojis}
-          onChange={(change) =>
-            setDraft({
-              ...draft,
-              mention_reaction_enabled: change.enabled,
-              mention_reaction_emoji_unicode: change.unicode,
-              mention_reaction_emoji_id: change.emojiId,
-            })
-          }
-        />
-        <ReactionCard
-          title="Automatická reakcia v kanáloch"
-          description="Každá nová správa vo vybraných kanáloch dostane reakciu."
-          enabled={draft.auto_reaction_enabled}
-          unicode={draft.auto_reaction_emoji_unicode}
-          emojiId={draft.auto_reaction_emoji_id}
-          emojis={directory.emojis}
-          onChange={(change) =>
-            setDraft({
-              ...draft,
-              auto_reaction_enabled: change.enabled,
-              auto_reaction_emoji_unicode: change.unicode,
-              auto_reaction_emoji_id: change.emojiId,
-            })
-          }
-        >
-          <ChannelMultiPicker
-            channels={directory.channels}
-            value={draft.auto_reaction_channel_ids}
-            onChange={(ids) => setDraft({ ...draft, auto_reaction_channel_ids: ids })}
-          />
-        </ReactionCard>
-      </div>
-      <Card className="settings-side-card">
-        <CardHeader>
-          <CardTitle>Vyskúšať reakciu</CardTitle>
-          <CardDescription>
-            Carlo pošle jasne označenú skúšobnú správu do zvoleného kanála.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="settings-fields">
-          <ChannelSelect
-            label="Testovací kanál"
-            value={testChannel || null}
-            channels={directory.channels}
-            onChange={(id) => setTestChannel(id ?? '')}
-          />
-          <Button
-            variant="outline"
-            disabled={!testChannel || !draft.seen_enabled}
-            onClick={() => void test('seen')}
-          >
-            Test seen
-          </Button>
-          <Button
-            variant="outline"
-            disabled={!testChannel || !draft.mention_reaction_enabled}
-            onClick={() => void test('mention')}
-          >
-            Test označenia
-          </Button>
-          <Button
-            variant="outline"
-            disabled={!testChannel || !draft.auto_reaction_enabled}
-            onClick={() => void test('auto')}
-          >
-            Test automatickej
-          </Button>
-          <Button className="settings-save" disabled={saving} onClick={() => void save()}>
-            {saving ? <LoaderCircle className="spin" /> : <Check />}Uložiť reakcie
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-function ReactionCard({
-  title,
-  description,
-  enabled,
-  unicode,
-  emojiId,
-  emojis,
-  onChange,
-  children,
-}: {
-  title: string
-  description: string
-  enabled: boolean
-  unicode: string | null
-  emojiId: string | null
-  emojis: DiscordDirectory['emojis']
-  onChange: (value: { enabled: boolean; unicode: string | null; emojiId: string | null }) => void
-  children?: ReactNode
-}) {
-  const mode = emojiId ? 'server' : 'unicode'
-  return (
-    <Card>
-      <CardHeader className="reaction-heading">
-        <div>
-          <CardTitle>{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </div>
-        <Switch
-          checked={enabled}
-          aria-label={`${enabled ? 'Vypnúť' : 'Zapnúť'}: ${title}`}
-          onCheckedChange={(checked) => onChange({ enabled: checked, unicode, emojiId })}
-        />
-      </CardHeader>
-      <CardContent className="reaction-fields">
-        <Field label="Typ emoji">
-          <select
-            value={mode}
-            onChange={(event) =>
-              onChange({
-                enabled,
-                unicode: event.target.value === 'unicode' ? (unicode ?? '✅') : null,
-                emojiId:
-                  event.target.value === 'server'
-                    ? (emojis.find((emoji) => emoji.available)?.id ?? null)
-                    : null,
-              })
-            }
-          >
-            <option value="unicode">Bežné emoji</option>
-            <option value="server">Emoji servera</option>
-          </select>
-        </Field>
-        {mode === 'unicode' ? (
-          <Field label="Emoji">
-            <Input
-              value={unicode ?? ''}
-              maxLength={32}
-              onChange={(event) =>
-                onChange({ enabled, unicode: event.target.value || null, emojiId: null })
-              }
-            />
-          </Field>
-        ) : (
-          <Field label="Emoji servera">
-            <select
-              value={emojiId ?? ''}
-              onChange={(event) =>
-                onChange({ enabled, unicode: null, emojiId: event.target.value || null })
-              }
-            >
-              <option value="">Vyberte emoji</option>
-              {emojiId && !emojis.some((emoji) => emoji.id === emojiId) && (
-                <option value={emojiId}>Uložené emoji je na serveri nedostupné</option>
-              )}
-              {emojis.map((emoji) => (
-                <option key={emoji.id} disabled={!emoji.available} value={emoji.id}>
-                  :{emoji.name}:{emoji.available ? '' : ' (nedostupné)'}
-                </option>
-              ))}
-            </select>
-          </Field>
-        )}
-        {children}
-      </CardContent>
-    </Card>
   )
 }
 
