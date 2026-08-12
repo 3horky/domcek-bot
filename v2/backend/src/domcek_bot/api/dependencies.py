@@ -12,7 +12,7 @@ from domcek_bot.application.audit import AuditQueryService
 from domcek_bot.application.auth.authorization import Principal
 from domcek_bot.application.auth.contracts import DiscordIdentityError, DiscordMemberNotFound
 from domcek_bot.application.auth.oauth_state import OAuthStateCodec
-from domcek_bot.application.auth.service import AuthService, LoginDenied
+from domcek_bot.application.auth.service import AuthService, GuildConfigurationMissing, LoginDenied
 from domcek_bot.application.auth.session import InvalidSession, SessionService
 from domcek_bot.application.channels import ChannelManagementService
 from domcek_bot.application.discord_admin import DiscordAdministrationService
@@ -91,6 +91,14 @@ async def authenticated_context(request: Request) -> AuthContext:
             "Vyžaduje sa prihlásenie",
             "Relácia nie je platná alebo už nemáte prístup k administrácii.",
             401,
+        ) from exc
+    except GuildConfigurationMissing as exc:
+        raise ApplicationError(
+            "guild_not_configured",
+            "Carlo ešte nie je pripravený",
+            "Nastavenie rolí servera nie je dostupné. "
+            "Skúste to znova alebo kontaktujte správcu Carla.",
+            503,
         ) from exc
     except DiscordIdentityError as exc:
         raise ApplicationError(

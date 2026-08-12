@@ -31,7 +31,7 @@ from domcek_bot.application.auth.oauth_state import (
     OAuthStateCodec,
     safe_return_path,
 )
-from domcek_bot.application.auth.service import AuthService, LoginDenied
+from domcek_bot.application.auth.service import AuthService, GuildConfigurationMissing, LoginDenied
 from domcek_bot.application.auth.session import InvalidSession, SessionService
 from domcek_bot.application.bootstrap import ensure_guild_config
 from domcek_bot.application.editor.content import ContentEditorialService
@@ -434,6 +434,56 @@ def test_http_oauth_session_csrf_logout_and_security_headers(settings: Settings)
     assert discord.closed
 
 
+def test_http_login_reports_missing_server_configuration_as_service_failure(
+    settings: Settings,
+) -> None:
+    configured = settings.model_copy(
+        update={
+            "discord_application_id": USER_ID,
+            "discord_oauth_client_id": USER_ID,
+            "discord_guild_id": GUILD_ID,
+            "discord_oauth_client_secret": "oauth-secret",
+            "discord_bot_token": "bot-token",
+        }
+    )
+    fake_uow = FakeUnitOfWork(None)
+    unit_of_work = cast(UnitOfWork, fake_uow)
+    discord = FakeDiscord(frozenset({ADMIN_ROLE}))
+    session_service = SessionService(
+        unit_of_work,
+        secret=configured.session_secret_value(),
+        lifetime=timedelta(hours=12),
+    )
+    api_services = ApiServices(
+        auth=AuthService(unit_of_work, discord, session_service, guild_id=GUILD_ID),
+        sessions=session_service,
+        oauth_state=OAuthStateCodec(
+            secret=configured.session_secret_value(), lifetime=timedelta(minutes=10)
+        ),
+        publication_drafts=PublicationDraftService(unit_of_work),
+        event_editor=EventEditorialService(unit_of_work),
+        content_editor=ContentEditorialService(unit_of_work),
+        audit=AuditQueryService(unit_of_work),
+    )
+
+    with TestClient(
+        create_app(settings=configured, database=FakeDatabase(), services=api_services)
+    ) as client:
+        login = client.get("/api/v1/auth/discord/login", follow_redirects=False)
+        state = parse_qs(urlsplit(login.headers["location"]).query)["state"][0]
+        callback = client.get(
+            "/api/v1/auth/discord/callback",
+            params={"code": "valid-code", "state": state},
+            follow_redirects=False,
+        )
+
+    assert callback.status_code == 503
+    assert callback.json()["code"] == "guild_not_configured"
+    assert callback.json()["title"] == "Carlo ešte nie je pripravený"
+    assert "nemá prístup" not in callback.text
+    assert not fake_uow.web_sessions.records
+
+
 async def test_login_rejects_missing_scope_and_missing_admin_role() -> None:
     fake_uow = FakeUnitOfWork(_config())
     unit_of_work = cast(UnitOfWork, fake_uow)
@@ -453,5 +503,21 @@ async def test_login_rejects_missing_scope_and_missing_admin_role() -> None:
     discord.scopes = frozenset({"identify", "guilds.members.read"})
     discord.role_ids = frozenset()
     with pytest.raises(LoginDenied, match="administration role"):
+        await auth.login("valid-code")
+    assert not fake_uow.web_sessions.records
+
+
+async def test_login_distinguishes_missing_server_configuration_from_missing_user_role() -> None:
+    fake_uow = FakeUnitOfWork(None)
+    unit_of_work = cast(UnitOfWork, fake_uow)
+    sessions = SessionService(
+        unit_of_work,
+        secret="s" * 32,
+        lifetime=timedelta(hours=12),
+    )
+    discord = FakeDiscord(frozenset({ADMIN_ROLE}))
+    auth = AuthService(unit_of_work, discord, sessions, guild_id=GUILD_ID)
+
+    with pytest.raises(GuildConfigurationMissing, match="configuration is missing"):
         await auth.login("valid-code")
     assert not fake_uow.web_sessions.records

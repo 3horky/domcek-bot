@@ -17,6 +17,10 @@ class LoginDenied(PermissionError):
     pass
 
 
+class GuildConfigurationMissing(RuntimeError):
+    """The server cannot authorize anyone because its role mapping is unavailable."""
+
+
 @dataclass(frozen=True, slots=True)
 class LoginResult:
     session: IssuedSession
@@ -73,7 +77,7 @@ class AuthService:
         async with self._unit_of_work.transaction() as repositories:
             config = await repositories.guild_configs.get(self._guild_id)
         if config is None:
-            raise LoginDenied("guild configuration is missing")
+            raise GuildConfigurationMissing("guild configuration is missing")
         roles = resolve_app_roles(role_ids, config)
         avatar_url = (
             None

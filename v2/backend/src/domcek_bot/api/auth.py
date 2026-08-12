@@ -20,7 +20,11 @@ from domcek_bot.api.dependencies import (
 from domcek_bot.api.errors import ApplicationError
 from domcek_bot.application.auth.contracts import DiscordIdentityError, DiscordMemberNotFound
 from domcek_bot.application.auth.oauth_state import InvalidOAuthState
-from domcek_bot.application.auth.service import REQUIRED_OAUTH_SCOPES, LoginDenied
+from domcek_bot.application.auth.service import (
+    REQUIRED_OAUTH_SCOPES,
+    GuildConfigurationMissing,
+    LoginDenied,
+)
 from domcek_bot.config import Settings
 
 router = APIRouter(prefix="/api/v1")
@@ -81,6 +85,14 @@ async def discord_callback(
             "Prístup nebol povolený",
             "Discord účet nemá prístup k tejto administrácii.",
             403,
+        ) from exc
+    except GuildConfigurationMissing as exc:
+        raise ApplicationError(
+            "guild_not_configured",
+            "Carlo ešte nie je pripravený",
+            "Nastavenie rolí servera nie je dostupné. "
+            "Skúste to znova alebo kontaktujte správcu Carla.",
+            503,
         ) from exc
     except DiscordIdentityError as exc:
         raise ApplicationError(
