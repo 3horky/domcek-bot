@@ -12,14 +12,11 @@ import {
   MessageSquareMore,
   Plus,
   RefreshCw,
-  Search,
   Settings2,
   ShieldCheck,
   SmilePlus,
   Sparkles,
-  Users,
   UsersRound,
-  X,
 } from 'lucide-react'
 import EmojiPicker, { EmojiStyle } from 'emoji-picker-react'
 import {
@@ -39,7 +36,6 @@ import {
   type ArchiveRequest,
   type CalendarSource,
   type DiscordDirectory,
-  type DiscordMemberOption,
   type ManualPublicationPreview,
   type PublicationSettings,
   createArchiveRequest,
@@ -51,8 +47,6 @@ import {
   getDiscordDirectory,
   prepareManualPublication,
   recoverArchiveRequests,
-  searchDiscordMembers,
-  setDiscordRole,
   syncCalendarSource,
   updateCalendarSource,
   updatePublicationSettings,
@@ -1266,207 +1260,6 @@ function ChannelEmojiPicker({
   )
 }
 
-export function RolesPanel({
-  publication,
-  setNotice,
-}: {
-  publication: PublicationSettings
-  setNotice: (notice: Notice) => void
-}) {
-  const [query, setQuery] = useState('')
-  const [members, setMembers] = useState<DiscordMemberOption[]>([])
-  const [searching, setSearching] = useState(false)
-  const [busy, setBusy] = useState<string | null>(null)
-  const [pending, setPending] = useState<{
-    member: DiscordMemberOption
-    role: 'team_mod' | 'admin'
-    enabled: boolean
-  } | null>(null)
-  useEffect(() => {
-    const normalized = query.trim()
-    if (!normalized) return
-    const controller = new AbortController()
-    const timer = window.setTimeout(() => {
-      setSearching(true)
-      void searchDiscordMembers(normalized, controller.signal)
-        .then(setMembers)
-        .catch((error: unknown) => {
-          if (!controller.signal.aborted) setNotice({ kind: 'error', text: message(error) })
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setSearching(false)
-        })
-    }, 240)
-    return () => {
-      window.clearTimeout(timer)
-      controller.abort()
-    }
-  }, [query, setNotice])
-  async function change(member: DiscordMemberOption, role: 'team_mod' | 'admin', enabled: boolean) {
-    setBusy(`${member.id}:${role}`)
-    try {
-      const changed = await setDiscordRole(member.id, role, enabled)
-      setMembers(members.map((item) => (item.id === changed.id ? changed : item)))
-      setNotice({
-        kind: 'success',
-        text: `${role === 'admin' ? 'Admin' : 'Team Mod'} oprávnenie bolo ${enabled ? 'udelené' : 'odobrané'}.`,
-      })
-    } catch (error) {
-      setNotice({ kind: 'error', text: message(error) })
-    } finally {
-      setBusy(null)
-    }
-  }
-  return (
-    <>
-      <Card className="roles-card">
-        <CardHeader>
-          <CardTitle>Oprávnenia členov</CardTitle>
-          <CardDescription>
-            Carlo dovolí meniť iba Team Mod a Admin. Posledného Admina nemožno odobrať.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="member-search picker-search-shell">
-            <Search aria-hidden="true" />
-            <Input
-              value={query}
-              placeholder="Začnite písať meno alebo prezývku…"
-              onChange={(event) => {
-                const next = event.target.value
-                setQuery(next)
-                if (!next.trim()) {
-                  setMembers([])
-                  setSearching(false)
-                }
-              }}
-            />
-            {searching && <LoaderCircle className="spin" aria-label="Vyhľadávam" />}
-            {query && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Vymazať vyhľadávanie"
-                onClick={() => {
-                  setQuery('')
-                  setMembers([])
-                  setSearching(false)
-                }}
-              >
-                <X />
-              </Button>
-            )}
-          </div>
-          <div className="member-results">
-            {members.map((member) => (
-              <MemberRoleRow
-                key={member.id}
-                member={member}
-                publication={publication}
-                busy={busy}
-                onChange={(member, role, enabled) => setPending({ member, role, enabled })}
-              />
-            ))}
-            {!query.trim() && members.length === 0 && (
-              <EmptyState
-                icon={Users}
-                title="Začnite písať meno"
-                text="Výsledky s avatarom a aktuálnymi oprávneniami sa zobrazia automaticky."
-              />
-            )}
-            {query.trim() && !searching && members.length === 0 && (
-              <EmptyState
-                icon={Users}
-                title="Nikto sa nenašiel"
-                text="Skúste inú časť mena alebo Discord prezývky."
-              />
-            )}
-          </div>
-          <p className="role-footnote">
-            <ShieldCheck /> Carlo pred každou zmenou znova overí vlastné Manage Roles oprávnenie a
-            poradie rolí.
-          </p>
-        </CardContent>
-      </Card>
-      <AlertDialog
-        open={pending !== null}
-        onOpenChange={(open) => {
-          if (!open) setPending(null)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Potvrdiť zmenu oprávnenia?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pending
-                ? `${pending.enabled ? 'Udelíte' : 'Odoberiete'} rolu ${pending.role === 'admin' ? 'Admin' : 'Team Mod'} členovi ${pending.member.display_name}.`
-                : ''}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Zrušiť</AlertDialogCancel>
-            <AlertDialogAction
-              variant={pending && !pending.enabled ? 'destructive' : 'default'}
-              onClick={() => {
-                if (pending) void change(pending.member, pending.role, pending.enabled)
-                setPending(null)
-              }}
-            >
-              Potvrdiť zmenu
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  )
-}
-
-function MemberRoleRow({
-  member,
-  publication,
-  busy,
-  onChange,
-}: {
-  member: DiscordMemberOption
-  publication: PublicationSettings
-  busy: string | null
-  onChange: (member: DiscordMemberOption, role: 'team_mod' | 'admin', enabled: boolean) => void
-}) {
-  const team =
-    publication.team_mod_role_id !== null && member.role_ids.includes(publication.team_mod_role_id)
-  const admin =
-    publication.admin_role_id !== null && member.role_ids.includes(publication.admin_role_id)
-  return (
-    <article className="member-row">
-      <div className="member-identity">
-        {member.avatar_url ? (
-          <img src={member.avatar_url} alt="" />
-        ) : (
-          <span>{member.display_name[0]}</span>
-        )}
-        <div>
-          <strong>{member.display_name}</strong>
-          <small>@{member.username}</small>
-        </div>
-      </div>
-      <div className="role-switches">
-        <ToggleCompact
-          label="Team Mod"
-          checked={team}
-          disabled={busy === `${member.id}:team_mod`}
-          onChecked={(checked) => onChange(member, 'team_mod', checked)}
-        />
-        <ToggleCompact
-          label="Admin"
-          checked={admin}
-          disabled={busy === `${member.id}:admin`}
-          onChecked={(checked) => onChange(member, 'admin', checked)}
-        />
-      </div>
-    </article>
-  )
-}
-
 function ToggleRow({
   title,
   description,
@@ -1486,24 +1279,6 @@ function ToggleRow({
       </div>
       <Switch checked={checked} onCheckedChange={onChecked} aria-label={title} />
     </div>
-  )
-}
-function ToggleCompact({
-  label,
-  checked,
-  disabled,
-  onChecked,
-}: {
-  label: string
-  checked: boolean
-  disabled: boolean
-  onChecked: (checked: boolean) => void
-}) {
-  return (
-    <label>
-      <span>{label}</span>
-      <Switch checked={checked} disabled={disabled} onCheckedChange={onChecked} />
-    </label>
   )
 }
 function Field({

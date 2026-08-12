@@ -31,11 +31,20 @@ Inventár východiskového dlhu: 241 hex výskytov v monolitickom `global.css`, 
 
 ## UX2 – Roly
 
-Nasleduje po uzavretom UX1.
+| ID     | Etapa | Oblasť a úloha                                       | Štandard      | Závažnosť | Dodanie | Stav súladu         | Dôkaz                                | Dopad                                                      | Cieľové správanie                                                     | Akceptácia                                              | Vynútenie | Plánovaná etapa | Stav opravy |
+| ------ | ----- | ---------------------------------------------------- | ------------- | --------- | ------- | ------------------- | ------------------------------------ | ---------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------- | --------- | --------------- | ----------- |
+| UX2-01 | UX2   | placeholder bez labelu a neúplné vyhľadávanie        | 4.2, 10.5, 14 | P0        | BLOKUJE | opravené            | browser 10 + Axe selected state      | človeka nebolo možné spoľahlivo nájsť klávesnicou          | pomenovaný combobox, avatar, Discord meno a klávesnicový výber        | dve podobné identity sa dajú rozlíšiť a vybrať Enterom  | test      | UX2             | hotovo      |
+| UX2-02 | UX2   | stará odpoveď mohla zostať pri novom dopyte          | 10.5, 16      | P0        | BLOKUJE | opravené            | browser 29                           | správca mohol vybrať človeka z už neplatného výsledku      | nový dopyt ihneď zruší starý obsah a zastaraná odpoveď ho neprepíše   | oneskorený prvý request neprepíše novšie dve možnosti   | test      | UX2             | hotovo      |
+| UX2-03 | UX2   | všeobecné potvrdenie a neadresný výsledok            | 3.6, 9.2, 15  | P0        | BLOKUJE | opravené            | browser 10                           | citlivá zmena neukazovala presne osobu, rolu a výsledok    | tlačidlo, dialóg, úspech aj chyba pomenúvajú človeka a rolu           | grant/remove Team Mod aj Admin majú presný text         | test      | UX2             | hotovo      |
+| UX2-04 | UX2   | posledný Admin a Discord obmedzenie bez recovery     | 11.4, 13.4    | P0        | BLOKUJE | opravené            | browser 23–24                        | chyba mohla vyzerať ako všeobecné zlyhanie alebo úspech    | chyba vysvetlí nezmenený/neistý stav a konkrétny ďalší krok           | posledný Admin ostane; Discord chyba nemá success       | test      | UX2             | hotovo      |
+| UX2-05 | UX2   | dvojklik a strata Admin oprávnenia pri potvrdení     | 3.6, 4.1      | P0        | BLOKUJE | opravené            | browser 10 a 25 + backend integrácia | mohli vzniknúť dva účinky alebo zmena po strate oprávnenia | synchrónny request guard a čerstvé serverové overenie pri každom PUT  | dvojklik = jeden request; zmena roly aktéra = 403       | test      | UX2             | hotovo      |
+| UX2-06 | UX2   | chyba vyhľadania, načítania a priamy forbidden vstup | 11, 15        | P0        | BLOKUJE | opravené            | browser 26–28                        | stránka mohla zostať v loadingu alebo bez nápravy          | lokálna chyba zachová dopyt; page chyba a zákaz majú jasný recovery   | 503 retry aj 403 skončia pravdivým stavom               | test      | UX2             | hotovo      |
+| UX2-07 | UX2   | identita a roly na mobile                            | 7.3, 13.4     | P1        | BACKLOG | opravené            | mobilný render + browser 10          | dlhé slovenské meno a akcie sa mohli stlačiť               | vybraný človek, obe roly a plné názvy akcií sa bezpečne preskladajú   | bez horizontálneho scrollu a bez odrezanej akcie        | test      | UX2             | hotovo      |
+| UX2-08 | UX2   | stavovo bezpečné Undo po potvrdenej zmene roly       | 10.10, 13.7   | P1        | BACKLOG | otvorené, evidované | runtime nemá undo kontrakt           | bezpečný návrat dnes vyžaduje novú opačnú potvrdenú zmenu  | časovo neobmedzené Undo iba pri čerstvom oprávnení a nezmenenom stave | backend snapshot, odmietnutie po cudzej zmene a UI test | test      | E7/E9 follow-up | backlog     |
 
 ## UX3 – Nastavenia
 
-Čaká na UX2.
+Nasleduje po uzavretom UX2.
 
 ## UX4 – aplikačný rámec a spoločné stavy
 

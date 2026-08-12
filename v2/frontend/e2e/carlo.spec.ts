@@ -16,6 +16,8 @@ interface MockState {
   extraEvents: number
   reactions: Record<string, unknown>
   settingsFailureStatus: number | null
+  memberSearchFailureStatus: number | null
+  roleMutationFailure: 'last_admin' | 'discord_unavailable' | null
 }
 
 const normalEvent = {
@@ -87,6 +89,8 @@ async function mockCarlo(page: Page, role: Role = 'admin'): Promise<MockState> {
     extraEvents: 0,
     reactions: defaultReactionSettings(),
     settingsFailureStatus: null,
+    memberSearchFailureStatus: null,
+    roleMutationFailure: null,
   }
   await page
     .context()
@@ -95,6 +99,12 @@ async function mockCarlo(page: Page, role: Role = 'admin'): Promise<MockState> {
     route.fulfill({
       contentType: 'image/svg+xml',
       body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><circle cx="32" cy="32" r="28" fill="#2f7552"/></svg>',
+    }),
+  )
+  await page.route('https://cdn.discordapp.com/avatars/**', (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" rx="32" fill="#e4f1e9"/><circle cx="32" cy="24" r="11" fill="#2f7552"/><path d="M13 56c3-14 12-20 19-20s16 6 19 20" fill="#2f7552"/></svg>',
     }),
   )
   await page.route('**/api/v1/**', async (route) => handleApi(route, state))
@@ -208,11 +218,25 @@ async function handleApi(route: Route, state: MockState) {
     return json({ run_id: 'run-1', state: 'succeeded_manual', slot_key: 'slot-1' })
   }
   if (path === '/api/v1/admin/settings') {
+    const sourcePage = new URL(request.headers()['referer'] ?? 'http://localhost/').pathname
     if (!capabilities(role).includes('manage_settings'))
-      return json({ detail: 'Na správu reakcií nemáte oprávnenie.' }, 403)
+      return json(
+        {
+          detail:
+            sourcePage === '/roly'
+              ? 'Roly môže spravovať iba Admin.'
+              : 'Na správu reakcií nemáte oprávnenie.',
+        },
+        403,
+      )
     if (state.settingsFailureStatus)
       return json(
-        { detail: 'Nastavenia reakcií sa teraz nedajú načítať.' },
+        {
+          detail:
+            sourcePage === '/roly'
+              ? 'Oprávnenia sa teraz nedajú načítať.'
+              : 'Nastavenia reakcií sa teraz nedajú načítať.',
+        },
         state.settingsFailureStatus,
       )
     return json(adminSettings(state))
@@ -241,7 +265,28 @@ async function handleApi(route: Route, state: MockState) {
       { channel_id: '777', name: 'e2e-projekt', jump_url: 'https://discord.test/777' },
       201,
     )
-  if (path === '/api/v1/admin/discord/members')
+  if (path === '/api/v1/admin/discord/members') {
+    if (state.memberSearchFailureStatus)
+      return json({ detail: 'Ľudí sa teraz nepodarilo vyhľadať.' }, state.memberSearchFailureStatus)
+    const query = new URL(request.url()).searchParams.get('query')?.toLocaleLowerCase('sk') ?? ''
+    if (query.includes('pomaly')) await new Promise((resolve) => setTimeout(resolve, 650))
+    if (query.includes('mart'))
+      return json([
+        {
+          id: '999',
+          username: 'martina.z',
+          display_name: 'Martina Živčáková-Hrušková',
+          avatar_url: 'https://cdn.discordapp.com/avatars/999/test.png',
+          role_ids: state.memberRoles,
+        },
+        {
+          id: '998',
+          username: 'martina_90',
+          display_name: 'Martina Živčáková',
+          avatar_url: null,
+          role_ids: [],
+        },
+      ])
     return json([
       {
         id: '999',
@@ -251,14 +296,37 @@ async function handleApi(route: Route, state: MockState) {
         role_ids: state.memberRoles,
       },
     ])
+  }
   if (path === '/api/v1/admin/discord/roles' && method === 'PUT') {
+    if (!capabilities(state.role).includes('manage_roles'))
+      return json({ detail: 'Roly môže spravovať iba Admin.', code: 'forbidden' }, 403)
+    if (state.roleMutationFailure === 'last_admin')
+      return json(
+        {
+          detail: 'Najprv udeľte Admin oprávnenie ďalšiemu členovi.',
+          code: 'last_admin',
+        },
+        409,
+      )
+    if (state.roleMutationFailure === 'discord_unavailable')
+      return json(
+        {
+          detail: 'Skontrolujte oprávnenia Carla a skúste operáciu znova.',
+          code: 'discord_unavailable',
+        },
+        502,
+      )
     const values = body as Record<string, unknown>
-    state.memberRoles = values.enabled ? ['901'] : []
+    const roleId = values.role === 'admin' ? '900' : '901'
+    state.memberRoles = values.enabled
+      ? [...new Set([...state.memberRoles, roleId])]
+      : state.memberRoles.filter((id) => id !== roleId)
     return json({
-      id: '999',
-      username: 'tester',
-      display_name: 'Testovací člen',
-      avatar_url: null,
+      id: String(values.member_id),
+      username: values.member_id === '999' ? 'martina.z' : 'martina_90',
+      display_name: values.member_id === '999' ? 'Martina Živčáková-Hrušková' : 'Martina Živčáková',
+      avatar_url:
+        values.member_id === '999' ? 'https://cdn.discordapp.com/avatars/999/test.png' : null,
       role_ids: state.memberRoles,
     })
   }
@@ -669,24 +737,59 @@ test('09 Team Mod požiada o archiváciu a Admin schváli konkrétnu žiadosť',
   expect(state.archives).toHaveLength(0)
 })
 
-test('10 Admin udelí a odoberie Team Mod rolu', async ({ page }) => {
+test('10 Admin klávesnicou vyberie človeka a bezpečne zmení obe roly', async ({
+  page,
+}, testInfo) => {
   const state = await mockCarlo(page)
   await page.goto('/roly')
-  await page.getByPlaceholder('Začnite písať meno alebo prezývku…').fill('tester')
-  await page.getByRole('switch', { name: 'Team Mod' }).click()
-  await page.getByRole('button', { name: 'Potvrdiť zmenu' }).click()
-  await expect(page.getByText(/Team Mod oprávnenie bolo udelené/)).toBeVisible()
-  expect(state.memberRoles).toEqual(['901'])
+  const search = page.getByRole('combobox', { name: 'Koho chcete spravovať?' })
+  await search.fill('mart')
+  await expect(page.getByRole('option')).toHaveCount(2)
+  await search.press('Enter')
+  await expect(page.getByRole('heading', { name: 'Martina Živčáková-Hrušková' })).toBeFocused()
+  const selectedStateAxe = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze()
+  expect(
+    selectedStateAxe.violations.map((violation) => violation.id),
+    'Vybraný človek musí zostať bez automaticky zistiteľného WCAG A/AA porušenia.',
+  ).toEqual([])
+  if (process.env.CARLO_VISUAL_AUDIT_DIR) {
+    await page.screenshot({
+      path: `${process.env.CARLO_VISUAL_AUDIT_DIR}/roly--selected--${testInfo.project.name}.png`,
+      fullPage: true,
+    })
+  }
 
-  await page.getByRole('switch', { name: 'Team Mod' }).click()
-  await page.getByRole('button', { name: 'Potvrdiť zmenu' }).click()
-  await expect(page.getByText(/Team Mod oprávnenie bolo odobrané/)).toBeVisible()
+  await page.getByRole('button', { name: 'Udeliť Team Mod' }).click()
+  const grantDialog = page.getByRole('alertdialog')
+  const grantTeam = grantDialog.getByRole('button', { name: 'Udeliť Team Mod', exact: true })
+  await expect(grantDialog).toContainText('Martina Živčáková-Hrušková')
+  await grantTeam.dblclick()
+  await expect(page.getByText(/Team Mod oprávnenie bolo udelené človeku Martina/)).toBeVisible()
+  expect(state.memberRoles).toEqual(['901'])
+  expect(state.calls.filter((call) => call.path === '/api/v1/admin/discord/roles')).toHaveLength(1)
+
+  await page.getByRole('button', { name: 'Udeliť Admin' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Udeliť Admin' }).click()
+  await expect(page.getByText(/Admin oprávnenie bolo udelené človeku Martina/)).toBeVisible()
+  expect(state.memberRoles).toEqual(['901', '900'])
+
+  await page.getByRole('button', { name: 'Odobrať Team Mod' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Odobrať Team Mod' }).click()
+  await expect(page.getByText(/Team Mod oprávnenie bolo odobrané človeku Martina/)).toBeVisible()
+  expect(state.memberRoles).toEqual(['900'])
+
+  await page.getByRole('button', { name: 'Odobrať Admin' }).click()
+  await expect(page.getByRole('alertdialog')).toContainText('stratí prístup k nastaveniam')
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Odobrať Admin' }).click()
+  await expect(page.getByText(/Admin oprávnenie bolo odobrané človeku Martina/)).toBeVisible()
   expect(state.memberRoles).toEqual([])
   expect(
     state.calls
       .filter((call) => call.path === '/api/v1/admin/discord/roles')
       .map((call) => (call.body as Record<string, unknown>).enabled),
-  ).toEqual([true, false])
+  ).toEqual([true, true, false, false])
 })
 
 test('11 neoprávnený používateľ neobíde Admin API', async ({ page }) => {
@@ -800,9 +903,10 @@ for (const [name, path] of [
     await mockCarlo(page)
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    if (process.env.CARLO_VISUAL_AUDIT_DIR && name === 'Reakcie') {
+    const visualAuditPage = process.env.CARLO_VISUAL_AUDIT_PAGE ?? 'Reakcie'
+    if (process.env.CARLO_VISUAL_AUDIT_DIR && name === visualAuditPage) {
       await page.screenshot({
-        path: `${process.env.CARLO_VISUAL_AUDIT_DIR}/reakcie--baseline--${testInfo.project.name}.png`,
+        path: `${process.env.CARLO_VISUAL_AUDIT_DIR}/${path === '/' ? 'prehlad' : path.slice(1)}--baseline--${testInfo.project.name}.png`,
         fullPage: true,
       })
     }
@@ -906,4 +1010,95 @@ test('22 Reakcie pri chýbajúcom oprávnení zobrazia zrozumiteľný zákaz', a
   await page.goto('/reakcie')
   await expect(page.getByRole('alert')).toContainText('Na správu reakcií nemáte oprávnenie.')
   await expect(page.getByText('Načítavam reakcie a emoji…')).toHaveCount(0)
+})
+
+test('23 Roly chránia posledného Admina a dávajú konkrétny ďalší krok', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.memberRoles = ['900']
+  state.roleMutationFailure = 'last_admin'
+  await page.goto('/roly')
+  await page.getByRole('combobox', { name: 'Koho chcete spravovať?' }).fill('mart')
+  await page.getByRole('option', { name: /Martina Živčáková-Hrušková/ }).click()
+  await page.getByRole('button', { name: 'Odobrať Admin' }).click()
+  const dialog = page.getByRole('alertdialog')
+  await dialog.getByRole('button', { name: 'Odobrať Admin' }).click()
+  await expect(dialog.getByRole('alert')).toContainText(
+    'Najprv udeľte Admin oprávnenie niekomu ďalšiemu.',
+  )
+  await expect(dialog).toBeVisible()
+  expect(state.memberRoles).toEqual(['900'])
+  await dialog.getByRole('button', { name: 'Zrušiť' }).click()
+  await expect(page.getByRole('button', { name: 'Odobrať Admin' })).toBeFocused()
+})
+
+test('24 Roly pri Discord obmedzení neukážu falošný úspech', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.roleMutationFailure = 'discord_unavailable'
+  await page.goto('/roly')
+  await page.getByRole('combobox', { name: 'Koho chcete spravovať?' }).fill('mart')
+  await page.getByRole('option', { name: /Martina Živčáková-Hrušková/ }).click()
+  await page.getByRole('button', { name: 'Udeliť Team Mod' }).click()
+  const dialog = page.getByRole('alertdialog')
+  await dialog.getByRole('button', { name: 'Udeliť Team Mod' }).click()
+  await expect(dialog.getByRole('alert')).toContainText('Discord výsledok')
+  await expect(page.getByText(/oprávnenie bolo udelené/)).toHaveCount(0)
+  expect(state.memberRoles).toEqual([])
+})
+
+test('25 Roly čerstvo odmietnu zmenu po strate Admin oprávnenia', async ({ page }) => {
+  const state = await mockCarlo(page)
+  await page.goto('/roly')
+  await page.getByRole('combobox', { name: 'Koho chcete spravovať?' }).fill('mart')
+  await page.getByRole('option', { name: /Martina Živčáková-Hrušková/ }).click()
+  await page.getByRole('button', { name: 'Udeliť Team Mod' }).click()
+  state.role = 'team_mod'
+  const dialog = page.getByRole('alertdialog')
+  await dialog.getByRole('button', { name: 'Udeliť Team Mod' }).click()
+  await expect(dialog.getByRole('alert')).toContainText('už nie je platné')
+  expect(state.memberRoles).toEqual([])
+})
+
+test('26 Roly obnovia lokálne zlyhané vyhľadávanie bez straty dopytu', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.memberSearchFailureStatus = 503
+  await page.goto('/roly')
+  const search = page.getByRole('combobox', { name: 'Koho chcete spravovať?' })
+  await search.fill('mart')
+  const error = page.getByRole('alert').filter({ hasText: 'Ľudí sa teraz nepodarilo vyhľadať' })
+  await expect(error).toBeVisible()
+  await expect(search).toHaveValue('mart')
+  state.memberSearchFailureStatus = null
+  await error.getByRole('button', { name: 'Skúsiť znova' }).click()
+  await expect(page.getByRole('option')).toHaveCount(2)
+})
+
+test('27 Roly pri chybe načítania ponúknu obnovu a nezostanú v loadingu', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.settingsFailureStatus = 503
+  await page.goto('/roly')
+  await expect(page.getByRole('alert')).toContainText('Oprávnenia sa teraz nedajú načítať.')
+  await expect(page.getByText('Načítavam roly…')).toHaveCount(0)
+  state.settingsFailureStatus = null
+  await page.getByRole('button', { name: 'Skúsiť znova' }).click()
+  await expect(page.getByRole('heading', { name: 'Nájdite človeka' })).toBeVisible()
+})
+
+test('28 Roly pri priamom vstupe bez Admin oprávnenia vysvetlia zákaz', async ({ page }) => {
+  await mockCarlo(page, 'team_mod')
+  await page.goto('/roly')
+  await expect(page.getByRole('alert')).toContainText('Roly môže spravovať iba Admin.')
+  await expect(page.getByText('Načítavam roly…')).toHaveCount(0)
+})
+
+test('29 Roly nedovolia starej odpovedi prepísať novší dopyt', async ({ page }) => {
+  await mockCarlo(page)
+  await page.goto('/roly')
+  const search = page.getByRole('combobox', { name: 'Koho chcete spravovať?' })
+  await search.fill('pomaly')
+  await page.waitForTimeout(300)
+  await search.fill('mart')
+  await expect(page.getByRole('option')).toHaveCount(2)
+  await page.waitForTimeout(500)
+  await expect(page.getByRole('option')).toHaveCount(2)
+  await expect(page.getByRole('option', { name: /Testovací člen/ })).toHaveCount(0)
 })

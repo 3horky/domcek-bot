@@ -14,7 +14,8 @@ import { useAuth } from '../auth/context'
 import { LoadErrorState, LoadingState } from '../components/AsyncState'
 import { Button } from '../components/ui/button'
 import { ReactionsPanel } from './ReactionsPanel'
-import { ChannelsPanel, NoticeBanner, RolesPanel, type Notice } from './SettingsPage'
+import { RolesPanel } from './RolesPanel'
+import { ChannelsPanel, NoticeBanner, type Notice } from './SettingsPage'
 
 export function ChannelsPage() {
   const auth = useAuth()
@@ -70,12 +71,15 @@ export function ChannelsPage() {
 export function RolesPage() {
   const [settings, setSettings] = useState<AdminSettings | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const load = useCallback(async () => {
+    setLoading(true)
+    setLoadError(null)
     try {
       setSettings(await getAdminSettings())
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error) })
+      setLoadError(errorMessage(error))
     } finally {
       setLoading(false)
     }
@@ -94,8 +98,13 @@ export function RolesPage() {
       notice={notice}
       onReload={load}
     >
-      {loading || !settings ? (
+      {loading ? (
         <LoadingState label="Načítavam roly…" />
+      ) : loadError || !settings ? (
+        <LoadErrorState
+          detail={loadError ?? 'Carlo neposlal úplné nastavenie rolí.'}
+          onRetry={() => void load()}
+        />
       ) : (
         <RolesPanel publication={settings.publication} setNotice={setNotice} />
       )}

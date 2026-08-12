@@ -5,9 +5,9 @@
 ## Základné údaje
 
 - **Posledná aktualizácia:** 12. august 2026
-- **Celkový stav:** E0–E11 sú implementované a auditované; UX0 je pushnutá a UX1 Reakcie je lokálne funkčne, vizuálne aj prístupnostne uzavretá. Úplná regresia má 193 úspešných backendových testov a 1 opt-in skip, 15 frontendových testov, 54 desktop/mobile browser scenárov a 2 full-stack browser scenáre. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
-- **Aktuálna etapa:** E12 zostáva externe otvorená; paralelne prebieha autonómny nočný UI/UX priechod UX0–UX10 bez priebežných otázok. UX1 je lokálne uzavretá a nasleduje UX2 Roly; režim `live` zostáva zakázaný
-- **Najbližší kontrolný bod:** commit a push UX1, potom bez čakania pokračovať UX2 Roly → UX3 Nastavenia až po UX10. Produkčne podobný HTTPS staging a podpísaný ľudský UAT zostávajú odložené externé dôkazy
+- **Celkový stav:** E0–E11 sú implementované a auditované; UX0 a UX1 sú na `origin/main` a UX2 Roly je lokálne funkčne, vizuálne aj prístupnostne uzavretá. Úplná UX2 regresia má 15 frontendových testov, 68 desktop/mobile browser scenárov a 2 full-stack browser scenáre; nezmenený backend zostáva na zelenej sade 193 testov a 1 opt-in skip. Používateľ prijal dvojcyklový rehearsal ako E12 dôkaz; otvorené zostávajú produkčne podobný HTTPS staging a podpísaný rolový/responzívny UAT
+- **Aktuálna etapa:** E12 zostáva externe otvorená; paralelne prebieha autonómny nočný UI/UX priechod UX0–UX10 bez priebežných otázok. UX2 je lokálne uzavretá a nasleduje UX3 Nastavenia; režim `live` zostáva zakázaný
+- **Najbližší kontrolný bod:** commit a push UX2, potom bez čakania pokračovať UX3 Nastavenia až po UX10. Produkčne podobný HTTPS staging a podpísaný ľudský UAT zostávajú odložené externé dôkazy
 - **Produkčný runtime:** pôvodný bot; jeho existujúci aplikačný kód nebol pri príprave zadania a plánu zmenený
 - **Nový runtime Carlo:** úplný auditovaný build API, Discord procesu, workera, frontendu a PostgreSQL beží lokálne pod `v2/` výhradne v režime `shadow`
 - **Orientačný postup implementácie:** 12 z 15 etáp lokálne dokončených; E12 je otvorená a E13–E14 sú pripravené, ale blokované
@@ -97,6 +97,11 @@ Pravidlo je normatívne definované v kapitole 1.1 súboru `ZADANIE.md` a platí
 - Stránka Reakcií má jednotné dirty/save/discard správanie, ochranu rozpracovanej práce pri navigácii a zatvorení karty, explicitný recovery stav pre 403/503 a cestu na náhradu odstráneného serverového emoji. Desktopový aj mobilný finálny render bol vizuálne skontrolovaný; sticky akcie sa zobrazujú iba pri skutočnej zmene a Axe nenašiel WCAG A/AA porušenie.
 - Cielená UX1 brána prešla Ruff/mypy, 8/8 backendovými integračnými testami, ESLintom, Stylelintom, TypeScriptom a 10/10 desktop/mobile Playwright scenármi. Tie overujú aktuálny draft, presne jeden request po dvojkliku, reload uloženia, filtrovanie a úplné zrušenie kanálov, chýbajúce emoji, recovery po 503, stav bez oprávnenia a Axe.
 - Úplná UX1 regresia je zelená: 193/193 backendových testov s 1 opt-in Google skipom, 15/15 Vitest testov, produkčný frontend build, 54/54 desktop/mobile Playwright a 2/2 full-stack browser scenáre. Etapa čaká už iba na checkpoint commit/push pred začatím UX2.
+- UX1 bola uložená commitom `ef96ccf` a pushnutá na `origin/main`. UX2 Roly následne nahradila veľkú technickú kartu dvojkrokovým pracoviskom „nájsť človeka → skontrolovať oprávnenia“. Vyhľadávanie má viditeľný label, combobox sémantiku, avatar, Discord meno, klávesnicový výber, lokálny loading/empty/error/retry a ochranu pred zastaranou odpoveďou.
+- Vybraný človek má samostatný čitateľný súhrn a presne dve oprávnenia s ľudským dopadom. Citlivé tlačidlá aj dialóg pomenúvajú osobu, rolu a výsledok; odobratie používa deštruktívny variant. Dialóg zostáva otvorený do potvrdeného serverového výsledku, synchrónny guard chráni dvojklik a úspech vždy obsahuje meno človeka.
+- Posledný Admin, Discord/hierarchické zlyhanie, strata Admin schopnosti pri potvrdení, zlyhané vyhľadávanie, page 503 a priamy 403 majú samostatné pravdivé recovery toky. Desktopový, mobilný, prázdny aj vybraný stav boli vizuálne skontrolované; dlhé slovenské meno sa bezpečne preskladá. Cielená UX2 sada prešla 18/18 desktop/mobile scenármi vrátane Axe a návratu fokusu.
+- Audit eviduje jeden odložiteľný produktový dlh UX2-08: časovo neobmedzené stavovo bezpečné Undo zmeny roly vyžaduje nový backendový snapshot/reconcile kontrakt. Súčasný tok používa presné potvrdenie a nepredstiera vratnosť; dlh je plánovaný do E7/E9 follow-upu a neblokuje UX2 checkpoint.
+- Úplná UX2 regresia je zelená: kompletný lint vrátane UI/UX invariantov, TypeScript, 15/15 Vitest testov, produkčný build, 68/68 desktop/mobile Playwright a 2/2 full-stack browser scenáre. Backendový runtime sa v UX2 nemenil a zostáva pokrytý zelenou UX1 sadou 193 testov s jedným opt-in skipom.
 
 ### Následný E9 produktový overhaul správy servera
 
