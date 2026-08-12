@@ -3129,6 +3129,9 @@ label:has(input:disabled) {
   .next-publication-card {
     grid-template-columns: 1fr;
   }
+  .publication-rhythm-controls {
+    grid-template-columns: 1fr;
+  }
   .desk-panel-header {
     min-height: 70px;
   }
@@ -3248,23 +3251,6 @@ label:has(input:disabled) {
   display: grid;
   gap: 1rem;
 }
-.readonly-setting {
-  display: grid;
-  min-height: 58px;
-  align-content: center;
-  gap: 0.15rem;
-  border: 1px solid var(--input);
-  border-radius: 0.6rem;
-  background: var(--muted);
-  padding: 0.55rem 0.7rem;
-}
-.readonly-setting strong {
-  font-size: 0.82rem;
-}
-.readonly-setting span {
-  color: var(--ink-muted);
-  font-size: 0.72rem;
-}
 .settings-save-bar {
   position: sticky;
   z-index: 18;
@@ -3326,10 +3312,88 @@ label:has(input:disabled) {
 .settings-page [data-slot='card-content'] {
   padding: 0 1.3rem 1.3rem;
 }
-.settings-form-grid {
+.publication-rhythm-layout {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+  gap: 0.9rem 1rem;
+}
+.publication-rhythm-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.68fr);
+  align-content: start;
+  gap: 0.85rem;
+  border-radius: 0.8rem;
+  background: color-mix(in oklch, var(--muted), white 34%);
+  padding: 1rem;
+}
+.publication-rhythm-controls .settings-field select,
+.publication-rhythm-controls .settings-field [data-slot='input'] {
+  min-height: 44px;
+  background: var(--card);
+  font-size: 0.9rem;
+}
+.publication-next-run {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+  border: 1px solid color-mix(in oklch, var(--primary), white 68%);
+  border-radius: 0.8rem;
+  background: color-mix(in oklch, var(--brand-soft), white 36%);
+  padding: 1rem;
+  color: var(--brand-strong);
+}
+.publication-next-run-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgb(18 36 25 / 8%);
+}
+.publication-next-run-icon svg {
+  width: 20px;
+}
+.publication-next-run > div,
+.publication-timezone-note > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+.publication-next-run small {
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+  font-weight: 620;
+}
+.publication-next-run strong {
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+.publication-next-run > div > span {
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+}
+.publication-timezone-note {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  border-top: 1px solid var(--line);
+  padding: 0.75rem 0.1rem 0;
+}
+.publication-timezone-note > svg {
+  width: 17px;
+  flex: 0 0 auto;
+  color: var(--brand);
+}
+.publication-timezone-note strong {
+  font-size: 0.75rem;
+}
+.publication-timezone-note span {
+  color: var(--ink-muted);
+  font-size: 0.7rem;
 }
 .settings-fields,
 .toggle-stack,
@@ -3362,7 +3426,6 @@ label:has(input:disabled) {
   color: var(--ink-muted);
   font-size: 0.72rem;
 }
-.next-run-card,
 .permission-preview {
   display: flex;
   align-items: center;
@@ -3374,22 +3437,18 @@ label:has(input:disabled) {
   padding: 0.8rem;
   color: var(--brand-strong);
 }
-.next-run-card svg,
 .permission-preview svg {
   width: 20px;
   flex: 0 0 auto;
 }
-.next-run-card div,
 .permission-preview div {
   display: grid;
   gap: 0.12rem;
 }
-.next-run-card small,
 .permission-preview span {
   color: #587062;
   font-size: 0.72rem;
 }
-.next-run-card strong,
 .permission-preview strong {
   font-size: 0.82rem;
 }
@@ -4076,8 +4135,11 @@ label:has(input:disabled) {
   .settings-tabs button svg {
     width: 18px;
   }
-  .settings-form-grid {
+  .publication-rhythm-layout {
     grid-template-columns: 1fr;
+  }
+  .publication-timezone-note {
+    grid-column: 1;
   }
   .settings-save-bar {
     bottom: 4.8rem;

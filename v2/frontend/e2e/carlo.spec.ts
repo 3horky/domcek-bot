@@ -1503,12 +1503,25 @@ test('29 Roly nedovolia starej odpovedi prepísať novší dopyt', async ({ page
   await expect(page.getByRole('option', { name: /Testovací člen/ })).toHaveCount(0)
 })
 
-test('30 Nastavenia chránia draft, rizikovú voľbu a dvojklik uloženia', async ({ page }) => {
+test('30 Nastavenia chránia draft, rizikovú voľbu a dvojklik uloženia', async ({
+  page,
+}, testInfo) => {
   const state = await mockCarlo(page)
   await page.goto('/nastavenia')
   await expect(page.getByRole('heading', { name: 'Nastavenia' })).toBeVisible()
   await expect(page.getByText('Ručné publikovanie')).toHaveCount(0)
-  await expect(page.getByText('Europe/Bratislava · automaticky rešpektuje letný čas')).toBeVisible()
+  await expect(page.getByText('Najbližšie Carlo publikuje')).toBeVisible()
+  await expect(page.getByText('Prehľad udalostí na nasledujúcich 14 dní')).toBeVisible()
+  await expect(
+    page.getByText('Europe/Bratislava · prechod na letný čas sa zohľadní automaticky'),
+  ).toBeVisible()
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+  if (process.env.CARLO_VISUAL_AUDIT_DIR) {
+    await page.screenshot({
+      path: `${process.env.CARLO_VISUAL_AUDIT_DIR}/nastavenia--publikovanie--${testInfo.project.name}.png`,
+      fullPage: true,
+    })
+  }
 
   const closing = page.getByLabel('Záverečná správa (voliteľná)')
   await closing.fill('Pokojný záver týždňa.')

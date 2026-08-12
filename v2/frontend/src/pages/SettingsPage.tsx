@@ -8,6 +8,7 @@ import {
   Clock3,
   FolderArchive,
   FolderTree,
+  Globe2,
   LoaderCircle,
   MessageSquareMore,
   Plus,
@@ -315,42 +316,50 @@ function PublicationPanel({
             <CardHeader>
               <CardTitle>Týždenný rytmus</CardTitle>
               <CardDescription>
-                Kedy Carlo uzavrie redakciu a zverejní nasledujúcich 14 dní.
+                Kedy Carlo uzavrie redakciu a zverejní prehľad nasledujúcich 14 dní.
               </CardDescription>
             </CardHeader>
-            <CardContent className="settings-form-grid">
-              <Field label="Deň publikovania">
-                <select
-                  value={draft.publication_weekday}
-                  onChange={(event) =>
-                    setDraft({ ...draft, publication_weekday: Number(event.target.value) })
-                  }
-                >
-                  {weekdays.map((day, index) => (
-                    <option key={day} value={index}>
-                      {day.charAt(0).toUpperCase() + day.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Čas">
-                <Input
-                  type="time"
-                  value={draft.publication_time.slice(0, 5)}
-                  onChange={(event) => setDraft({ ...draft, publication_time: event.target.value })}
-                />
-              </Field>
-              <Field label="Časové pásmo">
-                <div className="readonly-setting">
-                  <strong>Slovensko</strong>
-                  <span>Europe/Bratislava · automaticky rešpektuje letný čas</span>
-                </div>
-              </Field>
-              <div className="next-run-card">
-                <Clock3 />
+            <CardContent className="publication-rhythm-layout">
+              <div className="publication-rhythm-controls">
+                <Field label="Deň publikovania">
+                  <select
+                    value={draft.publication_weekday}
+                    onChange={(event) =>
+                      setDraft({ ...draft, publication_weekday: Number(event.target.value) })
+                    }
+                  >
+                    {weekdays.map((day, index) => (
+                      <option key={day} value={index}>
+                        {day.charAt(0).toUpperCase() + day.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Čas publikovania">
+                  <Input
+                    type="time"
+                    value={draft.publication_time.slice(0, 5)}
+                    onChange={(event) =>
+                      setDraft({ ...draft, publication_time: event.target.value })
+                    }
+                  />
+                </Field>
+              </div>
+              <div className="publication-next-run" aria-live="polite">
+                <span className="publication-next-run-icon" aria-hidden="true">
+                  <Clock3 />
+                </span>
                 <div>
-                  <small>Najbližší termín</small>
+                  <small>Najbližšie Carlo publikuje</small>
                   <strong>{nextLabel}</strong>
+                  <span>Prehľad udalostí na nasledujúcich 14 dní</span>
+                </div>
+              </div>
+              <div className="publication-timezone-note">
+                <Globe2 aria-hidden="true" />
+                <div>
+                  <strong>Čas pre Slovensko</strong>
+                  <span>Europe/Bratislava · prechod na letný čas sa zohľadní automaticky</span>
                 </div>
               </div>
             </CardContent>
