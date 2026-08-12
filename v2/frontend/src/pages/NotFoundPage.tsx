@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 
-import { Button } from '../components/ui/button'
+import { buttonVariants } from '../components/ui/button'
 
 export function NotFoundPage() {
   return (
@@ -8,9 +8,9 @@ export function NotFoundPage() {
       <p className="eyebrow">Stránka sa nenašla</p>
       <h1>Táto stránka neexistuje</h1>
       <p>Skontrolujte adresu alebo sa vráťte na prehľad najbližších oznamov.</p>
-      <Button nativeButton={false} render={<Link to="/" />}>
+      <Link className={buttonVariants()} to="/">
         Späť na prehľad
-      </Button>
+      </Link>
     </section>
   )
 }

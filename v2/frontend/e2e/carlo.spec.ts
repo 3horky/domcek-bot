@@ -2110,7 +2110,7 @@ test('57 Stav systému rozlíši výpadok, skryje referenciu a obnoví sa jedný
   await page.goto('/stav')
 
   await expect(page.getByRole('heading', { name: 'Carlo je momentálne nedostupný' })).toBeVisible()
-  await expect(page.getByText('live-reference-e2e')).toHaveCount(0)
+  await expect(page.getByText('live-reference-e2e')).not.toBeVisible()
   await page.getByText('Technické údaje pre riešenie problému').click()
   await expect(page.getByText('live-reference-e2e')).toBeVisible()
 

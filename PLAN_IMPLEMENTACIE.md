@@ -837,6 +837,12 @@ Reálny Admin a Team Mod musia bez vysvetľovania dokončiť editor, INFO oznam,
 
 ### 12.5.1 Ochranná lehota pred zverejnením
 
+**Stav k 12. augustu 2026:** normatívny kontrakt je hotový, runtime stavový
+automat ešte nie. Konfigurácia odmieta bežný režim `live`, kým táto podkapitola
+a stavovo bezpečné Undo z 14.1/14.2 nemajú zelené integračné a staging dôkazy.
+Brána nemá konfiguračný bypass; po dokončení sa odstráni vedomou, testovanou
+zmenou kódu.
+
 - Nastaviteľná lehota je 0–300 sekúnd, predvolene 30; hodnota 0 ju vypne.
 - Po vytvorení nemenného snapshotu ostáva run trvácne v stave čakania a ešte nevytvorí verejnú správu ani `@everyone`.
 - Ručný tok zobrazí countdown, verný náhľad, „Zastaviť“ a „Zverejniť teraz“.

@@ -11,6 +11,11 @@
   počkať na skutočné sloty.
 - Produkčný cutover, tri stabilizačné cykly a vyradenie legacy neprebehli.
   `PUBLICATION_EXECUTION_MODE=live` preto zostáva zakázaný.
+- Ochranná lehota publikovania a časovo neobmedzené stavovo bezpečné Undo
+  Discord rolí a kanálov sú kompletne špecifikované, ale ešte nemajú trvácny
+  serverový stavový automat. Konfigurácia preto fail-closed odmietne režim
+  `live`; v konfigurácii neexistuje prepínač, ktorým by sa táto brána dala
+  obísť.
 - Produkčný systemd backup timer sa musí reálne overiť na cieľovom Linux hoste;
   vývojový macOS host nemá `systemd-analyze`.
 

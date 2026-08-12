@@ -87,16 +87,12 @@ def test_production_web_urls_require_https() -> None:
         )
 
 
-def test_manual_publication_is_enabled_only_by_live_or_explicit_staging_shadow() -> None:
+def test_manual_publication_can_use_explicit_staging_shadow() -> None:
     database_url = "postgresql+asyncpg://localhost/domcek"
     paused = Settings(database_url=database_url)
     shadow = Settings(
         database_url=database_url,
         publication_execution_mode=PublicationExecutionMode.SHADOW,
-    )
-    live = Settings(
-        database_url=database_url,
-        publication_execution_mode=PublicationExecutionMode.LIVE,
     )
     staging_shadow = Settings(
         database_url=database_url,
@@ -111,8 +107,15 @@ def test_manual_publication_is_enabled_only_by_live_or_explicit_staging_shadow()
 
     assert not paused.manual_publication_enabled
     assert not shadow.manual_publication_enabled
-    assert live.manual_publication_enabled
     assert staging_shadow.manual_publication_enabled
+
+
+def test_live_is_blocked_until_grace_period_and_undo_are_implemented() -> None:
+    with pytest.raises(ValidationError, match="grace period and state-safe Discord Undo"):
+        Settings(
+            database_url="postgresql+asyncpg://localhost/domcek",
+            publication_execution_mode=PublicationExecutionMode.LIVE,
+        )
 
 
 @pytest.mark.parametrize("environment", [AppEnvironment.LOCAL, AppEnvironment.PRODUCTION])

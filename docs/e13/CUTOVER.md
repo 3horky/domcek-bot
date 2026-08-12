@@ -33,7 +33,9 @@ Každý krok označiť časom, operátorom a výsledkom. Pri chybe sa nepokraču
     znovu nastaviť na `false`.
 14. Spustiť worker ešte v `paused`, vykonať full Calendar sync a porovnať draft.
 15. Admin explicitne schváli konkrétny slot, cieľový kanál a obsah.
-16. Zmeniť iba `PUBLICATION_EXECUTION_MODE=live`, spustiť validátor s
+16. Až po implementácii a zelenej bráne `UX5-07` a `UX7-07` odstrániť
+    dočasnú fail-closed validáciu v `config.py` a zmeniť
+    `PUBLICATION_EXECUTION_MODE=live`. Spustiť validátor s
     `--allow-live` a znovu vytvoriť iba worker.
 17. Potvrdiť worker log režimu `live`, Compose stav `healthy`, práve jednu
     aktívnu inštanciu, Calendar freshness, nulový rozpracovaný incident a
