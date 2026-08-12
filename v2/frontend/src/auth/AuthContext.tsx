@@ -40,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       signOut: async () => {
         await logout()
+        clearSessionDrafts()
         setState({ status: 'anonymous', session: null, error: null })
       },
     }),
@@ -47,4 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
+
+function clearSessionDrafts() {
+  for (let index = window.sessionStorage.length - 1; index >= 0; index -= 1) {
+    const key = window.sessionStorage.key(index)
+    if (key?.startsWith('carlo:draft:')) window.sessionStorage.removeItem(key)
+  }
 }

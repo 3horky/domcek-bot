@@ -15,7 +15,10 @@ interface MockState {
   memberRoles: string[]
   extraEvents: number
   reactions: Record<string, unknown>
+  publicationSettings: Record<string, unknown>
+  calendars: Record<string, unknown>[]
   settingsFailureStatus: number | null
+  settingsSaveFailureStatus: number | null
   memberSearchFailureStatus: number | null
   roleMutationFailure: 'last_admin' | 'discord_unavailable' | null
 }
@@ -88,7 +91,10 @@ async function mockCarlo(page: Page, role: Role = 'admin'): Promise<MockState> {
     memberRoles: [],
     extraEvents: 0,
     reactions: defaultReactionSettings(),
+    publicationSettings: defaultPublicationSettings(),
+    calendars: [],
     settingsFailureStatus: null,
+    settingsSaveFailureStatus: null,
     memberSearchFailureStatus: null,
     roleMutationFailure: null,
   }
@@ -225,7 +231,9 @@ async function handleApi(route: Route, state: MockState) {
           detail:
             sourcePage === '/roly'
               ? 'Roly môže spravovať iba Admin.'
-              : 'Na správu reakcií nemáte oprávnenie.',
+              : sourcePage === '/nastavenia'
+                ? 'Nastavenia môže spravovať iba Admin.'
+                : 'Na správu reakcií nemáte oprávnenie.',
         },
         403,
       )
@@ -235,11 +243,36 @@ async function handleApi(route: Route, state: MockState) {
           detail:
             sourcePage === '/roly'
               ? 'Oprávnenia sa teraz nedajú načítať.'
-              : 'Nastavenia reakcií sa teraz nedajú načítať.',
+              : sourcePage === '/nastavenia'
+                ? 'Nastavenia sa teraz nedajú načítať.'
+                : 'Nastavenia reakcií sa teraz nedajú načítať.',
         },
         state.settingsFailureStatus,
       )
     return json(adminSettings(state))
+  }
+  if (path === '/api/v1/admin/settings/publication' && method === 'PUT') {
+    if (!capabilities(state.role).includes('manage_settings'))
+      return json({ detail: 'Nastavenia môže spravovať iba Admin.', code: 'forbidden' }, 403)
+    if (state.settingsSaveFailureStatus)
+      return json(
+        {
+          detail:
+            state.settingsSaveFailureStatus === 409
+              ? 'Nastavenia boli medzitým zmenené.'
+              : 'Nastavenia sa nepodarilo uložiť.',
+          code: state.settingsSaveFailureStatus === 409 ? 'conflict' : 'settings_unavailable',
+        },
+        state.settingsSaveFailureStatus,
+      )
+    const values = { ...(body as Record<string, unknown>) }
+    delete values.expected_version
+    state.publicationSettings = {
+      ...values,
+      everyone_mention_enabled: true,
+      version: Number(state.publicationSettings.version) + 1,
+    }
+    return json(state.publicationSettings)
   }
   if (path === '/api/v1/admin/settings/reactions' && method === 'PUT') {
     const values = body as Record<string, unknown>
@@ -247,6 +280,32 @@ async function handleApi(route: Route, state: MockState) {
     delete state.reactions.expected_version
     return json(state.reactions)
   }
+  if (path === '/api/v1/admin/calendars' && method === 'POST') {
+    const values = body as Record<string, unknown>
+    const calendar = mockCalendar({
+      id: `calendar-${state.calendars.length + 1}`,
+      display_name: String(values.display_name),
+      external_calendar_id: String(values.external_calendar_id),
+      priority: Number(values.priority),
+    })
+    state.calendars = [...state.calendars, calendar]
+    return json(calendar, 201)
+  }
+  const calendarMatch = path.match(/^\/api\/v1\/admin\/calendars\/([^/]+)$/)
+  if (calendarMatch && method === 'PUT') {
+    const values = body as Record<string, unknown>
+    const current = state.calendars.find((item) => item.id === calendarMatch[1])
+    const updated: Record<string, unknown> = {
+      ...current,
+      ...values,
+      version: Number(current?.version ?? 1) + 1,
+    }
+    delete updated.expected_version
+    state.calendars = state.calendars.map((item) => (item.id === calendarMatch[1] ? updated : item))
+    return json(updated)
+  }
+  if (path.match(/^\/api\/v1\/admin\/calendars\/[^/]+\/sync$/) && method === 'POST')
+    return json({ received: 12, created: 2, updated: 3 })
   if (path === '/api/v1/admin/discord/reactions/test' && method === 'POST')
     return json({ message_id: 'reaction-test-message' })
   if (path === '/api/v1/admin/discord/directory') return json(directory())
@@ -416,34 +475,38 @@ function draft(state: MockState) {
 
 function adminSettings(state: MockState) {
   return {
-    publication: {
-      guild_id: '456',
-      timezone: 'Europe/Bratislava',
-      publication_weekday: 0,
-      publication_time: '20:00:00',
-      automatic_publication_enabled: true,
-      publish_google_descriptions: false,
-      generated_intro_enabled: true,
-      everyone_mention_enabled: true,
-      allow_stale_calendar_cache: false,
-      alert_calendar_sync_enabled: true,
-      alert_publication_enabled: true,
-      alert_channel_operations_enabled: true,
-      alert_role_operations_enabled: true,
-      alert_publication_reminder_enabled: false,
-      admin_role_id: '900',
-      team_mod_role_id: '901',
-      publisher_role_id: '902',
-      announcement_channel_id: '700',
-      command_channel_id: '701',
-      moderator_channel_id: '701',
-      projects_category_id: '800',
-      archive_category_id: '801',
-      closing_message: null,
-      version: 1,
-    },
-    calendars: [],
+    publication: state.publicationSettings,
+    calendars: state.calendars,
     reactions: state.reactions,
+  }
+}
+
+function defaultPublicationSettings() {
+  return {
+    guild_id: '456',
+    timezone: 'Europe/Bratislava',
+    publication_weekday: 0,
+    publication_time: '20:00:00',
+    automatic_publication_enabled: true,
+    publish_google_descriptions: false,
+    generated_intro_enabled: true,
+    everyone_mention_enabled: true,
+    allow_stale_calendar_cache: false,
+    alert_calendar_sync_enabled: true,
+    alert_publication_enabled: true,
+    alert_channel_operations_enabled: true,
+    alert_role_operations_enabled: true,
+    alert_publication_reminder_enabled: false,
+    admin_role_id: '900',
+    team_mod_role_id: '901',
+    publisher_role_id: '902',
+    announcement_channel_id: '700',
+    command_channel_id: '701',
+    moderator_channel_id: '701',
+    projects_category_id: '800',
+    archive_category_id: '801',
+    closing_message: null,
+    version: 1,
   }
 }
 
@@ -461,6 +524,24 @@ function defaultReactionSettings() {
     mention_reaction_emoji_unicode: null,
     auto_reaction_channel_ids: [],
     version: 1,
+  }
+}
+
+function mockCalendar(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+  return {
+    id: 'calendar-1',
+    guild_id: '456',
+    external_calendar_id: 'program@example.test',
+    display_name: 'Program Domčeka',
+    priority: 10,
+    active: true,
+    sync_status: 'succeeded',
+    last_sync_attempt_at: '2026-08-12T18:00:00Z',
+    last_sync_success_at: '2026-08-12T18:00:00Z',
+    last_full_sync_at: '2026-08-12T18:00:00Z',
+    last_sync_error: null,
+    version: 1,
+    ...overrides,
   }
 }
 
@@ -970,9 +1051,9 @@ test('19 Reakcie upravujú, testujú a ukladajú práve viditeľné emoji', asyn
   ).toBeChecked()
 
   const automaticRule = page.locator('.reaction-rule').filter({
-    has: page.getByRole('heading', { name: 'Automatická reakcia vo vybraných kanáloch' }),
+    has: page.getByRole('heading', { name: 'Reakcia na nové správy' }),
   })
-  await automaticRule.getByPlaceholder('Filtrovať kanály…').fill('moder')
+  await automaticRule.getByRole('textbox', { name: 'Kanály' }).fill('moder')
   await automaticRule.getByRole('option', { name: /#moderatori/ }).click()
   await expect(automaticRule.getByText('moderatori', { exact: true })).toBeVisible()
   await automaticRule.getByRole('button', { name: 'Zrušiť výber' }).click()
@@ -1101,4 +1182,147 @@ test('29 Roly nedovolia starej odpovedi prepísať novší dopyt', async ({ page
   await page.waitForTimeout(500)
   await expect(page.getByRole('option')).toHaveCount(2)
   await expect(page.getByRole('option', { name: /Testovací člen/ })).toHaveCount(0)
+})
+
+test('30 Nastavenia chránia draft, rizikovú voľbu a dvojklik uloženia', async ({ page }) => {
+  const state = await mockCarlo(page)
+  await page.goto('/nastavenia')
+  await expect(page.getByRole('heading', { name: 'Nastavenia' })).toBeVisible()
+  await expect(page.getByText('Ručné publikovanie')).toHaveCount(0)
+  await expect(page.getByText('Europe/Bratislava · automaticky rešpektuje letný čas')).toBeVisible()
+
+  const closing = page.getByLabel('Záverečná správa (voliteľná)')
+  await closing.fill('Pokojný záver týždňa.')
+  await expect(page.getByText('Máte neuložené zmeny')).toBeVisible()
+  await page.reload()
+  await expect(closing).toHaveValue('Pokojný záver týždňa.')
+  await expect(page.getByText('Máte neuložené zmeny')).toBeVisible()
+
+  await page.getByRole('tab', { name: 'Kalendáre' }).click()
+  await expect(page.getByRole('alertdialog')).toContainText('Zahodiť neuložené zmeny?')
+  await page.getByRole('button', { name: 'Zostať a dokončiť' }).click()
+  await expect(closing).toHaveValue('Pokojný záver týždňa.')
+
+  const staleSwitch = page.getByRole('switch', { name: 'Použiť posledné dostupné dáta' })
+  await staleSwitch.click()
+  await expect(page.getByRole('alertdialog')).toContainText('Povoliť publikovanie zo starších dát?')
+  await page.getByRole('button', { name: 'Nepovoliť' }).click()
+  await expect(staleSwitch).not.toBeChecked()
+  await staleSwitch.click()
+  await page.getByRole('button', { name: 'Povoliť staršie dáta' }).click()
+  await expect(staleSwitch).toBeChecked()
+
+  await page.getByRole('button', { name: 'Uložiť zmeny' }).dblclick()
+  await expect(page.getByText('Publikačné nastavenia sú uložené.')).toBeVisible()
+  expect(
+    state.calls.filter((call) => call.path === '/api/v1/admin/settings/publication'),
+  ).toHaveLength(1)
+  expect(state.publicationSettings).toMatchObject({
+    closing_message: 'Pokojný záver týždňa.',
+    allow_stale_calendar_cache: true,
+    everyone_mention_enabled: true,
+  })
+})
+
+test('31 Nastavenia pri konflikte zachovajú draft a vedome načítajú novšiu verziu', async ({
+  page,
+}) => {
+  const state = await mockCarlo(page)
+  state.settingsSaveFailureStatus = 409
+  await page.goto('/nastavenia')
+  const closing = page.getByLabel('Záverečná správa (voliteľná)')
+  await closing.fill('Moja rozpracovaná hodnota')
+  await page.getByRole('button', { name: 'Uložiť zmeny' }).click()
+  const conflict = page.getByRole('alert').filter({ hasText: 'medzitým zmenil niekto iný' })
+  await expect(conflict).toBeVisible()
+  await expect(closing).toHaveValue('Moja rozpracovaná hodnota')
+
+  state.settingsSaveFailureStatus = null
+  state.publicationSettings = {
+    ...state.publicationSettings,
+    closing_message: 'Aktuálna hodnota od iného Admina',
+    version: 2,
+  }
+  await conflict.getByRole('button', { name: 'Načítať aktuálne hodnoty' }).click()
+  await expect(page.getByLabel('Záverečná správa (voliteľná)')).toHaveValue(
+    'Aktuálna hodnota od iného Admina',
+  )
+})
+
+test('32 Kalendáre používajú modal, pravdivý výsledok a žiadnu číselnú prioritu', async ({
+  page,
+}, testInfo) => {
+  const state = await mockCarlo(page)
+  await page.goto('/nastavenia')
+  await page.getByRole('tab', { name: 'Kalendáre' }).click()
+  await expect(page.getByText('Carlo môže fungovať aj bez kalendára.')).toBeVisible()
+  if (process.env.CARLO_VISUAL_AUDIT_DIR) {
+    await page.screenshot({
+      path: `${process.env.CARLO_VISUAL_AUDIT_DIR}/nastavenia--kalendare--${testInfo.project.name}.png`,
+      fullPage: true,
+    })
+  }
+
+  const addOpener = page.locator('.calendar-card-heading').getByRole('button', {
+    name: 'Pridať kalendár',
+  })
+  await addOpener.click()
+  const dialog = page.getByRole('dialog', { name: 'Pridať Google kalendár' })
+  await dialog.getByLabel('Názov v administrácii').fill('Program Domčeka')
+  await dialog.getByLabel('Google Calendar ID').fill('program@example.test')
+  await dialog.getByRole('button', { name: 'Pridať kalendár' }).dblclick()
+  await expect(page.getByText('Google kalendár Program Domčeka bol pridaný.')).toBeVisible()
+  await expect(dialog).toBeHidden()
+  await expect(addOpener).toBeFocused()
+  expect(state.calls.filter((call) => call.path === '/api/v1/admin/calendars')).toHaveLength(1)
+
+  const row = page.locator('.calendar-row').filter({ hasText: 'Program Domčeka' })
+  await expect(row).toContainText('Aktuálny')
+  await row.getByRole('button', { name: 'Synchronizovať' }).click()
+  await expect(page.getByText(/Program Domčeka sa obnovil.*12 udalostí/)).toBeVisible()
+  await row.getByRole('button', { name: 'Upraviť' }).click()
+  const edit = page.getByRole('dialog', { name: /Upraviť kalendár Program Domčeka/ })
+  await expect(edit.getByLabel('Priorita')).toHaveCount(0)
+  await edit.getByLabel('Názov v administrácii').fill('Program a podujatia')
+  await edit.getByRole('button', { name: 'Uložiť kalendár' }).click()
+  await expect(page.getByText('Kalendár Program a podujatia bol upravený.')).toBeVisible()
+})
+
+test('33 Nastavenia pri chybe načítania a bez oprávnenia nezostanú prázdne', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.settingsFailureStatus = 503
+  await page.goto('/nastavenia')
+  await expect(
+    page.getByRole('heading', { name: 'Nastavenia sa nepodarilo načítať' }),
+  ).toBeVisible()
+  await expect(page.getByText('Nastavenia sa teraz nedajú načítať.')).toBeVisible()
+  state.settingsFailureStatus = null
+  await page.getByRole('button', { name: 'Skúsiť znova' }).click()
+  await expect(page.getByRole('heading', { name: 'Nastavenia', exact: true })).toBeVisible()
+})
+
+test('34 Priamy vstup do Nastavení bez Admin oprávnenia vysvetlí obmedzenie', async ({ page }) => {
+  await mockCarlo(page, 'team_mod')
+  await page.goto('/nastavenia')
+  await expect(
+    page.getByRole('heading', { name: 'Nastavenia sa nepodarilo načítať' }),
+  ).toBeVisible()
+  await expect(page.getByText('Nastavenia Carla môže spravovať iba Admin.')).toBeVisible()
+})
+
+test('35 Kalendár so zlyhaným obnovením ukáže vek, dopad a ľudskú nápravu', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.calendars = [
+    mockCalendar({
+      sync_status: 'failed',
+      last_sync_error: '403 forbidden permission denied',
+      last_sync_success_at: '2026-08-10T18:00:00Z',
+    }),
+  ]
+  await page.goto('/nastavenia')
+  await page.getByRole('tab', { name: 'Kalendáre' }).click()
+  const row = page.locator('.calendar-row').filter({ hasText: 'Program Domčeka' })
+  await expect(row).toContainText('Chyba')
+  await expect(row).toContainText('Carlo nemá ku kalendáru prístup')
+  await expect(row).toContainText('Naposledy úspešne')
 })

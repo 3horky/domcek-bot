@@ -409,7 +409,7 @@ describe('authenticated application shell', () => {
     fireEvent.click(await screen.findByRole('link', { name: /Nastavenia/ }))
 
     expect(await screen.findByRole('tab', { name: /Publikovanie/ })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Nastavenia Carla' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Nastavenia' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /Kalendáre/ })).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: /Kanály/ })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Oznamy')).toHaveValue('700')

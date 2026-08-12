@@ -6,9 +6,9 @@ Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny post
 | ----- | ---------------------------------- | --------- | ---------------------------------- | -------------- |
 | UX0   | auditná infraštruktúra             | hotovo    | lint, 15 unit, 46 browser scenárov | `87cb6ec`      |
 | UX1   | Reakcie                            | hotovo    | 193 backend, 15 unit, 54 browser   | `ef96ccf`      |
-| UX2   | Roly                               | hotovo    | 15 unit, 68 browser, 2 full-stack  | čaká na commit |
-| UX3   | Nastavenia                         | nasleduje | baseline sa pripraví               | –              |
-| UX4   | aplikačný rámec a spoločné stavy   | čaká      | –                                  | –              |
+| UX2   | Roly                               | hotovo    | 15 unit, 68 browser, 2 full-stack  | `0d7e1ba`      |
+| UX3   | Nastavenia                         | hotovo    | 15 unit, 80 browser, 2 full-stack  | čaká na commit |
+| UX4   | aplikačný rámec a spoločné stavy   | nasleduje | baseline sa pripraví               | –              |
 | UX5   | Prehľad                            | čaká      | –                                  | –              |
 | UX6   | Redakčný pult a Discord náhľad     | čaká      | –                                  | –              |
 | UX7   | Kanály                             | čaká      | –                                  | –              |
@@ -26,6 +26,6 @@ Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny post
 
 ## Posledný checkpoint
 
-- **Aktuálna etapa:** UX2 lokálne uzavretá; nasleduje UX3
-- **Najbližší krok:** commit/push UX2, potom vizuálny a funkčný baseline Nastavení
+- **Aktuálna etapa:** UX3 lokálne uzavretá; nasleduje UX4
+- **Najbližší krok:** commit/push UX3, potom baseline aplikačného rámca a spoločných stavov
 - **Okamžitý blokátor:** žiadny

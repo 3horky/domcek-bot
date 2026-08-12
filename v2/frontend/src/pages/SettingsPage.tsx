@@ -36,24 +36,21 @@ import {
   type ArchiveRequest,
   type CalendarSource,
   type DiscordDirectory,
-  type ManualPublicationPreview,
   type PublicationSettings,
   createArchiveRequest,
   createCalendarSource,
   createDiscordChannel,
-  confirmManualPublication,
   decideArchiveRequest,
   getAdminSettings,
   getDiscordDirectory,
-  prepareManualPublication,
   recoverArchiveRequests,
   syncCalendarSource,
   updateCalendarSource,
   updatePublicationSettings,
 } from '../api/client'
 import { useAuth } from '../auth/context'
-import { DiscordPreview } from '../components/DiscordPreview'
 import { MemberPicker, RolePicker } from '../components/DiscordPickers'
+import { UnsavedChangesGuard } from '../components/UnsavedChangesGuard'
 import { carloEmojiCategories } from '../lib/emoji'
 import { Badge } from '../components/ui/badge'
 import {
@@ -75,6 +72,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
@@ -96,10 +94,21 @@ export function SettingsPage() {
   const [directory, setDirectory] = useState<DiscordDirectory | null>(null)
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState<Notice>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [settingsRevision, setSettingsRevision] = useState(0)
+  const [activeSection, setActiveSection] = useState('publikovanie')
+  const [pendingSection, setPendingSection] = useState<string | null>(null)
+  const [publicationDirty, setPublicationDirty] = useState(false)
+  const handlePublicationDirty = useCallback((dirty: boolean) => setPublicationDirty(dirty), [])
+  const publicationDraftKey =
+    auth.status === 'authenticated'
+      ? `carlo:draft:publication-settings:${auth.session.guild_id}:${auth.session.user.id}:${settings?.publication.version ?? 'loading'}`
+      : 'carlo:draft:publication-settings:anonymous'
 
   const reload = useCallback(async () => {
     setLoading(true)
     setNotice(null)
+    setLoadError(null)
     try {
       const [directoryValue, settingsValue] = await Promise.all([
         getDiscordDirectory(),
@@ -107,8 +116,9 @@ export function SettingsPage() {
       ])
       setDirectory(directoryValue)
       setSettings(settingsValue)
+      setSettingsRevision((current) => current + 1)
     } catch (error) {
-      setNotice({ kind: 'error', text: message(error) })
+      setLoadError(message(error))
     } finally {
       setLoading(false)
     }
@@ -123,7 +133,7 @@ export function SettingsPage() {
         setSettings(settingsValue)
       })
       .catch((error: unknown) => {
-        if (!cancelled) setNotice({ kind: 'error', text: message(error) })
+        if (!cancelled) setLoadError(message(error))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -134,22 +144,41 @@ export function SettingsPage() {
   }, [canAdmin])
 
   if (loading) return <SettingsSkeleton />
-  if (!directory) return <PageError notice={notice} onRetry={() => void reload()} />
+  if (!canAdmin)
+    return (
+      <PageError
+        notice={{ kind: 'error', text: 'Nastavenia Carla môže spravovať iba Admin.' }}
+        onRetry={() => void reload()}
+        retryLabel="Obnoviť oprávnenia"
+      />
+    )
+  if (!directory || !settings)
+    return (
+      <PageError
+        notice={{ kind: 'error', text: loadError ?? 'Carlo neposlal úplné nastavenia.' }}
+        onRetry={() => void reload()}
+      />
+    )
 
   return (
     <section className="settings-page">
       <header className="settings-hero">
         <div>
-          <p className="eyebrow">Riadiace centrum</p>
-          <h1>Nastavenia Carla</h1>
-          <p>Časovanie, obsah publikovania a zdroje z Google kalendára.</p>
+          <p className="eyebrow">Trvalé pravidlá</p>
+          <h1>Nastavenia</h1>
+          <p>Publikovanie, miesta na Discorde a zdroje z Google Kalendára.</p>
         </div>
-        <Button variant="outline" onClick={() => void reload()}>
-          <RefreshCw /> Obnoviť údaje
-        </Button>
       </header>
       {notice && <NoticeBanner notice={notice} />}
-      <Tabs defaultValue="publikovanie" className="settings-workspace">
+      <Tabs
+        value={activeSection}
+        onValueChange={(next) => {
+          if (publicationDirty && activeSection === 'publikovanie' && next !== activeSection)
+            setPendingSection(next)
+          else setActiveSection(next)
+        }}
+        className="settings-workspace"
+      >
         <TabsList className="settings-tabs" aria-label="Sekcie nastavení">
           {canAdmin && (
             <TabsTrigger value="publikovanie">
@@ -167,14 +196,16 @@ export function SettingsPage() {
         {canAdmin && settings && (
           <TabsContent value="publikovanie">
             <PublicationPanel
+              key={`${settings.publication.version}:${settingsRevision}`}
               value={settings.publication}
               directory={directory}
               onSaved={(value) => {
                 setSettings({ ...settings, publication: value })
                 setNotice({ kind: 'success', text: 'Publikačné nastavenia sú uložené.' })
               }}
-              onError={(text) => setNotice({ kind: 'error', text })}
-              onPublished={(text) => setNotice({ kind: 'success', text })}
+              onReload={() => void reload()}
+              onDirtyChange={handlePublicationDirty}
+              draftStorageKey={publicationDraftKey}
             />
           </TabsContent>
         )}
@@ -188,6 +219,37 @@ export function SettingsPage() {
           </TabsContent>
         )}
       </Tabs>
+      <AlertDialog
+        open={pendingSection !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingSection(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Zahodiť neuložené zmeny?</AlertDialogTitle>
+            <AlertDialogDescription>
+              V nastaveniach publikovania máte zmeny, ktoré ešte nie sú uložené. Pri prechode na
+              kalendáre sa zahodia.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Zostať a dokončiť</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                window.sessionStorage.removeItem(publicationDraftKey)
+                setSettingsRevision((current) => current + 1)
+                setPublicationDirty(false)
+                setActiveSection(pendingSection ?? 'publikovanie')
+                setPendingSection(null)
+              }}
+            >
+              Zahodiť zmeny
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   )
 }
@@ -196,285 +258,323 @@ function PublicationPanel({
   value,
   directory,
   onSaved,
-  onError,
-  onPublished,
+  onReload,
+  onDirtyChange,
+  draftStorageKey,
 }: {
   value: PublicationSettings
   directory: DiscordDirectory
   onSaved: (value: PublicationSettings) => void
-  onError: (text: string) => void
-  onPublished: (text: string) => void
+  onReload: () => void
+  onDirtyChange: (dirty: boolean) => void
+  draftStorageKey: string
 }) {
-  const [draft, setDraft] = useState(value)
+  const [draft, setDraft] = useState(() => restoredPublicationDraft(draftStorageKey, value))
   const [saving, setSaving] = useState(false)
-  const [publishPreview, setPublishPreview] = useState<ManualPublicationPreview | null>(null)
-  const [publishing, setPublishing] = useState(false)
+  const [saveError, setSaveError] = useState<{ text: string; conflict: boolean } | null>(null)
+  const [confirmStaleCache, setConfirmStaleCache] = useState(false)
+  const saveInFlight = useRef(false)
+  const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(value), [draft, value])
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange])
+  useEffect(() => {
+    if (dirty) window.sessionStorage.setItem(draftStorageKey, JSON.stringify(draft))
+    else window.sessionStorage.removeItem(draftStorageKey)
+  }, [dirty, draft, draftStorageKey])
   const nextLabel = useMemo(() => nextPublicationLabel(draft), [draft])
   async function save() {
+    if (saveInFlight.current || !dirty) return
+    saveInFlight.current = true
     setSaving(true)
+    setSaveError(null)
     try {
-      onSaved(await updatePublicationSettings(draft))
+      const saved = await updatePublicationSettings(draft)
+      window.sessionStorage.removeItem(draftStorageKey)
+      onSaved(saved)
     } catch (error) {
-      onError(message(error))
+      setSaveError({
+        text:
+          error instanceof ApiError && error.status === 409
+            ? 'Nastavenia medzitým zmenil niekto iný. Vaše hodnoty zostali zachované; načítajte aktuálnu verziu a zmenu urobte znova.'
+            : `Nastavenia sa nepodarilo uložiť. Vaše zmeny zostali zachované. ${message(error)}`,
+        conflict: error instanceof ApiError && error.status === 409,
+      })
     } finally {
+      saveInFlight.current = false
       setSaving(false)
     }
   }
-  async function preparePublish() {
-    setPublishing(true)
-    try {
-      setPublishPreview(await prepareManualPublication())
-    } catch (error) {
-      onError(message(error))
-    } finally {
-      setPublishing(false)
-    }
-  }
-  async function publish() {
-    if (!publishPreview) return
-    setPublishing(true)
-    try {
-      const result = await confirmManualPublication(publishPreview.confirmation_token)
-      setPublishPreview(null)
-      onPublished(`Publikovanie skončilo stavom ${result.state}.`)
-    } catch (error) {
-      onError(message(error))
-    } finally {
-      setPublishing(false)
-    }
-  }
   return (
-    <div className="settings-grid settings-grid-main">
-      <div className="settings-stack">
-        <Card>
-          <CardHeader>
-            <CardTitle>Týždenný rytmus</CardTitle>
-            <CardDescription>
-              Kedy Carlo uzavrie redakciu a zverejní nasledujúcich 14 dní.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="settings-form-grid">
-            <Field label="Deň publikovania">
-              <select
-                value={draft.publication_weekday}
-                onChange={(event) =>
-                  setDraft({ ...draft, publication_weekday: Number(event.target.value) })
-                }
-              >
-                {weekdays.map((day, index) => (
-                  <option key={day} value={index}>
-                    {day.charAt(0).toUpperCase() + day.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Čas">
-              <Input
-                type="time"
-                value={draft.publication_time.slice(0, 5)}
-                onChange={(event) => setDraft({ ...draft, publication_time: event.target.value })}
-              />
-            </Field>
-            <Field label="Časové pásmo">
-              <Input
-                value={draft.timezone}
-                onChange={(event) => setDraft({ ...draft, timezone: event.target.value })}
-              />
-            </Field>
-            <div className="next-run-card">
-              <Clock3 />
-              <div>
-                <small>Najbližší termín</small>
-                <strong>{nextLabel}</strong>
+    <div className="settings-publication-workspace">
+      <UnsavedChangesGuard active={dirty} />
+      <div className="settings-grid settings-grid-main">
+        <div className="settings-stack">
+          <Card>
+            <CardHeader>
+              <CardTitle>Týždenný rytmus</CardTitle>
+              <CardDescription>
+                Kedy Carlo uzavrie redakciu a zverejní nasledujúcich 14 dní.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="settings-form-grid">
+              <Field label="Deň publikovania">
+                <select
+                  value={draft.publication_weekday}
+                  onChange={(event) =>
+                    setDraft({ ...draft, publication_weekday: Number(event.target.value) })
+                  }
+                >
+                  {weekdays.map((day, index) => (
+                    <option key={day} value={index}>
+                      {day.charAt(0).toUpperCase() + day.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Čas">
+                <Input
+                  type="time"
+                  value={draft.publication_time.slice(0, 5)}
+                  onChange={(event) => setDraft({ ...draft, publication_time: event.target.value })}
+                />
+              </Field>
+              <Field label="Časové pásmo">
+                <div className="readonly-setting">
+                  <strong>Slovensko</strong>
+                  <span>Europe/Bratislava · automaticky rešpektuje letný čas</span>
+                </div>
+              </Field>
+              <div className="next-run-card">
+                <Clock3 />
+                <div>
+                  <small>Najbližší termín</small>
+                  <strong>{nextLabel}</strong>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Obsah oznamov</CardTitle>
-            <CardDescription>
-              Predvolené správanie automaticky zostaveného prehľadu.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="toggle-stack">
-            <ToggleRow
-              title="Automatické publikovanie"
-              description="Carlo publikuje bez potreby ručného potvrdenia."
-              checked={draft.automatic_publication_enabled}
-              onChecked={(checked) =>
-                setDraft({ ...draft, automatic_publication_enabled: checked })
-              }
-            />
-            <ToggleRow
-              title="Popisy z Google kalendára"
-              description="Nové udalosti použijú kalendárový popis, pokiaľ ho redakcia neupraví."
-              checked={draft.publish_google_descriptions}
-              onChecked={(checked) => setDraft({ ...draft, publish_google_descriptions: checked })}
-            />
-            <ToggleRow
-              title="Automaticky vytvorený úvod"
-              description="Pri nedostupnosti generátora sa použije bezpečný slovenský text."
-              checked={draft.generated_intro_enabled}
-              onChecked={(checked) => setDraft({ ...draft, generated_intro_enabled: checked })}
-            />
-            <div className="toggle-row">
-              <div>
-                <strong>Upozornenie @everyone</strong>
-                <span>Carlo ho povinne vloží práve raz, iba do prvej správy.</span>
-              </div>
-              <span className="status-badge">Vždy zapnuté</span>
-            </div>
-            <ToggleRow
-              title="Núdzovo použiť posledné dáta kalendára"
-              description="Ak finálna synchronizácia zlyhá, Carlo smie publikovať iba ešte bezpečne čerstvú cache. Predvolene je publikovanie zablokované."
-              checked={draft.allow_stale_calendar_cache}
-              onChecked={(checked) => setDraft({ ...draft, allow_stale_calendar_cache: checked })}
-            />
-            <Field label="Záverečná správa (voliteľná)">
-              <Textarea
-                value={draft.closing_message ?? ''}
-                onChange={(event) =>
-                  setDraft({ ...draft, closing_message: event.target.value || null })
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Obsah oznamov</CardTitle>
+              <CardDescription>
+                Predvolené správanie automaticky zostaveného prehľadu.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="toggle-stack">
+              <ToggleRow
+                title="Automatické publikovanie"
+                description="Carlo publikuje bez potreby ručného potvrdenia."
+                checked={draft.automatic_publication_enabled}
+                onChecked={(checked) =>
+                  setDraft({ ...draft, automatic_publication_enabled: checked })
                 }
               />
-            </Field>
-          </CardContent>
-        </Card>
-        <Card>
+              <ToggleRow
+                title="Popisy z Google kalendára"
+                description="Nové udalosti použijú kalendárový popis, pokiaľ ho redakcia neupraví."
+                checked={draft.publish_google_descriptions}
+                onChecked={(checked) =>
+                  setDraft({ ...draft, publish_google_descriptions: checked })
+                }
+              />
+              <ToggleRow
+                title="Automaticky vytvorený úvod"
+                description="Pri nedostupnosti generátora sa použije bezpečný slovenský text."
+                checked={draft.generated_intro_enabled}
+                onChecked={(checked) => setDraft({ ...draft, generated_intro_enabled: checked })}
+              />
+              <div className="toggle-row">
+                <div>
+                  <strong>Upozornenie @everyone</strong>
+                  <span>Carlo ho povinne vloží práve raz, iba do prvej správy.</span>
+                </div>
+                <span className="status-badge">Vždy zapnuté</span>
+              </div>
+              <ToggleRow
+                title="Použiť posledné dostupné dáta"
+                description="Ak sa kalendár pred termínom neobnoví, Carlo smie použiť iba dáta, ktoré sú ešte bezpečne čerstvé. Predvolene publikovanie zastaví."
+                checked={draft.allow_stale_calendar_cache}
+                onChecked={(checked) => {
+                  if (checked) setConfirmStaleCache(true)
+                  else setDraft({ ...draft, allow_stale_calendar_cache: false })
+                }}
+              />
+              <Field label="Záverečná správa (voliteľná)">
+                <Textarea
+                  value={draft.closing_message ?? ''}
+                  onChange={(event) =>
+                    setDraft({ ...draft, closing_message: event.target.value || null })
+                  }
+                />
+              </Field>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Prevádzkové upozornenia</CardTitle>
+              <CardDescription>
+                Kategórie správ, ktoré Carlo pošle do kanála moderátorov. Každá má odlišné
+                označenie.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="toggle-stack">
+              <ToggleRow
+                title="Google kalendáre"
+                description="Zlyhané obnovenie a nejednoznačné zmeny opakovaných udalostí."
+                checked={draft.alert_calendar_sync_enabled}
+                onChecked={(checked) =>
+                  setDraft({ ...draft, alert_calendar_sync_enabled: checked })
+                }
+              />
+              <ToggleRow
+                title="Publikovanie"
+                description="Zastavenie, neúplný výstup, opakovaný pokus a potrebný zásah Admina."
+                checked={draft.alert_publication_enabled}
+                onChecked={(checked) => setDraft({ ...draft, alert_publication_enabled: checked })}
+              />
+              <ToggleRow
+                title="Kanálové operácie"
+                description="Zlyhané vytvorenie alebo archivácia projektového kanála."
+                checked={draft.alert_channel_operations_enabled}
+                onChecked={(checked) =>
+                  setDraft({ ...draft, alert_channel_operations_enabled: checked })
+                }
+              />
+              <ToggleRow
+                title="Zmeny rolí"
+                description="Zlyhanie pri udeľovaní alebo odoberaní Team Mod či Admin."
+                checked={draft.alert_role_operations_enabled}
+                onChecked={(checked) =>
+                  setDraft({ ...draft, alert_role_operations_enabled: checked })
+                }
+              />
+              <ToggleRow
+                title="Pripomienka pred publikovaním"
+                description="Voliteľná redakčná pripomienka pred najbližším termínom."
+                checked={draft.alert_publication_reminder_enabled}
+                onChecked={(checked) =>
+                  setDraft({ ...draft, alert_publication_reminder_enabled: checked })
+                }
+              />
+            </CardContent>
+          </Card>
+        </div>
+        <Card className="settings-side-card">
           <CardHeader>
-            <CardTitle>Prevádzkové upozornenia</CardTitle>
-            <CardDescription>
-              Kategórie správ, ktoré Carlo pošle do kanála moderátorov. Každá má odlišné označenie.
-            </CardDescription>
+            <CardTitle>Miesta na Discorde</CardTitle>
+            <CardDescription>Kanály a kategórie, ktoré Carlo používa pri práci.</CardDescription>
           </CardHeader>
-          <CardContent className="toggle-stack">
-            <ToggleRow
-              title="Google kalendáre"
-              description="Zlyhaný sync a nejednoznačné zmeny opakovaných udalostí."
-              checked={draft.alert_calendar_sync_enabled}
-              onChecked={(checked) => setDraft({ ...draft, alert_calendar_sync_enabled: checked })}
+          <CardContent className="settings-fields">
+            <ChannelSelect
+              label="Oznamy"
+              value={draft.announcement_channel_id}
+              channels={directory.channels}
+              onChange={(id) => setDraft({ ...draft, announcement_channel_id: id })}
             />
-            <ToggleRow
-              title="Publikovanie a recovery"
-              description="Blokovanie, čiastočný výstup, retry a potrebný zásah Admina."
-              checked={draft.alert_publication_enabled}
-              onChecked={(checked) => setDraft({ ...draft, alert_publication_enabled: checked })}
+            <ChannelSelect
+              label="Moderátori"
+              value={draft.moderator_channel_id}
+              channels={directory.channels}
+              onChange={(id) => setDraft({ ...draft, moderator_channel_id: id })}
             />
-            <ToggleRow
-              title="Kanálové operácie"
-              description="Zlyhané vytvorenie alebo archivácia projektového kanála."
-              checked={draft.alert_channel_operations_enabled}
-              onChecked={(checked) =>
-                setDraft({ ...draft, alert_channel_operations_enabled: checked })
-              }
+            <ChannelSelect
+              label="Príkazy"
+              value={draft.command_channel_id}
+              channels={directory.channels}
+              onChange={(id) => setDraft({ ...draft, command_channel_id: id })}
             />
-            <ToggleRow
-              title="Zmeny rolí"
-              description="Zlyhanie pri udeľovaní alebo odoberaní Team Mod či Admin."
-              checked={draft.alert_role_operations_enabled}
-              onChecked={(checked) =>
-                setDraft({ ...draft, alert_role_operations_enabled: checked })
-              }
-            />
-            <ToggleRow
-              title="Pripomienka pred publikovaním"
-              description="Voliteľná redakčná pripomienka pred najbližším termínom."
-              checked={draft.alert_publication_reminder_enabled}
-              onChecked={(checked) =>
-                setDraft({ ...draft, alert_publication_reminder_enabled: checked })
-              }
-            />
+            <div className="settings-placement-block">
+              <div>
+                <strong>Pravidlá umiestnenia</strong>
+                <span>Kam Carlo pridáva nové projektové kanály a kam presúva tie ukončené.</span>
+              </div>
+              <ChannelSelect
+                label="Nové projektové kanály"
+                value={draft.projects_category_id}
+                channels={directory.categories.filter(
+                  (category) =>
+                    category.voice_channel_count === 0 && category.id !== draft.archive_category_id,
+                )}
+                onChange={(id) => setDraft({ ...draft, projects_category_id: id })}
+              />
+              <ChannelSelect
+                label="Archivované kanály"
+                value={draft.archive_category_id}
+                channels={directory.categories.filter(
+                  (category) =>
+                    category.voice_channel_count === 0 &&
+                    category.id !== draft.projects_category_id,
+                )}
+                onChange={(id) => setDraft({ ...draft, archive_category_id: id })}
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
-      <Card className="settings-side-card">
-        <CardHeader>
-          <CardTitle>Miesta na Discorde</CardTitle>
-          <CardDescription>Kanály a kategórie, ktoré Carlo používa pri práci.</CardDescription>
-        </CardHeader>
-        <CardContent className="settings-fields">
-          <ChannelSelect
-            label="Oznamy"
-            value={draft.announcement_channel_id}
-            channels={directory.channels}
-            onChange={(id) => setDraft({ ...draft, announcement_channel_id: id })}
-          />
-          <ChannelSelect
-            label="Moderátori"
-            value={draft.moderator_channel_id}
-            channels={directory.channels}
-            onChange={(id) => setDraft({ ...draft, moderator_channel_id: id })}
-          />
-          <ChannelSelect
-            label="Príkazy"
-            value={draft.command_channel_id}
-            channels={directory.channels}
-            onChange={(id) => setDraft({ ...draft, command_channel_id: id })}
-          />
-          <div className="settings-placement-block">
-            <div>
-              <strong>Pravidlá umiestnenia</strong>
-              <span>Kam Carlo pridáva nové projektové kanály a kam presúva tie ukončené.</span>
-            </div>
-            <ChannelSelect
-              label="Nové projektové kanály"
-              value={draft.projects_category_id}
-              channels={directory.categories.filter(
-                (category) =>
-                  category.voice_channel_count === 0 && category.id !== draft.archive_category_id,
-              )}
-              onChange={(id) => setDraft({ ...draft, projects_category_id: id })}
-            />
-            <ChannelSelect
-              label="Archivované kanály"
-              value={draft.archive_category_id}
-              channels={directory.categories.filter(
-                (category) =>
-                  category.voice_channel_count === 0 && category.id !== draft.projects_category_id,
-              )}
-              onChange={(id) => setDraft({ ...draft, archive_category_id: id })}
-            />
+      {dirty && (
+        <div className="settings-save-bar" role="region" aria-label="Neuložené nastavenia">
+          <div>
+            <strong>Máte neuložené zmeny</strong>
+            <span>Na serveri sa nič nezmení, kým ich neuložíte.</span>
           </div>
-          <Button className="settings-save" disabled={saving} onClick={() => void save()}>
-            {saving ? <LoaderCircle className="spin" /> : <Check />} Uložiť nastavenia
-          </Button>
-          <div className="manual-publish-box">
-            <div>
-              <strong>Ručné publikovanie</strong>
-              <span>Úspech preskočí iba najbližší pravidelný termín.</span>
-            </div>
-            {publishPreview ? (
-              <div className="manual-publish-confirm">
-                <p>
-                  {publishPreview.announcement_count} položiek v {publishPreview.message_count}{' '}
-                  správach · {dateTime(publishPreview.scheduled_for)}
-                </p>
-                <details className="manual-publish-preview">
-                  <summary>Zobraziť presný Discord náhľad</summary>
-                  <DiscordPreview draft={publishPreview.draft} />
-                </details>
-                <div>
-                  <Button variant="outline" onClick={() => setPublishPreview(null)}>
-                    Zrušiť
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    disabled={publishing}
-                    onClick={() => void publish()}
-                  >
-                    Zverejniť teraz
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <Button variant="outline" disabled={publishing} onClick={() => void preparePublish()}>
-                Pripraviť bezpečný náhľad
-              </Button>
-            )}
+          <div>
+            <Button
+              variant="ghost"
+              disabled={saving}
+              onClick={() => {
+                setDraft(value)
+                setSaveError(null)
+                window.sessionStorage.removeItem(draftStorageKey)
+              }}
+            >
+              Zahodiť zmeny
+            </Button>
+            <Button disabled={saving} onClick={() => void save()}>
+              {saving ? <LoaderCircle className="spin" /> : <Check />} Uložiť zmeny
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
+      {saveError && (
+        <div className="settings-save-error" role="alert">
+          <MessageSquareMore aria-hidden="true" />
+          <span>{saveError.text}</span>
+          {saveError.conflict && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                window.sessionStorage.removeItem(draftStorageKey)
+                onReload()
+              }}
+            >
+              Načítať aktuálne hodnoty
+            </Button>
+          )}
+        </div>
+      )}
+      <AlertDialog open={confirmStaleCache} onOpenChange={setConfirmStaleCache}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Povoliť publikovanie zo starších dát?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ak sa Google kalendáre tesne pred termínom neobnovia, Carlo môže použiť posledné ešte
+              bezpečne čerstvé dáta. Oznam tak nemusí obsahovať najnovšiu zmenu z kalendára.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Nepovoliť</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                setDraft({ ...draft, allow_stale_calendar_cache: true })
+                setConfirmStaleCache(false)
+              }}
+            >
+              Povoliť staršie dáta
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -488,11 +588,18 @@ function CalendarsPanel({
   onChanged: (items: CalendarSource[]) => void
   setNotice: (notice: Notice) => void
 }) {
+  const [addOpen, setAddOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [calendarId, setCalendarId] = useState('')
+  const [addError, setAddError] = useState<string | null>(null)
+  const addInFlight = useRef(false)
+  const addButtonRef = useRef<HTMLButtonElement>(null)
   async function add() {
+    if (addInFlight.current) return
+    addInFlight.current = true
     setCreating(true)
+    setAddError(null)
     try {
       const result = await createCalendarSource({
         display_name: name,
@@ -503,21 +610,77 @@ function CalendarsPanel({
       onChanged([...items, result])
       setName('')
       setCalendarId('')
-      setNotice({ kind: 'success', text: 'Google kalendár bol pridaný.' })
+      setAddOpen(false)
+      setNotice({ kind: 'success', text: `Google kalendár ${result.display_name} bol pridaný.` })
     } catch (error) {
-      setNotice({ kind: 'error', text: message(error) })
+      setAddError(`Kalendár sa nepodarilo pridať. Nič sa nezmenilo. ${message(error)}`)
     } finally {
+      addInFlight.current = false
       setCreating(false)
     }
   }
   return (
-    <div className="settings-grid settings-grid-calendars">
-      <Card>
+    <div className="calendar-workspace">
+      <Card className="calendar-overview-card">
         <CardHeader>
-          <CardTitle>Pripojené kalendáre</CardTitle>
-          <CardDescription>
-            Nižšia priorita rozhoduje skôr pri rovnakom čase udalostí.
-          </CardDescription>
+          <div className="calendar-card-heading">
+            <div>
+              <CardTitle>Pripojené kalendáre</CardTitle>
+              <CardDescription>
+                Carlo môže fungovať aj bez kalendára. Aktívne zdroje pravidelne načítava iba na
+                čítanie.
+              </CardDescription>
+            </div>
+            <Dialog open={addOpen} onOpenChange={setAddOpen}>
+              <DialogTrigger render={<Button ref={addButtonRef} />}>
+                <Plus /> Pridať kalendár
+              </DialogTrigger>
+              <DialogContent className="calendar-dialog" finalFocus={() => addButtonRef.current}>
+                <DialogHeader>
+                  <DialogTitle>Pridať Google kalendár</DialogTitle>
+                  <DialogDescription>
+                    Kalendár musí byť zdieľaný so servisným účtom Carla aspoň na čítanie.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="calendar-dialog-fields">
+                  <Field label="Názov v administrácii">
+                    <Input
+                      autoFocus
+                      placeholder="Napríklad Program Domčeka"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                    />
+                  </Field>
+                  <Field
+                    label="Google Calendar ID"
+                    hint="Nájdete ho v Google Kalendári v časti Nastavenia a integrácia kalendára."
+                  >
+                    <Input
+                      placeholder="…@group.calendar.google.com"
+                      value={calendarId}
+                      onChange={(event) => setCalendarId(event.target.value)}
+                    />
+                  </Field>
+                  {addError && (
+                    <div className="calendar-local-error" role="alert">
+                      <MessageSquareMore aria-hidden="true" /> {addError}
+                    </div>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" disabled={creating} onClick={() => setAddOpen(false)}>
+                    Zrušiť
+                  </Button>
+                  <Button
+                    disabled={creating || !name.trim() || !calendarId.trim()}
+                    onClick={() => void add()}
+                  >
+                    {creating ? <LoaderCircle className="spin" /> : <Plus />} Pridať kalendár
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </CardHeader>
         <CardContent className="calendar-list">
           {items.length === 0 && (
@@ -539,36 +702,6 @@ function CalendarsPanel({
           ))}
         </CardContent>
       </Card>
-      <Card className="settings-side-card">
-        <CardHeader>
-          <CardTitle>Pridať Google kalendár</CardTitle>
-          <CardDescription>
-            Kalendár musí byť zdieľaný so servisným účtom Carla aspoň na čítanie.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="settings-fields">
-          <Field label="Názov v administrácii">
-            <Input
-              placeholder="Napríklad Program Domčeka"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </Field>
-          <Field label="Google Calendar ID">
-            <Input
-              placeholder="…@group.calendar.google.com"
-              value={calendarId}
-              onChange={(event) => setCalendarId(event.target.value)}
-            />
-          </Field>
-          <Button
-            disabled={creating || !name.trim() || !calendarId.trim()}
-            onClick={() => void add()}
-          >
-            {creating ? <LoaderCircle className="spin" /> : <Plus />} Pridať kalendár
-          </Button>
-        </CardContent>
-      </Card>
     </div>
   )
 }
@@ -585,46 +718,71 @@ function CalendarRow({
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
-  async function toggle() {
+  const [localError, setLocalError] = useState<string | null>(null)
+  const operationInFlight = useRef(false)
+  function startOperation() {
+    if (operationInFlight.current) return false
+    operationInFlight.current = true
     setBusy(true)
+    setLocalError(null)
+    return true
+  }
+  function finishOperation() {
+    operationInFlight.current = false
+    setBusy(false)
+  }
+  async function toggle() {
+    if (!startOperation()) return
     try {
-      onChanged(await updateCalendarSource({ ...value, active: !value.active }))
+      const changed = await updateCalendarSource({ ...value, active: !value.active })
+      onChanged(changed)
+      setDraft(changed)
+      setNotice({
+        kind: 'success',
+        text: `${changed.display_name} je teraz ${changed.active ? 'zapnutý' : 'vypnutý'}.`,
+      })
     } catch (error) {
-      setNotice({ kind: 'error', text: message(error) })
+      setLocalError(
+        `${value.display_name} sa nepodarilo ${value.active ? 'vypnúť' : 'zapnúť'}. Stav sa nezmenil. ${message(error)}`,
+      )
     } finally {
-      setBusy(false)
+      finishOperation()
     }
   }
   async function sync() {
-    setBusy(true)
+    if (!startOperation()) return
     try {
       const result = await syncCalendarSource(value.id)
       setNotice({
         kind: 'success',
-        text: `Synchronizácia skončila: ${result.received} prijatých udalostí.`,
+        text: `${value.display_name} sa obnovil. Carlo prijal ${result.received} udalostí, vytvoril ${result.created} a aktualizoval ${result.updated}.`,
       })
     } catch (error) {
-      setNotice({ kind: 'error', text: message(error) })
+      setLocalError(
+        `${value.display_name} sa nepodarilo obnoviť. Carlo ponechal doterajšie dáta. ${message(error)}`,
+      )
     } finally {
-      setBusy(false)
+      finishOperation()
     }
   }
   async function save() {
-    setBusy(true)
+    if (!startOperation()) return
     try {
       const changed = await updateCalendarSource(draft)
       onChanged(changed)
       setDraft(changed)
       setEditing(false)
-      setNotice({ kind: 'success', text: 'Kalendár bol upravený.' })
+      setNotice({ kind: 'success', text: `Kalendár ${changed.display_name} bol upravený.` })
     } catch (error) {
-      setNotice({ kind: 'error', text: message(error) })
+      setLocalError(
+        `${value.display_name} sa nepodarilo upraviť. Zadané hodnoty zostali zachované. ${message(error)}`,
+      )
     } finally {
-      setBusy(false)
+      finishOperation()
     }
   }
   return (
-    <article className={`calendar-row ${editing ? 'calendar-row-editing' : ''}`}>
+    <article className="calendar-row">
       <div className="calendar-icon">
         <CalendarDays />
       </div>
@@ -639,12 +797,18 @@ function CalendarRow({
             ? `Naposledy úspešne ${dateTime(value.last_sync_success_at)}`
             : 'Ešte nebola úspešne synchronizovaná'}
         </small>
+        {value.last_sync_error && value.sync_status === 'failed' && (
+          <small className="calendar-sync-error">
+            Posledné obnovenie zlyhalo: {calendarErrorText(value.last_sync_error)}
+          </small>
+        )}
       </div>
       <div className="calendar-actions">
         <Switch
           checked={value.active}
+          disabled={busy}
           onCheckedChange={() => void toggle()}
-          aria-label={`Aktivovať ${value.display_name}`}
+          aria-label={`${value.active ? 'Vypnúť' : 'Zapnúť'} kalendár ${value.display_name}`}
         />
         <Button
           variant="outline"
@@ -655,37 +819,55 @@ function CalendarRow({
           <RefreshCw className={busy ? 'spin' : ''} />
           Synchronizovať
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => setEditing(!editing)}>
-          {editing ? 'Zavrieť' : 'Upraviť'}
-        </Button>
+        <Dialog open={editing} onOpenChange={setEditing}>
+          <DialogTrigger render={<Button variant="ghost" size="sm" />}>Upraviť</DialogTrigger>
+          <DialogContent className="calendar-dialog">
+            <DialogHeader>
+              <DialogTitle>Upraviť kalendár {value.display_name}</DialogTitle>
+              <DialogDescription>
+                Zmena názvu nemení Google kalendár. Po zmene ID Carlo pri ďalšom obnovení načíta
+                nový zdroj.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="calendar-dialog-fields">
+              <Field label="Názov v administrácii">
+                <Input
+                  value={draft.display_name}
+                  onChange={(event) => setDraft({ ...draft, display_name: event.target.value })}
+                />
+              </Field>
+              <Field label="Google Calendar ID">
+                <Input
+                  value={draft.external_calendar_id}
+                  onChange={(event) =>
+                    setDraft({ ...draft, external_calendar_id: event.target.value })
+                  }
+                />
+              </Field>
+              {localError && (
+                <div className="calendar-local-error" role="alert">
+                  <MessageSquareMore aria-hidden="true" /> {localError}
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" disabled={busy} onClick={() => setEditing(false)}>
+                Zrušiť
+              </Button>
+              <Button
+                disabled={busy || !draft.display_name.trim() || !draft.external_calendar_id.trim()}
+                onClick={() => void save()}
+              >
+                {busy ? <LoaderCircle className="spin" /> : <Check />} Uložiť kalendár
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
-      {editing && (
-        <div className="calendar-edit-form">
-          <Field label="Názov">
-            <Input
-              value={draft.display_name}
-              onChange={(event) => setDraft({ ...draft, display_name: event.target.value })}
-            />
-          </Field>
-          <Field label="Google Calendar ID">
-            <Input
-              value={draft.external_calendar_id}
-              onChange={(event) => setDraft({ ...draft, external_calendar_id: event.target.value })}
-            />
-          </Field>
-          <Field label="Priorita">
-            <Input
-              type="number"
-              min={0}
-              max={10000}
-              value={draft.priority}
-              onChange={(event) => setDraft({ ...draft, priority: Number(event.target.value) })}
-            />
-          </Field>
-          <Button disabled={busy} onClick={() => void save()}>
-            <Check /> Uložiť kalendár
-          </Button>
-        </div>
+      {localError && !editing && (
+        <p className="calendar-row-error" role="alert">
+          {localError}
+        </p>
       )}
     </article>
   )
@@ -1334,6 +1516,14 @@ function SyncBadge({ status }: { status: CalendarSource['sync_status'] }) {
   }
   return <Badge variant={status === 'failed' ? 'destructive' : 'secondary'}>{labels[status]}</Badge>
 }
+function calendarErrorText(value: string) {
+  const normalized = value.toLocaleLowerCase('sk')
+  if (normalized.includes('permission') || normalized.includes('forbidden'))
+    return 'Carlo nemá ku kalendáru prístup. Skontrolujte jeho zdieľanie.'
+  if (normalized.includes('not found') || normalized.includes('404'))
+    return 'Kalendár sa nenašiel. Skontrolujte jeho Google Calendar ID.'
+  return 'Google Kalendár neodpovedal správne. Skúste obnovenie znova.'
+}
 function EmptyState({
   icon: Icon,
   title,
@@ -1364,8 +1554,8 @@ function SettingsSkeleton() {
     <section className="settings-page">
       <div className="settings-hero">
         <div>
-          <p className="eyebrow">Riadiace centrum</p>
-          <h1>Nastavenia Carla</h1>
+          <p className="eyebrow">Trvalé pravidlá</p>
+          <h1>Nastavenia</h1>
         </div>
       </div>
       <div className="settings-loading">
@@ -1374,7 +1564,15 @@ function SettingsSkeleton() {
     </section>
   )
 }
-function PageError({ notice, onRetry }: { notice: Notice; onRetry: () => void }) {
+function PageError({
+  notice,
+  onRetry,
+  retryLabel = 'Skúsiť znova',
+}: {
+  notice: Notice
+  onRetry: () => void
+  retryLabel?: string
+}) {
   return (
     <section className="settings-page">
       <div className="settings-error">
@@ -1382,7 +1580,7 @@ function PageError({ notice, onRetry }: { notice: Notice; onRetry: () => void })
         <h1>Nastavenia sa nepodarilo načítať</h1>
         <p>{notice?.text ?? 'Skúste to znova.'}</p>
         <Button onClick={onRetry}>
-          Skúsiť znova <ChevronRight />
+          {retryLabel} <ChevronRight />
         </Button>
       </div>
     </section>
@@ -1395,6 +1593,26 @@ function dateTime(value: string) {
   return new Intl.DateTimeFormat('sk-SK', { dateStyle: 'medium', timeStyle: 'short' }).format(
     new Date(value),
   )
+}
+function restoredPublicationDraft(key: string, fallback: PublicationSettings) {
+  try {
+    const stored = window.sessionStorage.getItem(key)
+    if (!stored) return fallback
+    const parsed = JSON.parse(stored) as Partial<PublicationSettings>
+    if (
+      parsed.guild_id !== fallback.guild_id ||
+      parsed.version !== fallback.version ||
+      typeof parsed.publication_weekday !== 'number' ||
+      typeof parsed.publication_time !== 'string'
+    ) {
+      window.sessionStorage.removeItem(key)
+      return fallback
+    }
+    return { ...fallback, ...parsed }
+  } catch {
+    window.sessionStorage.removeItem(key)
+    return fallback
+  }
 }
 function nextPublicationLabel(settings: PublicationSettings) {
   const now = new Date()
