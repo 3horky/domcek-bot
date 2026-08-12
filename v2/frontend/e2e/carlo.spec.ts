@@ -1490,9 +1490,31 @@ test('28 Roly pri priamom vstupe bez Admin oprávnenia vysvetlia zákaz', async 
   await expect(page.getByText('Načítavam roly…')).toHaveCount(0)
 })
 
-test('29 Roly nedovolia starej odpovedi prepísať novší dopyt', async ({ page }) => {
+test('29 Roly nedovolia starej odpovedi prepísať novší dopyt', async ({ page }, testInfo) => {
   await mockCarlo(page)
   await page.goto('/roly')
+  const searchPanel = page.locator('.roles-search-panel')
+  const emptyPanel = page.locator('.roles-selection-empty')
+  await expect(searchPanel).toBeVisible()
+  await expect(emptyPanel).toBeVisible()
+  const panelsAreSideBySide = await page.evaluate(
+    () => window.matchMedia('(min-width: 921px)').matches,
+  )
+  if (panelsAreSideBySide) {
+    const [searchBox, emptyBox] = await Promise.all([
+      searchPanel.boundingBox(),
+      emptyPanel.boundingBox(),
+    ])
+    expect(searchBox).not.toBeNull()
+    expect(emptyBox).not.toBeNull()
+    expect(Math.abs((searchBox?.height ?? 0) - (emptyBox?.height ?? 0))).toBeLessThanOrEqual(1)
+  }
+  if (process.env.CARLO_VISUAL_AUDIT_DIR) {
+    await page.screenshot({
+      path: `${process.env.CARLO_VISUAL_AUDIT_DIR}/roly--default--${testInfo.project.name}.png`,
+      fullPage: true,
+    })
+  }
   const search = page.getByRole('combobox', { name: 'Koho chcete spravovať?' })
   await search.fill('pomaly')
   await page.waitForTimeout(300)
@@ -1515,6 +1537,19 @@ test('30 Nastavenia chránia draft, rizikovú voľbu a dvojklik uloženia', asyn
   await expect(
     page.getByText('Europe/Bratislava · prechod na letný čas sa zohľadní automaticky'),
   ).toBeVisible()
+  const weekdayControl = page.getByLabel('Deň publikovania')
+  const timeControl = page.getByLabel('Čas publikovania')
+  const [weekdayBox, timeBox, weekdayRadius, timeRadius] = await Promise.all([
+    weekdayControl.boundingBox(),
+    timeControl.boundingBox(),
+    weekdayControl.evaluate((element) => getComputedStyle(element).borderRadius),
+    timeControl.evaluate((element) => getComputedStyle(element).borderRadius),
+  ])
+  expect(weekdayBox).not.toBeNull()
+  expect(timeBox).not.toBeNull()
+  expect(Math.abs((weekdayBox?.width ?? 0) - (timeBox?.width ?? 0))).toBeLessThanOrEqual(1)
+  expect(Math.abs((weekdayBox?.height ?? 0) - (timeBox?.height ?? 0))).toBeLessThanOrEqual(1)
+  expect(weekdayRadius).toBe(timeRadius)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
   if (process.env.CARLO_VISUAL_AUDIT_DIR) {
     await page.screenshot({
