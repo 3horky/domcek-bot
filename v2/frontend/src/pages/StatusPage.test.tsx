@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 import { StatusPage } from './StatusPage'
@@ -26,7 +26,7 @@ const operationsSummary = {
       healthy: true,
       started_at: '2026-08-10T17:00:00+00:00',
       last_seen_at: '2026-08-10T17:59:55+00:00',
-      details: { publication_execution_mode: 'shadow' },
+      details: { publication_execution_mode: 'live' },
     },
   ],
   active_instance_counts: { bot: 1, worker: 1 },
@@ -48,60 +48,71 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
+function mockStatusApi(options?: {
+  readinessFailure?: boolean
+  operations?: typeof operationsSummary
+}) {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+    const path = String(input)
+    if (path.includes('/health/live'))
+      return Promise.resolve(
+        jsonResponse({ status: 'alive', version: '0.1.0', environment: 'test' }),
+      )
+    if (path.includes('/health/ready')) {
+      if (options?.readinessFailure)
+        return Promise.resolve(
+          new Response(JSON.stringify({ status: 'not_ready' }), {
+            status: 503,
+            headers: { 'X-Correlation-ID': 'frontend-test' },
+          }),
+        )
+      return Promise.resolve(
+        jsonResponse({ status: 'ready', dependencies: { database: { status: 'healthy' } } }),
+      )
+    }
+    return Promise.resolve(jsonResponse(options?.operations ?? operationsSummary))
+  })
+}
+
 afterEach(() => {
+  cleanup()
   vi.restoreAllMocks()
 })
 
 test('shows ready state when API and database are healthy', async () => {
-  vi.spyOn(globalThis, 'fetch')
-    .mockResolvedValueOnce(jsonResponse({ status: 'alive', version: '0.1.0', environment: 'test' }))
-    .mockResolvedValueOnce(
-      jsonResponse({ status: 'ready', dependencies: { database: { status: 'healthy' } } }),
-    )
-    .mockResolvedValueOnce(jsonResponse(operationsSummary))
+  mockStatusApi()
 
   render(<StatusPage />)
 
-  expect(await screen.findByRole('heading', { name: 'Pripravené' })).toBeInTheDocument()
-  expect(screen.getByText('healthy')).toBeInTheDocument()
-  expect(screen.getByText('Pripojený')).toBeInTheDocument()
-  expect(screen.getByText(/1 aktívna inštancia · režim/)).toHaveTextContent('shadow')
+  expect(await screen.findByRole('heading', { name: 'Carlo je pripravený' })).toBeInTheDocument()
+  expect(screen.getByText('Dostupná')).toBeInTheDocument()
+  expect(screen.getByText('Pripojené')).toBeInTheDocument()
+  expect(screen.getByText('Plánovač beží')).toBeInTheDocument()
   expect(screen.getByText('3')).toBeInTheDocument()
 })
 
 test('shows degraded state when readiness fails', async () => {
-  vi.spyOn(globalThis, 'fetch')
-    .mockResolvedValueOnce(jsonResponse({ status: 'alive', version: '0.1.0', environment: 'test' }))
-    .mockResolvedValueOnce(
-      new Response(JSON.stringify({ status: 'not_ready' }), {
-        status: 503,
-        headers: { 'X-Correlation-ID': 'frontend-test' },
-      }),
-    )
-    .mockResolvedValueOnce(jsonResponse(operationsSummary))
+  mockStatusApi({ readinessFailure: true })
 
   render(<StatusPage />)
 
-  expect(await screen.findByRole('heading', { name: 'Čiastočne dostupné' })).toBeInTheDocument()
+  expect(
+    await screen.findByRole('heading', { name: 'Niečo potrebuje pozornosť' }),
+  ).toBeInTheDocument()
+  expect(screen.getByText('frontend-test')).not.toBeVisible()
+  screen.getByText('Technické údaje pre riešenie problému').click()
   expect(screen.getByText('frontend-test')).toBeInTheDocument()
 })
 
 test('warns when more than one worker heartbeat is active', async () => {
-  vi.spyOn(globalThis, 'fetch')
-    .mockResolvedValueOnce(jsonResponse({ status: 'alive', version: '0.1.0', environment: 'test' }))
-    .mockResolvedValueOnce(
-      jsonResponse({ status: 'ready', dependencies: { database: { status: 'healthy' } } }),
-    )
-    .mockResolvedValueOnce(
-      jsonResponse({
-        ...operationsSummary,
-        active_instance_counts: { bot: 1, worker: 2 },
-      }),
-    )
+  mockStatusApi({
+    operations: {
+      ...operationsSummary,
+      active_instance_counts: { bot: 1, worker: 2 },
+    },
+  })
 
   render(<StatusPage />)
 
-  expect(await screen.findByRole('alert')).toHaveTextContent(
-    'viac aktívnych inštancií: bot 1, worker 2',
-  )
+  expect(await screen.findByRole('alert')).toHaveTextContent('Beží viac procesov rovnakého typu')
 })

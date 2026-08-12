@@ -2530,27 +2530,132 @@ label:has(input:disabled) {
   .audit-card-heading {
     align-items: flex-start;
   }
+  .hero-status {
+    grid-template-columns: 1fr;
+  }
+  .system-technical-details dl > div {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
 }
 
 .status-card {
   padding: 1rem;
 }
-.status-card h2 {
-  margin-bottom: 0.35rem;
-  font-size: 0.95rem;
+.status-card > strong {
+  display: block;
+  margin: 0.35rem 0;
+  font-size: 1.05rem;
 }
-.status-card p {
+.status-card p,
+.status-card span {
   margin-bottom: 0;
   color: var(--ink-muted);
   font-size: 0.8rem;
 }
-.status-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 0.4rem;
-  border-radius: 50%;
-  background: var(--brand);
+.hero-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.75fr);
+  align-items: center;
+  gap: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  background: var(--surface);
+  padding: 1.25rem 1.4rem;
+  box-shadow: var(--shadow-card);
+}
+.hero-status > p,
+.hero-status h2,
+.system-state-heading p {
+  margin: 0;
+}
+.hero-status > p {
+  color: var(--ink-muted);
+  line-height: 1.5;
+}
+.system-state-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.system-state-heading > svg {
+  width: 2rem;
+  color: var(--brand);
+}
+.status-degraded .system-state-heading > svg,
+.status-loading .system-state-heading > svg {
+  color: var(--warning);
+}
+.status-offline .system-state-heading > svg {
+  color: var(--destructive);
+}
+.status-degraded {
+  border-color: color-mix(in oklch, var(--warning), transparent 60%);
+  background: color-mix(in oklch, var(--warning), white 96%);
+}
+.status-offline {
+  border-color: color-mix(in oklch, var(--destructive), transparent 65%);
+  background: color-mix(in oklch, var(--destructive), white 97%);
+}
+.status-section {
+  display: grid;
+  gap: 0.85rem;
+}
+.system-issues {
+  border: 1px solid color-mix(in oklch, var(--warning), transparent 65%);
+  border-radius: 1rem;
+  background: color-mix(in oklch, var(--warning), white 95%);
+  padding: 1rem 1.15rem;
+}
+.system-issues h2,
+.system-issues p {
+  margin: 0;
+}
+.system-issues h2 {
+  font-size: 1rem;
+}
+.system-issues ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.65rem 0;
+  padding-left: 1.2rem;
+}
+.system-issues p,
+.system-issues li {
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+}
+.system-technical-details {
+  border-top: 1px solid var(--line);
+  padding-top: 0.8rem;
+}
+.system-technical-details dl {
+  display: grid;
+  gap: 0.5rem;
+}
+.system-technical-details dl > div {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.5fr) minmax(0, 1fr);
+  gap: 0.8rem;
+}
+.system-technical-details dt {
+  color: var(--ink-muted);
+}
+.system-technical-details dd {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .hero-status {
+    grid-template-columns: 1fr;
+    gap: 0.7rem;
+  }
+  .system-state-heading {
+    align-items: flex-start;
+  }
+  .system-state-heading > svg {
+    flex: 0 0 auto;
+  }
 }
 
 .auth-page,

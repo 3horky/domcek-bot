@@ -34,6 +34,13 @@ interface MockState {
   publicationHistory: Record<string, unknown>[]
   shadowHistory: Record<string, unknown>[]
   auditRecords: Record<string, unknown>[]
+  sessionFailureStatus: number | null
+  livenessFailureStatus: number | null
+  readinessFailureStatus: number | null
+  readinessStatus: 'ready' | 'not_ready'
+  operationsFailureStatus: number | null
+  operationsSummary: Record<string, unknown>
+  statusDelayMs: number
 }
 
 const normalEvent = {
@@ -155,6 +162,40 @@ const auditRecord = {
   created_at: '2026-08-09T18:00:00Z',
 }
 
+function healthyOperationsSummary(executionMode = 'live'): Record<string, unknown> {
+  return {
+    observed_at: '2026-08-12T08:00:00Z',
+    next_publication: {
+      slot_key: '2026-08-17T20:00:00+02:00',
+      scheduled_for: '2026-08-17T18:00:00Z',
+    },
+    processes: [
+      {
+        process_name: 'bot',
+        instance_id: 'bot-e2e',
+        state: 'running',
+        healthy: true,
+        started_at: '2026-08-12T07:00:00Z',
+        last_seen_at: '2026-08-12T08:00:00Z',
+        details: {},
+      },
+      {
+        process_name: 'worker',
+        instance_id: 'worker-e2e',
+        state: 'running',
+        healthy: true,
+        started_at: '2026-08-12T07:00:00Z',
+        last_seen_at: '2026-08-12T08:00:00Z',
+        details: { publication_execution_mode: executionMode },
+      },
+    ],
+    active_instance_counts: { bot: 1, worker: 1 },
+    calendars: [],
+    publication_metrics: { sample_size: 6, successful: 5, failed: 1, in_progress: 0, skipped: 0 },
+    recent_tasks: [],
+  }
+}
+
 function capabilities(role: Role) {
   if (role === 'admin')
     return [
@@ -206,6 +247,13 @@ async function mockCarlo(page: Page, role: Role = 'admin'): Promise<MockState> {
     publicationHistory: [],
     shadowHistory: [],
     auditRecords: [],
+    sessionFailureStatus: null,
+    livenessFailureStatus: null,
+    readinessFailureStatus: null,
+    readinessStatus: 'ready',
+    operationsFailureStatus: null,
+    operationsSummary: healthyOperationsSummary(),
+    statusDelayMs: 0,
   }
   await page
     .context()
@@ -229,6 +277,7 @@ async function mockCarlo(page: Page, role: Role = 'admin'): Promise<MockState> {
     }),
   )
   await page.route('**/api/v1/**', async (route) => handleApi(route, state))
+  await page.route('**/health/**', async (route) => handleApi(route, state))
   return state
 }
 
@@ -244,6 +293,14 @@ async function handleApi(route: Route, state: MockState) {
     route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(value) })
 
   if (path === '/api/v1/session') {
+    if (state.sessionFailureStatus)
+      return json(
+        {
+          detail: 'Prihlásenie sa teraz nedá overiť.',
+          correlation_id: 'session-reference-e2e',
+        },
+        state.sessionFailureStatus,
+      )
     if (role === 'none') return json({ code: 'authentication_required' }, 401)
     return json({
       authenticated: true,
@@ -252,6 +309,35 @@ async function handleApi(route: Route, state: MockState) {
       roles: [role],
       capabilities: capabilities(role),
       expires_at: '2026-08-11T12:00:00Z',
+    })
+  }
+  if (path === '/health/live') {
+    if (state.statusDelayMs)
+      await new Promise((resolve) => setTimeout(resolve, state.statusDelayMs))
+    if (state.livenessFailureStatus)
+      return json(
+        {
+          detail: 'Carlo momentálne neodpovedá.',
+          correlation_id: 'live-reference-e2e',
+        },
+        state.livenessFailureStatus,
+      )
+    return json({ status: 'alive', version: '2.0-e2e', environment: 'test' })
+  }
+  if (path === '/health/ready') {
+    if (state.readinessFailureStatus)
+      return json(
+        {
+          detail: 'Pripravenosť sa nepodarilo overiť.',
+          correlation_id: 'ready-reference-e2e',
+        },
+        state.readinessFailureStatus,
+      )
+    return json({
+      status: state.readinessStatus,
+      dependencies: {
+        database: { status: state.readinessStatus === 'ready' ? 'healthy' : 'unhealthy' },
+      },
     })
   }
   if (role === 'none') return json({ code: 'authentication_required' }, 401)
@@ -588,7 +674,17 @@ async function handleApi(route: Route, state: MockState) {
       return json({ detail: 'Históriu zmien sa nepodarilo načítať.' }, state.auditFailureStatus)
     return json(state.auditRecords)
   }
-  if (path === '/api/v1/operations/summary') return json({ processes: [], calendars: [] })
+  if (path === '/api/v1/operations/summary') {
+    if (state.operationsFailureStatus)
+      return json(
+        {
+          detail: 'Prevádzkový súhrn sa nepodarilo načítať.',
+          correlation_id: 'operations-reference-e2e',
+        },
+        state.operationsFailureStatus,
+      )
+    return json(state.operationsSummary)
+  }
   return json({})
 }
 
@@ -1193,6 +1289,7 @@ for (const [name, path] of [
   ['Nastavenia', '/nastavenia'],
   ['História publikácií', '/historia'],
   ['História zmien', '/audit'],
+  ['Stav systému', '/stav'],
 ] as const) {
   test(`18 Axe: ${name} nemá automaticky zistiteľné WCAG A/AA porušenie`, async ({
     page,
@@ -1968,4 +2065,75 @@ test('54 História a Audit rozlíšia chybu od prázdneho stavu a ponúknu recov
   state.auditFailureStatus = null
   await page.getByRole('button', { name: 'Skúsiť znova' }).click()
   await expect(page.getByText('Zatiaľ bez zaznamenanej zmeny')).toBeVisible()
+})
+
+test('55 Stav systému nikdy nevydáva nepripravenú službu za úspech', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.readinessStatus = 'not_ready'
+  await page.goto('/stav')
+
+  await expect(page.getByRole('heading', { name: 'Niečo potrebuje pozornosť' })).toBeVisible()
+  await expect(page.getByText('Databáza alebo iná základná služba')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Carlo je pripravený' })).toHaveCount(0)
+})
+
+test('56 Stav systému ľudsky vysvetlí skúšobný režim a chybu kalendára', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.operationsSummary = {
+    ...healthyOperationsSummary('shadow'),
+    calendars: [
+      {
+        id: 'calendar-1',
+        display_name: 'Program Domčeka',
+        active: true,
+        sync_status: 'failed',
+        last_sync_attempt_at: '2026-08-12T07:55:00Z',
+        last_sync_success_at: null,
+        last_sync_error: 'upstream_timeout',
+      },
+    ],
+  }
+  await page.goto('/stav')
+
+  await expect(page.getByText('Skúšobný režim', { exact: true })).toBeVisible()
+  await expect(page.getByText('Chyba obnovenia')).toBeVisible()
+  await expect(page.getByText(/budúci obsah môže byť neúplný/i)).toBeVisible()
+  await expect(page.getByText('upstream_timeout')).toHaveCount(0)
+  await expect(page.getByText(/heartbeat/i)).toHaveCount(0)
+})
+
+test('57 Stav systému rozlíši výpadok, skryje referenciu a obnoví sa jedným requestom', async ({
+  page,
+}) => {
+  const state = await mockCarlo(page)
+  state.livenessFailureStatus = 503
+  await page.goto('/stav')
+
+  await expect(page.getByRole('heading', { name: 'Carlo je momentálne nedostupný' })).toBeVisible()
+  await expect(page.getByText('live-reference-e2e')).toHaveCount(0)
+  await page.getByText('Technické údaje pre riešenie problému').click()
+  await expect(page.getByText('live-reference-e2e')).toBeVisible()
+
+  state.livenessFailureStatus = null
+  state.statusDelayMs = 100
+  await page.getByRole('button', { name: 'Skontrolovať znova' }).dblclick()
+  await expect(page.getByRole('heading', { name: 'Carlo je pripravený' })).toBeVisible()
+  expect(state.calls.filter((call) => call.path === '/health/live')).toHaveLength(2)
+})
+
+test('58 Prihlasovacia chyba a neznáma adresa zostanú ľudské a použiteľné', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.sessionFailureStatus = 503
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Carlo sa nedá načítať' })).toBeVisible()
+  await expect(page.getByText('Prihlásenie sa teraz nedá overiť.')).toBeVisible()
+  await expect(page.getByText(/session-reference-e2e/)).toHaveCount(0)
+
+  state.sessionFailureStatus = null
+  await page.goto('/tato-stranka-neexistuje')
+  await expect(page.getByRole('heading', { name: 'Táto stránka neexistuje' })).toBeVisible()
+  await expect(page.getByText('Stránka sa nenašla')).toBeVisible()
+  await expect(page.getByText('404', { exact: true })).toHaveCount(0)
+  await page.getByRole('link', { name: 'Späť na prehľad' }).click()
+  await expect(page).toHaveURL(/\/$/)
 })

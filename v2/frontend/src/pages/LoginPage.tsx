@@ -22,7 +22,7 @@ export function LoginPage() {
       <main className="auth-page">
         <div className="auth-card" role="alert">
           <p className="eyebrow">Spojenie zlyhalo</p>
-          <h1>Administrácia sa nedá načítať</h1>
+          <h1>Carlo sa nedá načítať</h1>
           <p>{auth.error.message}</p>
           <Button type="button" onClick={auth.retry}>
             Skúsiť znova
