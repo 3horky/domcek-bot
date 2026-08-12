@@ -465,6 +465,7 @@ def _history_json(entry: PublicationHistoryEntry) -> dict[str, object]:
                 "embeds": list(message.embeds),
                 "allowed_mentions": list(message.allowed_mentions),
                 "seen_target": message.seen_target,
+                "reaction_emoji": message.reaction_emoji,
                 "attempt_count": message.attempt_count,
                 "error_detail": message.error_detail,
                 "reaction_error": message.reaction_error,

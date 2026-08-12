@@ -120,6 +120,7 @@ def _snapshot(
         embeds=({"title": title, "description": item.final_description},),
         allowed_mentions=("everyone",),
         seen_target=True,
+        reaction_emoji="👀",
         state=PublicationMessageState.SENT,
         discord_message_id=int(run_id.hex[:12], 16),
         attempt_count=1,
@@ -147,6 +148,7 @@ async def test_history_returns_ordered_immutable_snapshots_and_is_guild_isolated
     assert [entry.run.id for entry in entries] == [latest[0].id, older[0].id]
     assert entries[0].items[0].final_title == "Najnovšia"
     assert entries[0].messages[0].discord_message_id == latest[2][0].discord_message_id
+    assert entries[0].messages[0].reaction_emoji == "👀"
     assert await service.get(foreign[0].id, _principal(AppRole.ADMIN)) is None
     assert (await service.get(latest[0].id, _principal(AppRole.ADMIN))) == entries[0]
 

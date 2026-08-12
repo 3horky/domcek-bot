@@ -665,9 +665,9 @@ describe('authenticated application shell', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('link', { name: /Audit/ }))
 
-    expect(await screen.findByRole('heading', { name: 'Audit' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'História zmien' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'Záznam bol vytvorený' })).toBeInTheDocument()
-    expect(screen.getByText('Vznikol nový záznam.')).toBeInTheDocument()
-    expect(screen.getByText('Úspešné')).toBeInTheDocument()
+    expect(screen.getByText('„Mimoriadne stretnutie“ bol vytvorený.')).toBeInTheDocument()
+    expect(screen.getByText('Vykonané')).toBeInTheDocument()
   })
 })

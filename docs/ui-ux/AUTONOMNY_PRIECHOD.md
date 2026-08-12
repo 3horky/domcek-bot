@@ -11,9 +11,9 @@ Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny post
 | UX4   | aplikačný rámec a spoločné stavy   | hotovo             | 15 unit, 86 browser, 2 full-stack  | `be701aa`      |
 | UX5   | Prehľad                            | hotovo             | 193 backend, 15 unit, 92 browser   | `2a45873`      |
 | UX6   | Redakčný pult a Discord náhľad     | hotovo             | 194 backend, 15 unit, 102 browser  | `9c7ad70`      |
-| UX7   | Kanály                             | funkčný rez hotový | 15 unit, 110 browser; Undo → UX10  | čaká na commit |
-| UX8   | História publikácií a Audit        | nasleduje          | zdrojový a vizuálny audit          | –              |
-| UX9   | Stav systému a systémové obrazovky | čaká               | –                                  | –              |
+| UX7   | Kanály                             | funkčný rez hotový | 15 unit, 110 browser; Undo → UX10  | `c8f4b6d`      |
+| UX8   | História publikácií a Audit        | hotovo             | 15 unit, 122 browser, 2 backend    | čaká na commit |
+| UX9   | Stav systému a systémové obrazovky | nasleduje          | zdrojový a vizuálny audit          | –              |
 | UX10  | finálna konzistencia a regresia    | čaká               | –                                  | –              |
 
 ## Pravidlá pokračovania
@@ -26,6 +26,6 @@ Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny post
 
 ## Posledný checkpoint
 
-- **Aktuálna etapa:** UX7 funkčne uzavretá; časovo neobmedzené stavovo bezpečné Undo zostáva priečny blokátor UX10
-- **Najbližší krok:** commit/push zeleného UX7 rezu, potom UX8 História publikácií a Audit
+- **Aktuálna etapa:** UX8 uzavretá; priečne live blokátory zostávajú vo fronte UX10
+- **Najbližší krok:** commit/push zelenej UX8 brány, potom UX9 Stav systému a systémové obrazovky
 - **Okamžitý blokátor:** žiadny

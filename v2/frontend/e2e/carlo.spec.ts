@@ -28,6 +28,12 @@ interface MockState {
   archiveRequestFailureStatus: number | null
   archiveDecisionFailureStatus: number | null
   archiveRecoverySucceeds: boolean
+  publicationHistoryFailureStatus: number | null
+  auditFailureStatus: number | null
+  publicationRecoveryFailureStatus: number | null
+  publicationHistory: Record<string, unknown>[]
+  shadowHistory: Record<string, unknown>[]
+  auditRecords: Record<string, unknown>[]
 }
 
 const normalEvent = {
@@ -67,6 +73,88 @@ const stopEvent = {
   is_recurring: false,
 }
 
+const publicationHistoryEntry = {
+  id: 'run-history-1',
+  slot_key: '2026-08-10T20:00:00+02:00',
+  scheduled_for: '2026-08-10T18:00:00Z',
+  mode: 'manual',
+  initiated_by_user_id: '123',
+  state: 'partially_published',
+  attempt: 1,
+  composer_version: 'e4-v2',
+  intro_text: 'Ahojte!',
+  intro_prompt_version: 'fallback-v1',
+  intro_used_fallback: false,
+  outro_text: null,
+  warning_codes: [],
+  started_at: '2026-08-10T17:59:58Z',
+  completed_at: null,
+  error_code: 'discord_effect_uncertain',
+  error_detail: 'Výsledok prvej správy treba overiť na Discorde.',
+  items: [
+    {
+      id: 'history-item-1',
+      kind: 'external_event',
+      position: 0,
+      title: 'Otvorený Domček',
+      description: 'Príďte medzi nás.',
+      display_time: '12.08. // 18:00–20:00',
+      day_emoji: '🏠',
+      starts_at: '2026-08-12T16:00:00Z',
+      ends_at: '2026-08-12T18:00:00Z',
+      starts_on: null,
+      ends_on: null,
+      is_all_day: false,
+      link_url: null,
+      image_url: null,
+    },
+  ],
+  messages: [
+    {
+      id: 'history-message-1',
+      position: 0,
+      discord_channel_id: '700',
+      discord_message_id: null,
+      jump_url: null,
+      state: 'uncertain',
+      content: '@everyone Ahojte!',
+      embeds: [
+        {
+          item_kind: 'external_event',
+          source_id: 'history-item-1',
+          color: 14190864,
+          title: 'Otvorený Domček',
+          description: 'Príďte medzi nás.',
+          author_name: '12.08. // 18:00–20:00',
+          author_icon_url: null,
+          link_url: null,
+          thumbnail_url: null,
+        },
+      ],
+      allowed_mentions: ['everyone'],
+      seen_target: true,
+      reaction_emoji: '👀',
+      attempt_count: 1,
+      error_detail: 'Neistý výsledok',
+      reaction_error: null,
+      sent_at: null,
+    },
+  ],
+}
+
+const auditRecord = {
+  id: 'audit-1',
+  actor_user_id: '123',
+  action: 'manual_event.updated',
+  object_type: 'manual_event',
+  object_id: 'manual-1',
+  before: { title: 'Stretnutie', description: 'Pôvodný text' },
+  after: { title: 'Mimoriadne stretnutie', description: 'Aktuálny text' },
+  result: 'succeeded',
+  correlation_id: 'correlation-1',
+  created_at: '2026-08-09T18:00:00Z',
+}
+
 function capabilities(role: Role) {
   if (role === 'admin')
     return [
@@ -74,6 +162,7 @@ function capabilities(role: Role) {
       'edit_content',
       'force_inclusion',
       'manual_publish',
+      'reconcile_publication',
       'manage_channels',
       'approve_archive',
       'manage_settings',
@@ -111,6 +200,12 @@ async function mockCarlo(page: Page, role: Role = 'admin'): Promise<MockState> {
     archiveRequestFailureStatus: null,
     archiveDecisionFailureStatus: null,
     archiveRecoverySucceeds: true,
+    publicationHistoryFailureStatus: null,
+    auditFailureStatus: null,
+    publicationRecoveryFailureStatus: null,
+    publicationHistory: [],
+    shadowHistory: [],
+    auditRecords: [],
   }
   await page
     .context()
@@ -468,9 +563,31 @@ async function handleApi(route: Route, state: MockState) {
       role_ids: state.memberRoles,
     })
   }
-  if (path === '/api/v1/publication/history' || path === '/api/v1/publication/shadow-history')
-    return json([])
-  if (path === '/api/v1/audit') return json([])
+  if (path === '/api/v1/publication/history') {
+    if (state.publicationHistoryFailureStatus)
+      return json(
+        { detail: 'Históriu publikácií sa nepodarilo načítať.' },
+        state.publicationHistoryFailureStatus,
+      )
+    return json(state.publicationHistory)
+  }
+  if (path === '/api/v1/publication/shadow-history') return json(state.shadowHistory)
+  if (path.includes('/api/v1/publication/recovery/')) {
+    if (state.publicationRecoveryFailureStatus)
+      return json(
+        { detail: 'Discord výsledok sa nepodarilo bezpečne potvrdiť.' },
+        state.publicationRecoveryFailureStatus,
+      )
+    state.publicationHistory = []
+    return json({ run_id: 'run-history-1', state: 'retry_pending' })
+  }
+  if (path === '/api/v1/audit') {
+    if (!capabilities(role).includes('edit_content'))
+      return json({ detail: 'História zmien nie je dostupná pre vašu rolu.' }, 403)
+    if (state.auditFailureStatus)
+      return json({ detail: 'Históriu zmien sa nepodarilo načítať.' }, state.auditFailureStatus)
+    return json(state.auditRecords)
+  }
   if (path === '/api/v1/operations/summary') return json({ processes: [], calendars: [] })
   return json({})
 }
@@ -1074,11 +1191,15 @@ for (const [name, path] of [
   ['Roly', '/roly'],
   ['Reakcie', '/reakcie'],
   ['Nastavenia', '/nastavenia'],
+  ['História publikácií', '/historia'],
+  ['História zmien', '/audit'],
 ] as const) {
   test(`18 Axe: ${name} nemá automaticky zistiteľné WCAG A/AA porušenie`, async ({
     page,
   }, testInfo) => {
-    await mockCarlo(page)
+    const state = await mockCarlo(page)
+    if (name === 'História publikácií') state.publicationHistory = [publicationHistoryEntry]
+    if (name === 'História zmien') state.auditRecords = [auditRecord]
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     const visualAuditPage = process.env.CARLO_VISUAL_AUDIT_PAGE ?? 'Reakcie'
@@ -1761,4 +1882,90 @@ test('50 neúspešná obnova archivácie sa neoznámi ako úspech', async ({ pag
       (call) => call.path === '/api/v1/admin/archives/recover' && call.method === 'POST',
     ),
   ).toHaveLength(1)
+})
+
+test('51 História ukáže presný Discord výstup, filtre a pravdivú neistú publikáciu', async ({
+  page,
+}) => {
+  const state = await mockCarlo(page)
+  state.publicationHistory = [publicationHistoryEntry]
+  await page.goto('/historia')
+
+  await expect(page.getByText('1 z 1 načítaných publikácií')).toBeVisible()
+  await page.getByRole('button', { name: 'Automatické' }).click()
+  await expect(page.getByText('Tomuto filtru nič nezodpovedá')).toBeVisible()
+  await page.getByRole('button', { name: 'Zobraziť všetky' }).click()
+  await expect(page.getByText('Publikovanie potrebuje rozhodnutie Admina')).toBeVisible()
+
+  await page.getByText('Zobraziť presný Discord výstup').click()
+  const preview = page.getByLabel('Náhľad správ v Discord kanáli oznamy')
+  await expect(preview).toContainText('@everyone')
+  await expect(preview).toContainText('Otvorený Domček')
+  await expect(preview.getByLabel('Na túto správu Carlo pridá seen reakciu')).toContainText('1')
+})
+
+test('52 recovery publikácie pri dvojkliku vykoná jeden request a chyba neklame', async ({
+  page,
+}) => {
+  const state = await mockCarlo(page)
+  state.publicationHistory = [publicationHistoryEntry]
+  state.publicationRecoveryFailureStatus = 502
+  await page.goto('/historia')
+  await page.getByLabel('Discord ID správy 1').fill('123456789012345678')
+  await page.getByRole('button', { name: 'Prepojiť existujúcu správu' }).dblclick()
+
+  await expect(page.getByText('Discord výsledok sa nepodarilo bezpečne potvrdiť.')).toBeVisible()
+  expect(
+    state.calls.filter((call) => call.path.endsWith('/link-existing') && call.method === 'POST'),
+  ).toHaveLength(1)
+  await expect(page.getByText('Publikovanie potrebuje rozhodnutie Admina')).toBeVisible()
+})
+
+test('53 História zmien používa ľudský súhrn, filter a neukazuje Discord ID ako identitu', async ({
+  page,
+}) => {
+  const state = await mockCarlo(page)
+  state.auditRecords = [
+    auditRecord,
+    {
+      ...auditRecord,
+      id: 'audit-2',
+      actor_user_id: '999',
+      action: 'role.change_denied',
+      object_type: 'discord_member',
+      object_id: '555',
+      before: null,
+      after: { role: 'admin', enabled: false, reason: 'last_admin_protection' },
+      result: 'failed',
+    },
+  ]
+  await page.goto('/audit')
+
+  await expect(page.getByRole('heading', { name: 'História zmien' })).toBeVisible()
+  await expect(page.getByText('Admin (vy)')).toBeVisible()
+  await expect(page.getByText('Iný správca')).toBeVisible()
+  await expect(page.getByText('Discord používateľ 999')).toHaveCount(0)
+  await expect(page.getByText('Názov: Stretnutie → Mimoriadne stretnutie')).toBeVisible()
+  await page.getByRole('button', { name: 'Nevykonané' }).click()
+  await expect(page.getByText('1 zo 2 načítaných zmien')).toBeVisible()
+  await expect(page.getByText('Zmena sa nevykonala', { exact: false })).toBeVisible()
+})
+
+test('54 História a Audit rozlíšia chybu od prázdneho stavu a ponúknu recovery', async ({
+  page,
+}) => {
+  const state = await mockCarlo(page)
+  state.publicationHistoryFailureStatus = 503
+  await page.goto('/historia')
+  await expect(page.getByRole('alert')).toContainText('Históriu publikácií sa nepodarilo načítať')
+  state.publicationHistoryFailureStatus = null
+  await page.getByRole('button', { name: 'Skúsiť znova' }).click()
+  await expect(page.getByText('Zatiaľ sa nič nezverejnilo')).toBeVisible()
+
+  state.auditFailureStatus = 503
+  await page.goto('/audit')
+  await expect(page.getByRole('alert')).toContainText('Históriu zmien sa nepodarilo načítať')
+  state.auditFailureStatus = null
+  await page.getByRole('button', { name: 'Skúsiť znova' }).click()
+  await expect(page.getByText('Zatiaľ bez zaznamenanej zmeny')).toBeVisible()
 })

@@ -360,6 +360,7 @@ export interface PublicationHistoryMessage {
   embeds: DiscordEmbedPlan[]
   allowed_mentions: string[]
   seen_target: boolean
+  reaction_emoji: string | null
   attempt_count: number
   error_detail: string | null
   reaction_error: string | null
