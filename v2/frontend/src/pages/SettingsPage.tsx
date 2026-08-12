@@ -889,26 +889,64 @@ export function ChannelsPanel({
   onArchivesChanged: (value: ArchiveRequest[]) => void
   setNotice: (notice: Notice) => void
 }) {
+  const auth = useAuth()
+  const draftScope =
+    auth.status === 'authenticated'
+      ? `${auth.session.guild_id}:${auth.session.user.id}`
+      : 'anonymous'
+  const createDraftKey = `carlo:draft:channel-create:${draftScope}`
+  const archiveDraftKey = `carlo:draft:archive-request:${draftScope}`
+  const recoveredCreate = useMemo(
+    () =>
+      readChannelDraft<{
+        name: string
+        emoji: string
+        emojiIsAutomatic: boolean
+        leaderIds: string[]
+        memberIds: string[]
+        roleIds: string[]
+        categoryId: string
+      }>(createDraftKey),
+    [createDraftKey],
+  )
+  const recoveredArchive = useMemo(
+    () => readChannelDraft<{ archiveChannel: string; reason: string }>(archiveDraftKey),
+    [archiveDraftKey],
+  )
   const [createOpen, setCreateOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [emoji, setEmoji] = useState('🏠')
-  const [emojiIsAutomatic, setEmojiIsAutomatic] = useState(true)
-  const [leaderIds, setLeaderIds] = useState<string[]>([])
-  const [memberIds, setMemberIds] = useState<string[]>([])
-  const [roleIds, setRoleIds] = useState<string[]>([])
-  const [categoryId, setCategoryId] = useState('')
-  const [archiveChannel, setArchiveChannel] = useState('')
-  const [reason, setReason] = useState('')
+  const [name, setName] = useState(recoveredCreate?.name ?? '')
+  const [emoji, setEmoji] = useState(recoveredCreate?.emoji ?? '🏠')
+  const [emojiIsAutomatic, setEmojiIsAutomatic] = useState(
+    recoveredCreate?.emojiIsAutomatic ?? true,
+  )
+  const [leaderIds, setLeaderIds] = useState<string[]>(recoveredCreate?.leaderIds ?? [])
+  const [memberIds, setMemberIds] = useState<string[]>(recoveredCreate?.memberIds ?? [])
+  const [roleIds, setRoleIds] = useState<string[]>(recoveredCreate?.roleIds ?? [])
+  const [categoryId, setCategoryId] = useState(recoveredCreate?.categoryId ?? '')
+  const [archiveChannel, setArchiveChannel] = useState(recoveredArchive?.archiveChannel ?? '')
+  const [reason, setReason] = useState(recoveredArchive?.reason ?? '')
   const [busy, setBusy] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [archiveError, setArchiveError] = useState<string | null>(null)
+  const [decisionError, setDecisionError] = useState<string | null>(null)
+  const [decisionBusy, setDecisionBusy] = useState(false)
+  const [discarding, setDiscarding] = useState<'create' | 'archive' | null>(null)
   const createButtonRef = useRef<HTMLButtonElement>(null)
   const archiveButtonRef = useRef<HTMLButtonElement>(null)
+  const createErrorRef = useRef<HTMLDivElement>(null)
+  const archiveErrorRef = useRef<HTMLDivElement>(null)
   const nameComposition = useRef(false)
   const createInFlight = useRef(false)
+  const archiveInFlight = useRef(false)
+  const decisionInFlight = useRef(false)
+  const recoveryInFlight = useRef(false)
   const createIdempotencyKey = useRef(crypto.randomUUID())
-  const [pendingDecision, setPendingDecision] = useState<{ id: string; approve: boolean } | null>(
-    null,
-  )
+  const [pendingDecision, setPendingDecision] = useState<{
+    id: string
+    approve: boolean
+    channelName: string
+  } | null>(null)
   const recoverableArchives = archives.filter((item) =>
     ['archiving', 'failed'].includes(item.state),
   )
@@ -928,10 +966,88 @@ export function ChannelsPanel({
   const archivableChannels = directory.channels.filter(
     (channel) => channel.category_id === null || !archiveCategoryIds.has(channel.category_id),
   )
+  const createDirty = Boolean(
+    name ||
+    !emojiIsAutomatic ||
+    leaderIds.length ||
+    memberIds.length ||
+    roleIds.length ||
+    categoryId,
+  )
+  const archiveDirty = Boolean(archiveChannel || reason)
+
+  useEffect(() => {
+    if (createError) createErrorRef.current?.focus()
+  }, [createError])
+
+  useEffect(() => {
+    if (archiveError) archiveErrorRef.current?.focus()
+  }, [archiveError])
+
+  useEffect(() => {
+    if (!createDirty) {
+      window.sessionStorage.removeItem(createDraftKey)
+      return
+    }
+    window.sessionStorage.setItem(
+      createDraftKey,
+      JSON.stringify({ name, emoji, emojiIsAutomatic, leaderIds, memberIds, roleIds, categoryId }),
+    )
+  }, [
+    categoryId,
+    createDirty,
+    createDraftKey,
+    emoji,
+    emojiIsAutomatic,
+    leaderIds,
+    memberIds,
+    name,
+    roleIds,
+  ])
+
+  useEffect(() => {
+    if (!archiveDirty) {
+      window.sessionStorage.removeItem(archiveDraftKey)
+      return
+    }
+    window.sessionStorage.setItem(archiveDraftKey, JSON.stringify({ archiveChannel, reason }))
+  }, [archiveChannel, archiveDirty, archiveDraftKey, reason])
+
+  function resetCreate() {
+    window.sessionStorage.removeItem(createDraftKey)
+    window.sessionStorage.removeItem(`${createDraftKey}:leaders`)
+    window.sessionStorage.removeItem(`${createDraftKey}:members`)
+    setName('')
+    setLeaderIds([])
+    setMemberIds([])
+    setRoleIds([])
+    setCategoryId('')
+    setEmoji('🏠')
+    setEmojiIsAutomatic(true)
+    setCreateError(null)
+  }
+
+  function resetArchive() {
+    window.sessionStorage.removeItem(archiveDraftKey)
+    setReason('')
+    setArchiveChannel('')
+    setArchiveError(null)
+  }
+
+  function requestDialogClose(kind: 'create' | 'archive') {
+    if ((kind === 'create' && createDirty) || (kind === 'archive' && archiveDirty)) {
+      setDiscarding(kind)
+      return
+    }
+    if (kind === 'create') setCreateOpen(false)
+    else setArchiveOpen(false)
+  }
+
   async function create() {
     if (createInFlight.current) return
     createInFlight.current = true
     setBusy(true)
+    setCreateError(null)
     try {
       const result = await createDiscordChannel({
         name: finalChannelName,
@@ -943,43 +1059,44 @@ export function ChannelsPanel({
         idempotency_key: createIdempotencyKey.current,
       })
       setNotice({ kind: 'success', text: `Kanál #${result.name} bol vytvorený.` })
-      setName('')
-      setLeaderIds([])
-      setMemberIds([])
-      setRoleIds([])
-      setCategoryId('')
-      setEmoji('🏠')
-      setEmojiIsAutomatic(true)
+      resetCreate()
       setCreateOpen(false)
       createIdempotencyKey.current = crypto.randomUUID()
     } catch (error) {
-      setNotice({ kind: 'error', text: message(error) })
+      setCreateError(message(error))
     } finally {
       createInFlight.current = false
       setBusy(false)
     }
   }
   async function requestArchive() {
+    if (archiveInFlight.current) return
     const channel = directory.channels.find((item) => item.id === archiveChannel)
     if (!channel) return
+    archiveInFlight.current = true
     setBusy(true)
+    setArchiveError(null)
     try {
       const result = await createArchiveRequest({
         channel_id: channel.id,
         reason,
       })
       onArchivesChanged([...archives.filter((item) => item.id !== result.id), result])
-      setReason('')
-      setArchiveChannel('')
+      resetArchive()
       setArchiveOpen(false)
       setNotice({ kind: 'success', text: 'Žiadosť čaká na rozhodnutie Admina.' })
     } catch (error) {
-      setNotice({ kind: 'error', text: message(error) })
+      setArchiveError(message(error))
     } finally {
+      archiveInFlight.current = false
       setBusy(false)
     }
   }
   async function decide(id: string, approve: boolean) {
+    if (decisionInFlight.current) return
+    decisionInFlight.current = true
+    setDecisionBusy(true)
+    setDecisionError(null)
     try {
       await decideArchiveRequest(id, approve)
       onArchivesChanged(archives.filter((item) => item.id !== id))
@@ -987,25 +1104,32 @@ export function ChannelsPanel({
         kind: 'success',
         text: approve ? 'Kanál bol archivovaný.' : 'Žiadosť bola zamietnutá.',
       })
+      setPendingDecision(null)
     } catch (error) {
-      setNotice({ kind: 'error', text: message(error) })
+      setDecisionError(message(error))
+    } finally {
+      decisionInFlight.current = false
+      setDecisionBusy(false)
     }
   }
   async function recoverArchives() {
+    if (recoveryInFlight.current) return
+    recoveryInFlight.current = true
     setBusy(true)
     try {
       const recovered = await recoverArchiveRequests()
       const recoveredIds = new Set(recovered.map((item) => item.id))
       onArchivesChanged(archives.filter((item) => !recoveredIds.has(item.id)))
       setNotice({
-        kind: 'success',
+        kind: recovered.length ? 'success' : 'error',
         text: recovered.length
-          ? `Carlo obnovil ${recovered.length} archivačných operácií.`
-          : 'Žiadnu archiváciu sa zatiaľ nepodarilo obnoviť.',
+          ? `Carlo dokončil ${recovered.length} ${recovered.length === 1 ? 'archiváciu' : 'archivácie'}.`
+          : 'Archivácie sa zatiaľ nepodarilo dokončiť. Kanály skontrolujte na Discorde a skúste to znova.',
       })
     } catch (error) {
       setNotice({ kind: 'error', text: message(error) })
     } finally {
+      recoveryInFlight.current = false
       setBusy(false)
     }
   }
@@ -1016,7 +1140,10 @@ export function ChannelsPanel({
           ref={createButtonRef}
           type="button"
           className="channel-action-card primary"
-          onClick={() => setCreateOpen(true)}
+          onClick={() => {
+            setCreateError(null)
+            setCreateOpen(true)
+          }}
         >
           <span className="channel-action-icon">
             <Sparkles />
@@ -1031,7 +1158,10 @@ export function ChannelsPanel({
           ref={archiveButtonRef}
           type="button"
           className="channel-action-card"
-          onClick={() => setArchiveOpen(true)}
+          onClick={() => {
+            setArchiveError(null)
+            setArchiveOpen(true)
+          }}
         >
           <span className="channel-action-icon archive">
             <FolderArchive />
@@ -1106,13 +1236,25 @@ export function ChannelsPanel({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setPendingDecision({ id: item.id, approve: false })}
+                    onClick={() =>
+                      setPendingDecision({
+                        id: item.id,
+                        approve: false,
+                        channelName: item.original_channel_name,
+                      })
+                    }
                   >
                     Zamietnuť
                   </Button>
                   <Button
                     size="sm"
-                    onClick={() => setPendingDecision({ id: item.id, approve: true })}
+                    onClick={() =>
+                      setPendingDecision({
+                        id: item.id,
+                        approve: true,
+                        channelName: item.original_channel_name,
+                      })
+                    }
                   >
                     Schváliť
                   </Button>
@@ -1123,7 +1265,12 @@ export function ChannelsPanel({
         </div>
       </section>
 
-      <Dialog open={createOpen} onOpenChange={(open) => !busy && setCreateOpen(open)}>
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          if (!open && !busy) requestDialogClose('create')
+        }}
+      >
         <DialogContent
           className="channel-dialog"
           showCloseButton={!busy}
@@ -1266,6 +1413,7 @@ export function ChannelsPanel({
                   value={leaderIds}
                   excludedIds={memberIds}
                   emptyLabel="Kanál budete viesť vy"
+                  storageKey={`${createDraftKey}:leaders`}
                   onChange={(ids) => {
                     setLeaderIds(ids)
                     setMemberIds((current) => current.filter((id) => !ids.includes(id)))
@@ -1276,6 +1424,7 @@ export function ChannelsPanel({
                   description="Píšte meno a vyberte ľudí zo zoznamu."
                   value={memberIds}
                   excludedIds={leaderIds}
+                  storageKey={`${createDraftKey}:members`}
                   onChange={setMemberIds}
                 />
                 <details className="channel-optional-control access-groups">
@@ -1299,8 +1448,33 @@ export function ChannelsPanel({
               </div>
             </section>
           </div>
+          <div className="channel-create-summary" aria-live="polite">
+            <strong>Carlo vytvorí súkromný kanál</strong>
+            <span>
+              #{effectiveEmoji}・{finalChannelName || 'názov-kanála'} v časti „
+              {selectedCategory?.name ?? defaultCategory?.name ?? 'bez vybraného miesta'}“.
+            </span>
+            <small>
+              {leaderIds.length || 1} {leaderIds.length === 1 ? 'vedúci' : 'vedúci'} ·{' '}
+              {memberIds.length} {memberIds.length === 1 ? 'ďalší človek' : 'ďalších ľudí'} ·{' '}
+              {roleIds.length} {roleIds.length === 1 ? 'skupina' : 'skupín'}
+            </small>
+          </div>
+          {createError && (
+            <div
+              ref={createErrorRef}
+              className="channel-operation-error"
+              role="alert"
+              tabIndex={-1}
+            >
+              <strong>Kanál sa nevytvoril</strong>
+              <span>
+                <span>{createError}</span> Zadané hodnoty zostali zachované.
+              </span>
+            </div>
+          )}
           <DialogFooter className="channel-dialog-footer">
-            <Button variant="outline" disabled={busy} onClick={() => setCreateOpen(false)}>
+            <Button variant="outline" disabled={busy} onClick={() => requestDialogClose('create')}>
               Zrušiť
             </Button>
             <Button
@@ -1318,7 +1492,12 @@ export function ChannelsPanel({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={archiveOpen} onOpenChange={(open) => !busy && setArchiveOpen(open)}>
+      <Dialog
+        open={archiveOpen}
+        onOpenChange={(open) => {
+          if (!open && !busy) requestDialogClose('archive')
+        }}
+      >
         <DialogContent
           className="channel-dialog archive-dialog"
           showCloseButton={!busy}
@@ -1354,8 +1533,21 @@ export function ChannelsPanel({
               <span>Žiadosť najprv skontroluje Admin. Dovtedy sa v kanáli nič nezmení.</span>
             </div>
           </div>
+          {archiveError && (
+            <div
+              ref={archiveErrorRef}
+              className="channel-operation-error"
+              role="alert"
+              tabIndex={-1}
+            >
+              <strong>Žiadosť sa neodoslala</strong>
+              <span>
+                <span>{archiveError}</span> Zadané hodnoty zostali zachované.
+              </span>
+            </div>
+          )}
           <DialogFooter className="channel-dialog-footer">
-            <Button variant="outline" disabled={busy} onClick={() => setArchiveOpen(false)}>
+            <Button variant="outline" disabled={busy} onClick={() => requestDialogClose('archive')}>
               Zrušiť
             </Button>
             <Button
@@ -1370,13 +1562,18 @@ export function ChannelsPanel({
       <AlertDialog
         open={pendingDecision !== null}
         onOpenChange={(open) => {
-          if (!open) setPendingDecision(null)
+          if (!open && !decisionBusy) {
+            setDecisionError(null)
+            setPendingDecision(null)
+          }
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {pendingDecision?.approve ? 'Archivovať tento kanál?' : 'Zamietnuť žiadosť?'}
+              {pendingDecision?.approve
+                ? `Archivovať #${pendingDecision.channelName}?`
+                : `Zamietnuť archiváciu #${pendingDecision?.channelName ?? ''}?`}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pendingDecision?.approve
@@ -1384,16 +1581,62 @@ export function ChannelsPanel({
                 : 'Žiadosť sa uzavrie bez zmeny kanála.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {decisionError && (
+            <p className="confirm-error" role="alert">
+              {decisionError} Žiadosť zostala otvorená; načítajte aktuálny stav pred ďalším pokusom.
+            </p>
+          )}
           <AlertDialogFooter>
-            <AlertDialogCancel>Zrušiť</AlertDialogCancel>
+            <AlertDialogCancel disabled={decisionBusy}>Zrušiť</AlertDialogCancel>
             <AlertDialogAction
               variant={pendingDecision?.approve ? 'destructive' : 'default'}
+              disabled={decisionBusy}
               onClick={() => {
                 if (pendingDecision) void decide(pendingDecision.id, pendingDecision.approve)
-                setPendingDecision(null)
               }}
             >
-              Potvrdiť
+              {decisionBusy
+                ? 'Pracujem…'
+                : pendingDecision?.approve
+                  ? 'Archivovať kanál'
+                  : 'Zamietnuť žiadosť'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={discarding !== null}
+        onOpenChange={(open) => {
+          if (!open) setDiscarding(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {discarding === 'create'
+                ? 'Zahodiť rozpracovaný kanál?'
+                : 'Zahodiť rozpracovanú žiadosť?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Zadaný názov, ľudia, skupiny alebo dôvod sa odstránia. Na Discorde sa nič nezmení.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Pokračovať v úprave</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (discarding === 'create') {
+                  resetCreate()
+                  setCreateOpen(false)
+                } else {
+                  resetArchive()
+                  setArchiveOpen(false)
+                }
+                setDiscarding(null)
+              }}
+            >
+              Zahodiť zmeny
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1609,6 +1852,16 @@ function dateTime(value: string) {
   return new Intl.DateTimeFormat('sk-SK', { dateStyle: 'medium', timeStyle: 'short' }).format(
     new Date(value),
   )
+}
+
+function readChannelDraft<T>(key: string): T | null {
+  try {
+    const value = window.sessionStorage.getItem(key)
+    return value ? (JSON.parse(value) as T) : null
+  } catch {
+    window.sessionStorage.removeItem(key)
+    return null
+  }
 }
 function restoredPublicationDraft(key: string, fallback: PublicationSettings) {
   try {

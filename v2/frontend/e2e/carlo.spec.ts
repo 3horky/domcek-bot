@@ -24,6 +24,10 @@ interface MockState {
   memberSearchFailureStatus: number | null
   roleMutationFailure: 'last_admin' | 'discord_unavailable' | null
   contentFailureStatus: number | null
+  channelCreateFailureStatus: number | null
+  archiveRequestFailureStatus: number | null
+  archiveDecisionFailureStatus: number | null
+  archiveRecoverySucceeds: boolean
 }
 
 const normalEvent = {
@@ -103,6 +107,10 @@ async function mockCarlo(page: Page, role: Role = 'admin'): Promise<MockState> {
     memberSearchFailureStatus: null,
     roleMutationFailure: null,
     contentFailureStatus: null,
+    channelCreateFailureStatus: null,
+    archiveRequestFailureStatus: null,
+    archiveDecisionFailureStatus: null,
+    archiveRecoverySucceeds: true,
   }
   await page
     .context()
@@ -358,19 +366,43 @@ async function handleApi(route: Route, state: MockState) {
   }
   if (path === '/api/v1/admin/archives' && method === 'GET') return json(state.archives)
   if (path === '/api/v1/admin/archives' && method === 'POST') {
+    if (state.archiveRequestFailureStatus)
+      return json(
+        { detail: 'Žiadosť sa teraz nedá bezpečne odoslať.' },
+        state.archiveRequestFailureStatus,
+      )
     const record = archiveRecord()
     state.archives = [record]
     return json(record, 201)
   }
   if (path.includes('/api/v1/admin/archives/') && path.endsWith('/decision')) {
+    if (state.archiveDecisionFailureStatus)
+      return json(
+        { detail: 'Discord výsledok zatiaľ nevieme potvrdiť.' },
+        state.archiveDecisionFailureStatus,
+      )
     state.archives = []
     return json({ ...archiveRecord(), state: 'executed' })
   }
-  if (path === '/api/v1/admin/channels' && method === 'POST')
+  if (path === '/api/v1/admin/archives/recover' && method === 'POST') {
+    if (!state.archiveRecoverySucceeds) return json([])
+    const recovered = state.archives.filter((item) =>
+      ['archiving', 'failed'].includes(String(item.state)),
+    )
+    state.archives = state.archives.filter((item) => !recovered.includes(item))
+    return json(recovered.map((item) => ({ ...item, state: 'executed' })))
+  }
+  if (path === '/api/v1/admin/channels' && method === 'POST') {
+    if (state.channelCreateFailureStatus)
+      return json(
+        { detail: 'Discord kanál sa teraz nedá bezpečne vytvoriť.' },
+        state.channelCreateFailureStatus,
+      )
     return json(
       { channel_id: '777', name: 'e2e-projekt', jump_url: 'https://discord.test/777' },
       201,
     )
+  }
   if (path === '/api/v1/admin/discord/members') {
     if (state.memberSearchFailureStatus)
       return json({ detail: 'Ľudí sa teraz nepodarilo vyhľadať.' }, state.memberSearchFailureStatus)
@@ -813,13 +845,13 @@ test('08 Admin vytvorí súkromný kanál', async ({ page }) => {
   const nameInput = dialog.getByLabel('Názov')
   await nameInput.fill('Letný Tábor 2026!')
   await expect(nameInput).toHaveValue('letný-tábor-2026-')
-  await expect(dialog.getByText('#⛺・letný-tábor-2026')).toBeVisible()
+  await expect(dialog.getByText('#⛺・letný-tábor-2026', { exact: true })).toBeVisible()
   await dialog.getByRole('button', { name: 'Otvoriť všetky emoji' }).click()
   const emojiSearch = page.getByPlaceholder('Hľadať emoji…')
   await expect(emojiSearch).toBeFocused()
   await emojiSearch.fill('camera')
   await page.locator('button[data-unified="1f4f7"]').click()
-  await expect(dialog.getByText(/#📷・letný-tábor-2026/)).toBeVisible()
+  await expect(dialog.getByText('#📷・letný-tábor-2026', { exact: true })).toBeVisible()
 
   const leaderPicker = dialog.locator('.discord-picker').filter({
     hasText: 'Kto bude kanál viesť?',
@@ -878,7 +910,7 @@ test('09 Team Mod požiada o archiváciu a Admin schváli konkrétnu žiadosť',
   state.role = 'admin'
   await page.reload()
   await page.getByRole('button', { name: 'Schváliť' }).click()
-  await page.getByRole('button', { name: 'Potvrdiť' }).click()
+  await page.getByRole('button', { name: 'Archivovať kanál' }).click()
   await expect(page.getByText('Kanál bol archivovaný.')).toBeVisible()
   expect(state.archives).toHaveLength(0)
 })
@@ -1602,9 +1634,7 @@ test('44 rozpracovaný oznam sa bez súhlasu nestratí ani po obnovení stránky
   await expect(opener).toBeFocused()
 })
 
-test('45 INFO obrázok sa nahrá priamo v editore a formulár ostane použiteľný', async ({
-  page,
-}) => {
+test('45 INFO obrázok sa nahrá priamo v editore a formulár ostane použiteľný', async ({ page }) => {
   const state = await mockCarlo(page, 'team_mod')
   await page.goto('/oznamy')
   await page.getByRole('button', { name: 'INFO oznam' }).click()
@@ -1640,4 +1670,95 @@ test('46 editor zostane celý dostupný aj na nízkom notebookovom viewporte', a
   const box = await dialog.boundingBox()
   expect(box).not.toBeNull()
   expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(650)
+})
+
+test('47 Kanály chránia rozpracovaný formulár a obnovia ho po reloade', async ({ page }) => {
+  await mockCarlo(page, 'team_mod')
+  await page.goto('/kanaly')
+  const opener = page.getByRole('button', { name: /Vytvoriť nový kanál/ })
+  await opener.click()
+  await page.getByLabel('Názov').fill('Letná komunitná záhrada')
+  await page.keyboard.press('Escape')
+
+  const discard = page.getByRole('alertdialog', { name: 'Zahodiť rozpracovaný kanál?' })
+  await expect(discard).toBeVisible()
+  await discard.getByRole('button', { name: 'Pokračovať v úprave' }).click()
+  await expect(page.getByLabel('Názov')).toHaveValue('letná-komunitná-záhrada')
+
+  await page.reload()
+  await opener.click()
+  await expect(page.getByLabel('Názov')).toHaveValue('letná-komunitná-záhrada')
+  await expect(page.getByText(/Carlo vytvorí súkromný kanál/)).toBeVisible()
+  await page.keyboard.press('Escape')
+  await page
+    .getByRole('alertdialog', { name: 'Zahodiť rozpracovaný kanál?' })
+    .getByRole('button', { name: 'Zahodiť zmeny' })
+    .click()
+  await expect(opener).toBeFocused()
+})
+
+test('48 zlyhané vytvorenie zachová formulár a dvojklik odošle iba jeden request', async ({
+  page,
+}) => {
+  const state = await mockCarlo(page)
+  state.channelCreateFailureStatus = 502
+  await page.goto('/kanaly')
+  await page.getByRole('button', { name: /Vytvoriť nový kanál/ }).click()
+  const dialog = page.getByRole('dialog', { name: 'Vytvoriť nový kanál' })
+  await dialog.getByLabel('Názov').fill('Bezpečný projekt')
+  await dialog.getByRole('button', { name: 'Vytvoriť kanál' }).dblclick()
+
+  const error = dialog.getByRole('alert')
+  await expect(error).toContainText('Zadané hodnoty zostali zachované')
+  await expect(error).toBeFocused()
+  await expect(dialog.getByLabel('Názov')).toHaveValue('bezpečný-projekt')
+  expect(
+    state.calls.filter((call) => call.path === '/api/v1/admin/channels' && call.method === 'POST'),
+  ).toHaveLength(1)
+})
+
+test('49 archivačný request aj rozhodnutie ostanú pravdivé pri chybe a dvojkliku', async ({
+  page,
+}) => {
+  const state = await mockCarlo(page, 'team_mod')
+  state.archiveRequestFailureStatus = 503
+  await page.goto('/kanaly')
+  await page.getByRole('button', { name: /Archivovať kanál/ }).click()
+  let dialog = page.getByRole('dialog', { name: 'Archivovať kanál' })
+  await dialog.getByLabel('Ktorý kanál chcete archivovať?').selectOption('700')
+  await dialog.getByLabel('Prečo sa kanál archivuje?').fill('Projekt bol dokončený')
+  await dialog.getByRole('button', { name: 'Odoslať žiadosť' }).dblclick()
+  await expect(dialog.getByRole('alert')).toContainText('Zadané hodnoty zostali zachované')
+  expect(
+    state.calls.filter((call) => call.path === '/api/v1/admin/archives' && call.method === 'POST'),
+  ).toHaveLength(1)
+
+  state.archiveRequestFailureStatus = null
+  await dialog.getByRole('button', { name: 'Odoslať žiadosť' }).click()
+  state.role = 'admin'
+  state.archiveDecisionFailureStatus = 502
+  await page.reload()
+  await page.getByRole('button', { name: 'Schváliť' }).click()
+  dialog = page.getByRole('alertdialog', { name: 'Archivovať #oznamy?' })
+  await dialog.getByRole('button', { name: 'Archivovať kanál' }).dblclick()
+  await expect(dialog.getByRole('alert')).toContainText('Žiadosť zostala otvorená')
+  await expect(dialog).toBeVisible()
+  expect(
+    state.calls.filter((call) => call.path.endsWith('/decision') && call.method === 'POST'),
+  ).toHaveLength(1)
+})
+
+test('50 neúspešná obnova archivácie sa neoznámi ako úspech', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.archives = [{ ...archiveRecord(), state: 'failed' }]
+  state.archiveRecoverySucceeds = false
+  await page.goto('/kanaly')
+  await page.getByRole('button', { name: 'Skúsiť dokončiť' }).dblclick()
+  const error = page.getByRole('alert')
+  await expect(error).toContainText('nepodarilo dokončiť')
+  expect(
+    state.calls.filter(
+      (call) => call.path === '/api/v1/admin/archives/recover' && call.method === 'POST',
+    ),
+  ).toHaveLength(1)
 })

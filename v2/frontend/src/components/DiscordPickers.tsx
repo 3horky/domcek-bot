@@ -21,6 +21,7 @@ export function MemberPicker({
   multiple = true,
   emptyLabel = 'Nikto nie je vybraný',
   excludedIds = [],
+  storageKey,
 }: {
   label: string
   description: string
@@ -29,11 +30,14 @@ export function MemberPicker({
   multiple?: boolean
   emptyLabel?: string
   excludedIds?: string[]
+  storageKey?: string
 }) {
   const listId = useId()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<DiscordMemberOption[]>([])
-  const [knownMembers, setKnownMembers] = useState<Record<string, DiscordMemberOption>>({})
+  const [knownMembers, setKnownMembers] = useState<Record<string, DiscordMemberOption>>(() =>
+    storageKey ? readMemberCache(storageKey) : {},
+  )
   const [state, setState] = useState<SearchState>('idle')
   const requestSequence = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -69,6 +73,11 @@ export function MemberPicker({
       controller.abort()
     }
   }, [query])
+
+  useEffect(() => {
+    if (!storageKey) return
+    window.sessionStorage.setItem(storageKey, JSON.stringify(knownMembers))
+  }, [knownMembers, storageKey])
 
   useEffect(() => {
     if (!restoreFocus.current) return
@@ -189,6 +198,16 @@ export function MemberPicker({
       )}
     </div>
   )
+}
+
+function readMemberCache(key: string): Record<string, DiscordMemberOption> {
+  try {
+    const value = window.sessionStorage.getItem(key)
+    return value ? (JSON.parse(value) as Record<string, DiscordMemberOption>) : {}
+  } catch {
+    window.sessionStorage.removeItem(key)
+    return {}
+  }
 }
 
 export function RolePicker({

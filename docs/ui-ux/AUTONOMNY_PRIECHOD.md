@@ -2,19 +2,19 @@
 
 Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny postup je v kapitole 20 `PLAN_UI_UX_AUDITU.md`.
 
-| Etapa | Oblasť                             | Stav      | Aktuálny dôkaz                     | Commit / CI    |
-| ----- | ---------------------------------- | --------- | ---------------------------------- | -------------- |
-| UX0   | auditná infraštruktúra             | hotovo    | lint, 15 unit, 46 browser scenárov | `87cb6ec`      |
-| UX1   | Reakcie                            | hotovo    | 193 backend, 15 unit, 54 browser   | `ef96ccf`      |
-| UX2   | Roly                               | hotovo    | 15 unit, 68 browser, 2 full-stack  | `0d7e1ba`      |
-| UX3   | Nastavenia                         | hotovo    | 15 unit, 80 browser, 2 full-stack  | `a9dcbbe`      |
-| UX4   | aplikačný rámec a spoločné stavy   | hotovo    | 15 unit, 86 browser, 2 full-stack  | `be701aa`      |
-| UX5   | Prehľad                            | hotovo    | 193 backend, 15 unit, 92 browser   | `2a45873`      |
-| UX6   | Redakčný pult a Discord náhľad     | hotovo    | 194 backend, 15 unit, 102 browser  | čaká na commit |
-| UX7   | Kanály                             | nasleduje | regresný audit sa pripraví         | –              |
-| UX8   | História publikácií a Audit        | čaká      | –                                  | –              |
-| UX9   | Stav systému a systémové obrazovky | čaká      | –                                  | –              |
-| UX10  | finálna konzistencia a regresia    | čaká      | –                                  | –              |
+| Etapa | Oblasť                             | Stav               | Aktuálny dôkaz                     | Commit / CI    |
+| ----- | ---------------------------------- | ------------------ | ---------------------------------- | -------------- |
+| UX0   | auditná infraštruktúra             | hotovo             | lint, 15 unit, 46 browser scenárov | `87cb6ec`      |
+| UX1   | Reakcie                            | hotovo             | 193 backend, 15 unit, 54 browser   | `ef96ccf`      |
+| UX2   | Roly                               | hotovo             | 15 unit, 68 browser, 2 full-stack  | `0d7e1ba`      |
+| UX3   | Nastavenia                         | hotovo             | 15 unit, 80 browser, 2 full-stack  | `a9dcbbe`      |
+| UX4   | aplikačný rámec a spoločné stavy   | hotovo             | 15 unit, 86 browser, 2 full-stack  | `be701aa`      |
+| UX5   | Prehľad                            | hotovo             | 193 backend, 15 unit, 92 browser   | `2a45873`      |
+| UX6   | Redakčný pult a Discord náhľad     | hotovo             | 194 backend, 15 unit, 102 browser  | `9c7ad70`      |
+| UX7   | Kanály                             | funkčný rez hotový | 15 unit, 110 browser; Undo → UX10  | čaká na commit |
+| UX8   | História publikácií a Audit        | nasleduje          | zdrojový a vizuálny audit          | –              |
+| UX9   | Stav systému a systémové obrazovky | čaká               | –                                  | –              |
+| UX10  | finálna konzistencia a regresia    | čaká               | –                                  | –              |
 
 ## Pravidlá pokračovania
 
@@ -26,6 +26,6 @@ Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny post
 
 ## Posledný checkpoint
 
-- **Aktuálna etapa:** UX6 lokálne uzavretá; nasleduje UX7
-- **Najbližší krok:** commit/push zelenej UX6 brány, potom regresný audit Kanálov
+- **Aktuálna etapa:** UX7 funkčne uzavretá; časovo neobmedzené stavovo bezpečné Undo zostáva priečny blokátor UX10
+- **Najbližší krok:** commit/push zeleného UX7 rezu, potom UX8 História publikácií a Audit
 - **Okamžitý blokátor:** žiadny

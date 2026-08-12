@@ -4985,6 +4985,31 @@ label:has(input:disabled) {
   gap: 1rem;
   padding-block: 1.25rem;
 }
+.channel-operation-error {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0 1.3rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, white);
+  border-radius: 0.7rem;
+  background: color-mix(in srgb, var(--danger) 7%, white);
+  padding: 0.7rem 0.8rem;
+  color: color-mix(in srgb, var(--danger) 78%, black);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+.channel-create-summary {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0 1.3rem 0.85rem;
+  border-radius: 0.7rem;
+  background: color-mix(in srgb, var(--brand) 7%, white);
+  padding: 0.7rem 0.8rem;
+  color: var(--brand-strong);
+  font-size: 0.72rem;
+}
+.channel-create-summary small {
+  color: var(--ink-muted);
+}
 .channel-dialog-section {
   display: grid;
   gap: 0.85rem;
