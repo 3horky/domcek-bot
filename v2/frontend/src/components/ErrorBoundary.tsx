@@ -1,5 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 
+import { Button } from './ui/button'
+
 interface Props {
   children: ReactNode
 }
@@ -23,12 +25,14 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.failed) {
       return (
         <main className="fatal-error" role="alert">
-          <p className="eyebrow">Carlo</p>
-          <h1>Rozhranie sa nepodarilo zobraziť</h1>
-          <p>Obnov stránku. Ak problém pretrváva, oznám ho administrátorovi.</p>
-          <button type="button" onClick={() => window.location.reload()}>
-            Obnoviť stránku
-          </button>
+          <div>
+            <p className="eyebrow">Carlo</p>
+            <h1>Rozhranie sa nepodarilo zobraziť</h1>
+            <p>Obnovte stránku. Ak problém pretrváva, oznámte ho administrátorovi.</p>
+            <Button type="button" onClick={() => window.location.reload()}>
+              Obnoviť stránku
+            </Button>
+          </div>
         </main>
       )
     }

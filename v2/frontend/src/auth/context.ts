@@ -9,7 +9,9 @@ export type AuthState =
   | { status: 'authenticated'; session: SessionResponse; error: null }
 
 export type AuthContextValue = AuthState & {
+  sessionExpired: boolean
   retry: () => void
+  refreshSession: () => Promise<boolean>
   signOut: () => Promise<void>
 }
 

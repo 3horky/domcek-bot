@@ -7,9 +7,9 @@ Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny post
 | UX0   | auditná infraštruktúra             | hotovo    | lint, 15 unit, 46 browser scenárov | `87cb6ec`      |
 | UX1   | Reakcie                            | hotovo    | 193 backend, 15 unit, 54 browser   | `ef96ccf`      |
 | UX2   | Roly                               | hotovo    | 15 unit, 68 browser, 2 full-stack  | `0d7e1ba`      |
-| UX3   | Nastavenia                         | hotovo    | 15 unit, 80 browser, 2 full-stack  | čaká na commit |
-| UX4   | aplikačný rámec a spoločné stavy   | nasleduje | baseline sa pripraví               | –              |
-| UX5   | Prehľad                            | čaká      | –                                  | –              |
+| UX3   | Nastavenia                         | hotovo    | 15 unit, 80 browser, 2 full-stack  | `a9dcbbe`      |
+| UX4   | aplikačný rámec a spoločné stavy   | hotovo    | 15 unit, 86 browser, 2 full-stack  | čaká na commit |
+| UX5   | Prehľad                            | nasleduje | baseline sa pripraví               | –              |
 | UX6   | Redakčný pult a Discord náhľad     | čaká      | –                                  | –              |
 | UX7   | Kanály                             | čaká      | –                                  | –              |
 | UX8   | História publikácií a Audit        | čaká      | –                                  | –              |
@@ -26,6 +26,6 @@ Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny post
 
 ## Posledný checkpoint
 
-- **Aktuálna etapa:** UX3 lokálne uzavretá; nasleduje UX4
-- **Najbližší krok:** commit/push UX3, potom baseline aplikačného rámca a spoločných stavov
+- **Aktuálna etapa:** UX4 lokálne uzavretá; nasleduje UX5
+- **Najbližší krok:** commit/push UX4, potom rozhodovací audit Prehľadu
 - **Okamžitý blokátor:** žiadny

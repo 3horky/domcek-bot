@@ -1,5 +1,5 @@
 import { Hash, RefreshCw, ShieldCheck, SmilePlus } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
   ApiError,
@@ -24,8 +24,11 @@ export function ChannelsPage() {
   const [directory, setDirectory] = useState<DiscordDirectory | null>(null)
   const [archives, setArchives] = useState<ArchiveRequest[]>([])
   const [notice, setNotice] = useState<Notice>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const load = useCallback(async () => {
+    setLoading(true)
+    setLoadError(null)
     try {
       const [nextDirectory, nextArchives] = await Promise.all([
         getDiscordDirectory(),
@@ -34,7 +37,7 @@ export function ChannelsPage() {
       setDirectory(nextDirectory)
       setArchives(nextArchives)
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error) })
+      setLoadError(errorMessage(error))
     } finally {
       setLoading(false)
     }
@@ -53,8 +56,13 @@ export function ChannelsPage() {
       notice={notice}
       onReload={load}
     >
-      {loading || !directory ? (
+      {loading ? (
         <LoadingState label="Načítavam kanály a otvorené žiadosti…" />
+      ) : loadError || !directory ? (
+        <LoadErrorState
+          detail={loadError ?? 'Carlo neposlal úplný zoznam kanálov.'}
+          onRetry={() => void load()}
+        />
       ) : (
         <ChannelsPanel
           directory={directory}
@@ -184,6 +192,19 @@ function AdministrationPage({
   onReload: () => Promise<void>
   children: React.ReactNode
 }) {
+  const [refreshing, setRefreshing] = useState(false)
+  const refreshInFlight = useRef(false)
+  async function refresh() {
+    if (refreshInFlight.current) return
+    refreshInFlight.current = true
+    setRefreshing(true)
+    try {
+      await onReload()
+    } finally {
+      refreshInFlight.current = false
+      setRefreshing(false)
+    }
+  }
   return (
     <section className="settings-page administration-page">
       <header className="settings-hero administration-hero">
@@ -195,8 +216,9 @@ function AdministrationPage({
             <p>{description}</p>
           </div>
         </div>
-        <Button variant="outline" onClick={() => void onReload()}>
-          <RefreshCw /> Obnoviť údaje
+        <Button variant="outline" disabled={refreshing} onClick={() => void refresh()}>
+          <RefreshCw className={refreshing ? 'spin' : undefined} />
+          {refreshing ? 'Načítavam aktuálny stav…' : 'Načítať aktuálny stav'}
         </Button>
       </header>
       {notice && <NoticeBanner notice={notice} />}

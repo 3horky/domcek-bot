@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy } from 'react'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 
 import { AuthProvider } from '../auth/AuthContext'
@@ -63,13 +63,7 @@ const router = createBrowserRouter([
 
 function AuthenticatedApp() {
   const auth = useAuth()
-  return auth.status === 'authenticated' ? (
-    <Suspense fallback={<div className="route-loader">Načítavam pracovisko…</div>}>
-      <RouterProvider router={router} />
-    </Suspense>
-  ) : (
-    <LoginPage />
-  )
+  return auth.status === 'authenticated' ? <RouterProvider router={router} /> : <LoginPage />
 }
 
 export function App() {

@@ -1,4 +1,5 @@
 import { useAuth } from '../auth/context'
+import { Button, buttonVariants } from '../components/ui/button'
 
 export function LoginPage() {
   const auth = useAuth()
@@ -23,9 +24,9 @@ export function LoginPage() {
           <p className="eyebrow">Spojenie zlyhalo</p>
           <h1>Administrácia sa nedá načítať</h1>
           <p>{auth.error.message}</p>
-          <button type="button" onClick={auth.retry}>
+          <Button type="button" onClick={auth.retry}>
             Skúsiť znova
-          </button>
+          </Button>
         </div>
       </main>
     )
@@ -39,8 +40,18 @@ export function LoginPage() {
         </div>
         <p className="eyebrow">Carlo</p>
         <h1>Oznamy pripravené bez ručnej roboty</h1>
-        <p>Prihlás sa cez Discord. Prístup dostanú iba členovia servera s povolenou rolou.</p>
-        <a className="primary-button discord-button" href={loginUrl}>
+        {auth.sessionExpired ? (
+          <div className="session-expired-message" role="alert">
+            <strong>Relácia vypršala</strong>
+            <p>
+              Rozpracované hodnoty sme neodoslali. Prihláste sa znova a Carlo obnoví uložený návrh
+              tam, kde je to možné.
+            </p>
+          </div>
+        ) : (
+          <p>Prihláste sa cez Discord. Prístup dostanú iba členovia servera s povolenou rolou.</p>
+        )}
+        <a className={`${buttonVariants()} discord-button`} href={loginUrl}>
           Prihlásiť cez Discord
         </a>
         <small>Bot nikdy neposiela Discord prihlasovacie údaje do tejto stránky.</small>

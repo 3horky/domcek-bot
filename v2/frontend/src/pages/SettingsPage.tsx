@@ -291,12 +291,15 @@ function PublicationPanel({
       window.sessionStorage.removeItem(draftStorageKey)
       onSaved(saved)
     } catch (error) {
+      const isConflict = error instanceof ApiError && error.status === 409
+      const isExpiredSession = error instanceof ApiError && error.status === 401
       setSaveError({
-        text:
-          error instanceof ApiError && error.status === 409
-            ? 'Nastavenia medzitým zmenil niekto iný. Vaše hodnoty zostali zachované; načítajte aktuálnu verziu a zmenu urobte znova.'
+        text: isConflict
+          ? 'Nastavenia medzitým zmenil niekto iný. Vaše hodnoty zostali zachované; načítajte aktuálnu verziu a zmenu urobte znova.'
+          : isExpiredSession
+            ? 'Zmeny neboli uložené. Po obnovení prihlásenia ich môžete bezpečne uložiť znova.'
             : `Nastavenia sa nepodarilo uložiť. Vaše zmeny zostali zachované. ${message(error)}`,
-        conflict: error instanceof ApiError && error.status === 409,
+        conflict: isConflict,
       })
     } finally {
       saveInFlight.current = false
@@ -1542,9 +1545,22 @@ function EmptyState({
   )
 }
 export function NoticeBanner({ notice }: { notice: Exclude<Notice, null> }) {
+  const alertRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (notice.kind === 'error') alertRef.current?.focus()
+  }, [notice])
   return (
-    <div className={`settings-notice ${notice.kind}`} role="status">
-      {notice.kind === 'success' ? <Check /> : <MessageSquareMore />}
+    <div
+      ref={alertRef}
+      className={`settings-notice ${notice.kind}`}
+      role={notice.kind === 'error' ? 'alert' : 'status'}
+      tabIndex={notice.kind === 'error' ? -1 : undefined}
+    >
+      {notice.kind === 'success' ? (
+        <Check aria-hidden="true" />
+      ) : (
+        <MessageSquareMore aria-hidden="true" />
+      )}
       {notice.text}
     </div>
   )

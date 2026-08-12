@@ -471,6 +471,9 @@ export async function requestJson<T>(path: string, options: RequestInit = {}): P
     } catch {
       // A safe fallback is shown when an intermediary did not return JSON.
     }
+    if (response.status === 401 && path !== '/api/v1/session' && path !== '/api/v1/auth/logout') {
+      window.dispatchEvent(new CustomEvent('carlo:session-expired'))
+    }
     throw new ApiError(
       problem.detail ?? problem.title ?? `Požiadavka zlyhala (${response.status}).`,
       response.status,

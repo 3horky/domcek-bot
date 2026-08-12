@@ -5,6 +5,7 @@ import { AuthContext, type AuthContextValue, type AuthState } from './context'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [reloadKey, setReloadKey] = useState(0)
+  const [sessionExpired, setSessionExpired] = useState(false)
   const [state, setState] = useState<AuthState>({ status: 'loading', session: null, error: null })
 
   useEffect(() => {
@@ -12,6 +13,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void getSession(controller.signal)
       .then((session) => {
         if (!controller.signal.aborted) {
+          setSessionExpired(false)
           setState({ status: 'authenticated', session, error: null })
         }
       })
@@ -31,20 +33,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => controller.abort()
   }, [reloadKey])
 
+  useEffect(() => {
+    function expireSession() {
+      setSessionExpired(true)
+      setState((current) =>
+        current.status === 'authenticated'
+          ? current
+          : { status: 'anonymous', session: null, error: null },
+      )
+    }
+    window.addEventListener('carlo:session-expired', expireSession)
+    return () => window.removeEventListener('carlo:session-expired', expireSession)
+  }, [])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       ...state,
+      sessionExpired,
       retry: () => {
         setState({ status: 'loading', session: null, error: null })
         setReloadKey((current) => current + 1)
       },
+      refreshSession: async () => {
+        try {
+          const session = await getSession()
+          setState({ status: 'authenticated', session, error: null })
+          setSessionExpired(false)
+          return true
+        } catch {
+          setSessionExpired(true)
+          return false
+        }
+      },
       signOut: async () => {
         await logout()
         clearSessionDrafts()
+        setSessionExpired(false)
         setState({ status: 'anonymous', session: null, error: null })
       },
     }),
-    [state],
+    [sessionExpired, state],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

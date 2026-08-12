@@ -17,6 +17,7 @@ interface MockState {
   reactions: Record<string, unknown>
   publicationSettings: Record<string, unknown>
   calendars: Record<string, unknown>[]
+  directoryFailureStatus: number | null
   settingsFailureStatus: number | null
   settingsSaveFailureStatus: number | null
   memberSearchFailureStatus: number | null
@@ -93,6 +94,7 @@ async function mockCarlo(page: Page, role: Role = 'admin'): Promise<MockState> {
     reactions: defaultReactionSettings(),
     publicationSettings: defaultPublicationSettings(),
     calendars: [],
+    directoryFailureStatus: null,
     settingsFailureStatus: null,
     settingsSaveFailureStatus: null,
     memberSearchFailureStatus: null,
@@ -308,7 +310,14 @@ async function handleApi(route: Route, state: MockState) {
     return json({ received: 12, created: 2, updated: 3 })
   if (path === '/api/v1/admin/discord/reactions/test' && method === 'POST')
     return json({ message_id: 'reaction-test-message' })
-  if (path === '/api/v1/admin/discord/directory') return json(directory())
+  if (path === '/api/v1/admin/discord/directory') {
+    if (state.directoryFailureStatus)
+      return json(
+        { detail: 'Aktuálny zoznam kanálov sa teraz nepodarilo načítať.' },
+        state.directoryFailureStatus,
+      )
+    return json(directory())
+  }
   if (path === '/api/v1/admin/archives' && method === 'GET') return json(state.archives)
   if (path === '/api/v1/admin/archives' && method === 'POST') {
     const record = archiveRecord()
@@ -1012,7 +1021,11 @@ test('19 Reakcie upravujú, testujú a ukladajú práve viditeľné emoji', asyn
   await page.getByRole('switch', { name: 'Zapnúť: Reakcia pri označení Carla' }).click()
   await expect(page.getByText('Máte neuložené zmeny')).toBeVisible()
 
-  await page.getByRole('link', { name: 'Roly' }).click()
+  const rolesLink = page.getByRole('link', { name: 'Roly' })
+  if (!(await rolesLink.isVisible())) {
+    await page.getByRole('button', { name: 'Viac' }).click()
+  }
+  await page.getByRole('link', { name: /Roly/ }).click()
   await expect(page.getByRole('alertdialog')).toContainText('Zahodiť neuložené zmeny?')
   await page.getByRole('button', { name: 'Zostať a dokončiť' }).click()
   await expect(page).toHaveURL(/\/reakcie$/)
@@ -1325,4 +1338,93 @@ test('35 Kalendár so zlyhaným obnovením ukáže vek, dopad a ľudskú náprav
   await expect(row).toContainText('Chyba')
   await expect(row).toContainText('Carlo nemá ku kalendáru prístup')
   await expect(row).toContainText('Naposledy úspešne')
+})
+
+test('36 mobilná navigácia sprístupní všetky časti bez skrytého horizontálneho posunu', async ({
+  page,
+}, testInfo) => {
+  await mockCarlo(page)
+  await page.goto('/')
+  const mobileNavigation = page.getByRole('navigation', { name: 'Hlavná mobilná navigácia' })
+
+  if (testInfo.project.name === 'mobile-chromium') {
+    await expect(mobileNavigation).toBeVisible()
+    await expect(mobileNavigation.getByRole('link', { name: 'Prehľad' })).toBeVisible()
+    await expect(mobileNavigation.getByRole('link', { name: 'Oznamy' })).toBeVisible()
+    await expect(mobileNavigation.getByRole('link', { name: 'História' })).toBeVisible()
+    await expect(mobileNavigation.getByRole('button', { name: 'Viac' })).toBeVisible()
+    expect(
+      await mobileNavigation.evaluate((element) => element.scrollWidth <= element.clientWidth),
+    ).toBe(true)
+
+    const more = mobileNavigation.getByRole('button', { name: 'Viac' })
+    await more.click()
+    const dialog = page.getByRole('dialog', { name: 'Ďalšie časti Carla' })
+    await expect(dialog.getByRole('link', { name: 'Audit' })).toBeVisible()
+    await expect(dialog.getByRole('link', { name: 'Kanály' })).toBeVisible()
+    await expect(dialog.getByRole('link', { name: 'Roly a oprávnenia' })).toBeVisible()
+    await expect(dialog.getByRole('link', { name: 'Automatické reakcie' })).toBeVisible()
+    await expect(dialog.getByRole('link', { name: 'Nastavenia' })).toBeVisible()
+    await expect(dialog.getByRole('link', { name: 'Stav systému' })).toBeVisible()
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+    if (process.env.CARLO_VISUAL_AUDIT_DIR) {
+      await page.screenshot({
+        path: `${process.env.CARLO_VISUAL_AUDIT_DIR}/ram--mobilne-menu--${testInfo.project.name}.png`,
+        fullPage: true,
+      })
+    }
+    await page.keyboard.press('Escape')
+    await expect(more).toBeFocused()
+  } else {
+    await expect(mobileNavigation).toBeHidden()
+    await expect(page.getByRole('navigation', { name: 'Hlavná navigácia' })).toBeVisible()
+  }
+})
+
+test('37 Kanály po chybe načítania ukážu pravdivý recovery stav', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.directoryFailureStatus = 503
+  await page.goto('/kanaly')
+  await expect(page.getByRole('alert')).toContainText(
+    'Aktuálny zoznam kanálov sa teraz nepodarilo načítať.',
+  )
+  await expect(page.getByText('Načítavam kanály a otvorené žiadosti…')).toHaveCount(0)
+  state.directoryFailureStatus = null
+  await page.getByRole('button', { name: 'Skúsiť znova' }).click()
+  await expect(page.getByRole('button', { name: 'Vytvoriť nový kanál' })).toBeVisible()
+})
+
+test('38 vypršaná relácia neodošle formulár znova a zachová otvorený formulár', async ({
+  page,
+}, testInfo) => {
+  const state = await mockCarlo(page)
+  await page.goto('/nastavenia')
+  const closingMessage = page.getByLabel('Záverečná správa (voliteľná)')
+  await closingMessage.fill('Tento text čaká na opätovné prihlásenie')
+  state.settingsSaveFailureStatus = 401
+  await page.getByRole('button', { name: 'Uložiť zmeny' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'Relácia vypršala' })
+  await expect(dialog).toContainText('Rozpracované hodnoty zostali v tejto karte')
+  await expect(dialog.getByRole('link', { name: 'Prihlásiť sa v novej karte' })).toHaveAttribute(
+    'target',
+    '_blank',
+  )
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+  await expect(closingMessage).toHaveValue('Tento text čaká na opätovné prihlásenie')
+  if (process.env.CARLO_VISUAL_AUDIT_DIR) {
+    await page.screenshot({
+      path: `${process.env.CARLO_VISUAL_AUDIT_DIR}/ram--vyprsana-relacia--${testInfo.project.name}.png`,
+      fullPage: true,
+    })
+  }
+  expect(
+    state.calls.filter(
+      (call) => call.path === '/api/v1/admin/settings/publication' && call.method === 'PUT',
+    ),
+  ).toHaveLength(1)
+  state.settingsSaveFailureStatus = null
+  await dialog.getByRole('button', { name: 'Overiť prihlásenie' }).click()
+  await expect(dialog).toBeHidden()
+  await expect(closingMessage).toHaveValue('Tento text čaká na opätovné prihlásenie')
 })
