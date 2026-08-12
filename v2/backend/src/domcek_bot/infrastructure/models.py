@@ -77,7 +77,7 @@ class GuildConfigModel(TimestampMixin, Base):
         CheckConstraint("publication_weekday BETWEEN 0 AND 6", name="publication_weekday"),
         CheckConstraint(
             "publication_grace_seconds BETWEEN 0 AND 300",
-            name="publication_grace_seconds",
+            name="ck_guild_config_publication_grace_seconds",
         ),
         CheckConstraint("everyone_mention_enabled", name="everyone_mention_required"),
         CheckConstraint("version >= 1", name="positive_version"),
@@ -393,6 +393,7 @@ class PublicationRunModel(TimestampMixin, Base):
         CheckConstraint(enum_check("state", PublicationState), name="state"),
         CheckConstraint("attempt >= 1", name="positive_attempt"),
         Index("ix_publication_run_state_scheduled", "state", "scheduled_for"),
+        Index("ix_publication_run_guard_release", "state", "release_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -429,7 +430,11 @@ class PublicationRunModel(TimestampMixin, Base):
 class PublicationGuardNoticeModel(TimestampMixin, Base):
     __tablename__ = "publication_guard_notice"
     __table_args__ = (
-        UniqueConstraint("publication_run_id", "recipient_user_id", name="run_recipient"),
+        UniqueConstraint(
+            "publication_run_id",
+            "recipient_user_id",
+            name="uq_publication_guard_notice_run_recipient",
+        ),
         CheckConstraint("state IN ('pending', 'sent', 'failed', 'deleted')", name="state"),
     )
 
