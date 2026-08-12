@@ -110,12 +110,12 @@ def test_manual_publication_can_use_explicit_staging_shadow() -> None:
     assert staging_shadow.manual_publication_enabled
 
 
-def test_live_is_blocked_until_grace_period_and_undo_are_implemented() -> None:
-    with pytest.raises(ValidationError, match="grace period and state-safe Discord Undo"):
-        Settings(
-            database_url="postgresql+asyncpg://localhost/domcek",
-            publication_execution_mode=PublicationExecutionMode.LIVE,
-        )
+def test_live_mode_is_valid_after_grace_period_and_undo_contracts_exist() -> None:
+    settings = Settings(
+        database_url="postgresql+asyncpg://localhost/domcek",
+        publication_execution_mode=PublicationExecutionMode.LIVE,
+    )
+    assert settings.publication_execution_mode is PublicationExecutionMode.LIVE
 
 
 @pytest.mark.parametrize("environment", [AppEnvironment.LOCAL, AppEnvironment.PRODUCTION])

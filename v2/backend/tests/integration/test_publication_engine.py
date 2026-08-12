@@ -15,7 +15,9 @@ from domcek_bot.application.publication.engine import (
     DiscordTransientError,
     NullModeratorAlertGateway,
     PublicationEngine,
+    PublicationGuardResult,
 )
+from domcek_bot.application.publication.guard import PublicationGuardService
 from domcek_bot.application.publication.intro import IntroService
 from domcek_bot.application.publication.manual import (
     InvalidPublishConfirmation,
@@ -135,6 +137,36 @@ class RecordingAlerts:
         self.calls.append((title, correlation_id))
 
 
+class RecordingGuardDiscord:
+    def __init__(self, *, admins: tuple[int, ...], fail_for: frozenset[int] = frozenset()) -> None:
+        self.admins = admins
+        self.fail_for = fail_for
+        self.sent: list[tuple[int, uuid.UUID, str]] = []
+        self.deleted: list[tuple[int, int]] = []
+
+    async def admin_member_ids(self, guild_id: int, admin_role_id: int) -> tuple[int, ...]:
+        assert guild_id == GUILD_ID
+        assert admin_role_id == 777
+        return self.admins
+
+    async def send_guard_dm(
+        self,
+        *,
+        recipient_user_id: int,
+        run_id: uuid.UUID,
+        release_at: datetime,
+        nonce: str,
+    ) -> tuple[int, int]:
+        del release_at
+        if recipient_user_id in self.fail_for:
+            raise RuntimeError("DM disabled")
+        self.sent.append((recipient_user_id, run_id, nonce))
+        return recipient_user_id + 100, recipient_user_id + 200
+
+    async def delete_guard_dm(self, *, channel_id: int, message_id: int) -> None:
+        self.deleted.append((channel_id, message_id))
+
+
 class ConfigurableFinalCalendarSync:
     def __init__(self, succeeds: bool = True) -> None:
         self.succeeds = succeeds
@@ -145,7 +177,7 @@ class ConfigurableFinalCalendarSync:
         return self.succeeds
 
 
-async def _seed(database: Database, *, event_count: int) -> None:
+async def _seed(database: Database, *, event_count: int, grace_seconds: int = 0) -> None:
     source_id = uuid.uuid4()
     async with database.session() as session, session.begin():
         session.add(
@@ -153,6 +185,7 @@ async def _seed(database: Database, *, event_count: int) -> None:
                 guild_id=GUILD_ID,
                 announcement_channel_id=CHANNEL_ID,
                 generated_intro_enabled=True,
+                publication_grace_seconds=grace_seconds,
             )
         )
         await session.flush()
@@ -605,6 +638,226 @@ async def test_successful_manual_run_skips_exactly_the_same_scheduler_slot(
 
     assert [decision.action for decision in decisions] == ["skipped_after_manual"]
     assert len(discord.sent) == 1
+
+
+async def test_publication_guard_is_durable_stoppable_and_releasable(
+    database: Database,
+) -> None:
+    await _seed(database, event_count=1, grace_seconds=30)
+    discord = RecordingDiscord()
+    engine = _engine(database, discord)
+    prepared = await engine.prepare(
+        GUILD_ID,
+        reference_time=REFERENCE,
+        mode=PublicationMode.MANUAL,
+        initiated_by_user_id=USER_ID,
+        correlation_id="guard-prepare",
+    )
+
+    waiting = await engine.begin_guard(
+        prepared.run.id,
+        correlation_id="guard-start",
+        now=REFERENCE,
+    )
+    assert isinstance(waiting, PublicationGuardResult)
+    assert waiting.state is PublicationState.WAITING_FOR_RELEASE
+    assert waiting.release_at == REFERENCE + timedelta(seconds=30)
+    assert discord.sent == []
+
+    still_waiting = await engine.release_guard(
+        prepared.run.id,
+        correlation_id="guard-too-early",
+        now=REFERENCE + timedelta(seconds=29),
+    )
+    assert still_waiting.state is PublicationState.WAITING_FOR_RELEASE
+    assert discord.sent == []
+
+    stopped = await engine.cancel_guard(
+        prepared.run.id,
+        correlation_id="guard-stop",
+        actor_user_id=USER_ID,
+        now=REFERENCE + timedelta(seconds=29),
+    )
+    replayed_stop = await engine.cancel_guard(
+        prepared.run.id,
+        correlation_id="guard-stop-replay",
+        actor_user_id=USER_ID,
+        now=REFERENCE + timedelta(seconds=29),
+    )
+    assert stopped.state is replayed_stop.state is PublicationState.CANCELLED
+    assert discord.sent == []
+
+
+async def test_publication_guard_releases_exactly_once_after_restart_boundary(
+    database: Database,
+) -> None:
+    await _seed(database, event_count=1, grace_seconds=30)
+    discord = RecordingDiscord()
+    first_engine = _engine(database, discord)
+    prepared = await first_engine.prepare(
+        GUILD_ID,
+        reference_time=REFERENCE,
+        mode=PublicationMode.MANUAL,
+        initiated_by_user_id=USER_ID,
+        correlation_id="guard-restart-prepare",
+    )
+    waiting = await first_engine.begin_guard(
+        prepared.run.id,
+        correlation_id="guard-restart-start",
+        now=REFERENCE,
+    )
+    assert waiting.state is PublicationState.WAITING_FOR_RELEASE
+
+    restarted_engine = _engine(database, discord)
+    published = await restarted_engine.release_guard(
+        prepared.run.id,
+        correlation_id="guard-restart-release",
+        now=REFERENCE + timedelta(seconds=31),
+    )
+    replay = await restarted_engine.release_guard(
+        prepared.run.id,
+        correlation_id="guard-restart-replay",
+        now=REFERENCE + timedelta(seconds=32),
+    )
+    assert published.state is replay.state is PublicationState.SUCCEEDED_MANUAL
+    assert len(discord.sent) == 1
+
+
+async def test_automatic_guard_notifies_fresh_admins_and_extra_recipients_once(
+    database: Database,
+) -> None:
+    await _seed(database, event_count=1, grace_seconds=30)
+    extra_recipient = USER_ID + 2
+    async with database.session() as session, session.begin():
+        await session.execute(
+            update(GuildConfigModel)
+            .where(GuildConfigModel.guild_id == GUILD_ID)
+            .values(
+                admin_role_id=777,
+                publication_guard_recipient_ids=[extra_recipient],
+                moderator_channel_id=CHANNEL_ID + 1,
+            )
+        )
+    discord = RecordingDiscord()
+    engine = _engine(database, discord)
+    prepared = await engine.prepare(
+        GUILD_ID,
+        reference_time=REFERENCE,
+        mode=PublicationMode.AUTOMATIC,
+        initiated_by_user_id=None,
+        correlation_id="guard-notice-prepare",
+    )
+    await engine.begin_guard(
+        prepared.run.id,
+        correlation_id="guard-notice-start",
+        now=REFERENCE,
+    )
+    guard_discord = RecordingGuardDiscord(admins=(USER_ID,))
+    guard = PublicationGuardService(
+        SqlAlchemyUnitOfWork(database), engine, guard_discord, RecordingAlerts()
+    )
+
+    first = await guard.notify(prepared.run.id, correlation_id="guard-notice-first")
+    second = await guard.notify(prepared.run.id, correlation_id="guard-notice-second")
+
+    assert first == 2
+    assert second == 0
+    assert [recipient for recipient, _, _ in guard_discord.sent] == [USER_ID, extra_recipient]
+    assert len({nonce for _, _, nonce in guard_discord.sent}) == 2
+
+
+async def test_guard_dm_failure_alerts_but_does_not_block_release(
+    database: Database,
+) -> None:
+    await _seed(database, event_count=1, grace_seconds=30)
+    async with database.session() as session, session.begin():
+        await session.execute(
+            update(GuildConfigModel)
+            .where(GuildConfigModel.guild_id == GUILD_ID)
+            .values(admin_role_id=777, moderator_channel_id=CHANNEL_ID + 1)
+        )
+    discord = RecordingDiscord()
+    engine = _engine(database, discord)
+    prepared = await engine.prepare(
+        GUILD_ID,
+        reference_time=REFERENCE,
+        mode=PublicationMode.AUTOMATIC,
+        initiated_by_user_id=None,
+        correlation_id="guard-failed-dm-prepare",
+    )
+    await engine.begin_guard(
+        prepared.run.id,
+        correlation_id="guard-failed-dm-start",
+        now=REFERENCE,
+    )
+    alerts = RecordingAlerts()
+    guard = PublicationGuardService(
+        SqlAlchemyUnitOfWork(database),
+        engine,
+        RecordingGuardDiscord(admins=(USER_ID,), fail_for=frozenset({USER_ID})),
+        alerts,
+    )
+
+    assert await guard.notify(prepared.run.id, correlation_id="guard-failed-dm") == 0
+    released = await guard.release_due(
+        now=REFERENCE + timedelta(seconds=31),
+        correlation_id="guard-failed-dm-release",
+    )
+
+    assert released[0].state is PublicationState.SUCCEEDED_AUTOMATIC
+    assert len(discord.sent) == 1
+    assert alerts.calls == [("Ochranná správa sa nedoručila", "guard-failed-dm")]
+
+
+async def test_dm_stop_reloads_admin_membership_and_cleans_up_notices(
+    database: Database,
+) -> None:
+    await _seed(database, event_count=1, grace_seconds=30)
+    async with database.session() as session, session.begin():
+        await session.execute(
+            update(GuildConfigModel)
+            .where(GuildConfigModel.guild_id == GUILD_ID)
+            .values(admin_role_id=777)
+        )
+    discord = RecordingDiscord()
+    engine = _engine(database, discord)
+    prepared = await engine.prepare(
+        GUILD_ID,
+        reference_time=REFERENCE,
+        mode=PublicationMode.AUTOMATIC,
+        initiated_by_user_id=None,
+        correlation_id="guard-dm-stop-prepare",
+    )
+    await engine.begin_guard(
+        prepared.run.id,
+        correlation_id="guard-dm-stop-start",
+        now=REFERENCE,
+    )
+    guard_discord = RecordingGuardDiscord(admins=(USER_ID,))
+    guard = PublicationGuardService(
+        SqlAlchemyUnitOfWork(database), engine, guard_discord, RecordingAlerts()
+    )
+    await guard.notify(prepared.run.id, correlation_id="guard-dm-stop-notify")
+
+    guard_discord.admins = ()
+    with pytest.raises(PermissionError):
+        await guard.stop_for_user(
+            guild_id=GUILD_ID,
+            user_id=USER_ID,
+            correlation_id="guard-stale-admin",
+            now=REFERENCE + timedelta(seconds=10),
+        )
+    guard_discord.admins = (USER_ID,)
+    stopped = await guard.stop_for_user(
+        guild_id=GUILD_ID,
+        user_id=USER_ID,
+        correlation_id="guard-fresh-admin",
+        now=REFERENCE + timedelta(seconds=10),
+    )
+
+    assert stopped.state is PublicationState.CANCELLED
+    assert guard_discord.deleted == [(USER_ID + 100, USER_ID + 200)]
+    assert discord.sent == []
 
 
 async def test_manual_confirmation_is_user_bound_short_lived_and_not_replayable(

@@ -104,7 +104,7 @@ async def test_all_e2_tables_exist(database: Database) -> None:
         table_names = await connection.run_sync(lambda sync: set(inspect(sync).get_table_names()))
 
     assert set(Base.metadata.tables) <= table_names
-    assert len(Base.metadata.tables) == 19
+    assert len(Base.metadata.tables) == 21
 
 
 async def test_required_postgresql_constraints_and_indexes_exist(database: Database) -> None:

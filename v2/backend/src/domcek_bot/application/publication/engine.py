@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 import uuid
 from dataclasses import asdict, dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 from domcek_bot.application.audit import AuditWriter
@@ -41,6 +41,10 @@ class PublicationChannelMissing(PublicationError):
 
 
 class PublicationAlreadyRunning(PublicationError):
+    pass
+
+
+class PublicationGuardPending(PublicationError):
     pass
 
 
@@ -118,6 +122,14 @@ class PublicationResult:
     state: PublicationState
     sent_message_ids: tuple[int, ...]
     warning_codes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PublicationGuardResult:
+    run_id: uuid.UUID
+    state: PublicationState
+    release_at: datetime | None
+    decided_at: datetime | None = None
 
 
 class PublicationEngine:
@@ -232,9 +244,10 @@ class PublicationEngine:
         run_id: uuid.UUID,
         *,
         correlation_id: str,
+        recovery: bool = False,
     ) -> PublicationResult:
         async with self._unit_of_work.transaction() as repositories:
-            run = await repositories.publication_runs.get(run_id)
+            run = await repositories.publication_runs.get_for_update(run_id)
             if run is None:
                 raise LookupError(f"publication run not found: {run_id}")
             messages = await repositories.publication_runs.list_messages(run_id)
@@ -255,6 +268,12 @@ class PublicationEngine:
                     ),
                     run.warning_codes,
                 )
+            if run.state is PublicationState.WAITING_FOR_RELEASE:
+                raise PublicationGuardPending("publication is still inside its protection period")
+            if run.state is PublicationState.CANCELLED:
+                return PublicationResult(run.id, run.state, (), run.warning_codes)
+            if run.state is PublicationState.PUBLISHING and not recovery:
+                raise PublicationAlreadyRunning("publication is already being delivered")
             if any(message.state is PublicationMessageState.UNCERTAIN for message in messages):
                 raise PublicationAlreadyRunning("publication requires moderator reconciliation")
             increment_attempt = run.state is not PublicationState.PREPARING
@@ -424,6 +443,146 @@ class PublicationEngine:
             )
         return PublicationResult(run.id, completed_state, tuple(sent_ids), tuple(warnings))
 
+    async def begin_guard(
+        self,
+        run_id: uuid.UUID,
+        *,
+        correlation_id: str,
+        now: datetime | None = None,
+    ) -> PublicationGuardResult | PublicationResult:
+        started_at = now or datetime.now(UTC)
+        async with self._unit_of_work.transaction() as repositories:
+            run = await repositories.publication_runs.get_for_update(run_id)
+            if run is None:
+                raise LookupError(f"publication run not found: {run_id}")
+            if run.state is PublicationState.WAITING_FOR_RELEASE:
+                return PublicationGuardResult(run.id, run.state, run.release_at, run.decision_at)
+            if run.state is PublicationState.CANCELLED:
+                return PublicationGuardResult(run.id, run.state, run.release_at, run.decision_at)
+            if run.state is not PublicationState.PREPARING:
+                return PublicationResult(run.id, run.state, (), run.warning_codes)
+            guild = await repositories.guild_configs.get(run.guild_id)
+            if guild is None:
+                raise LookupError(f"guild configuration not found: {run.guild_id}")
+            grace_seconds = guild.publication_grace_seconds
+            if grace_seconds > 0:
+                release_at = started_at + timedelta(seconds=grace_seconds)
+                await repositories.publication_runs.set_state(
+                    run.id,
+                    PublicationState.WAITING_FOR_RELEASE,
+                    release_at=release_at,
+                )
+                await AuditWriter(repositories.audit_logs).success(
+                    guild_id=run.guild_id,
+                    actor_user_id=run.initiated_by_user_id,
+                    action="publication.guard_started",
+                    object_type="publication_run",
+                    object_id=str(run.id),
+                    correlation_id=correlation_id,
+                    after_value={
+                        "release_at": release_at.isoformat(),
+                        "grace_seconds": grace_seconds,
+                    },
+                )
+                return PublicationGuardResult(
+                    run.id, PublicationState.WAITING_FOR_RELEASE, release_at
+                )
+        return await self.publish(run_id, correlation_id=correlation_id)
+
+    async def release_guard(
+        self,
+        run_id: uuid.UUID,
+        *,
+        correlation_id: str,
+        actor_user_id: int | None = None,
+        force: bool = False,
+        now: datetime | None = None,
+    ) -> PublicationGuardResult | PublicationResult:
+        decided_at = now or datetime.now(UTC)
+        async with self._unit_of_work.transaction() as repositories:
+            run = await repositories.publication_runs.get_for_update(run_id)
+            if run is None:
+                raise LookupError(f"publication run not found: {run_id}")
+            if run.state is PublicationState.CANCELLED:
+                return PublicationGuardResult(run.id, run.state, run.release_at, run.decision_at)
+            if run.state is not PublicationState.WAITING_FOR_RELEASE:
+                if run.state in {
+                    PublicationState.SUCCEEDED_AUTOMATIC,
+                    PublicationState.SUCCEEDED_MANUAL,
+                }:
+                    messages = await repositories.publication_runs.list_messages(run.id)
+                    return PublicationResult(
+                        run.id,
+                        run.state,
+                        tuple(
+                            message.discord_message_id
+                            for message in messages
+                            if message.discord_message_id is not None
+                        ),
+                        run.warning_codes,
+                    )
+                raise PublicationAlreadyRunning("publication guard is no longer active")
+            if not force and run.release_at is not None and decided_at < run.release_at:
+                return PublicationGuardResult(run.id, run.state, run.release_at, run.decision_at)
+            await repositories.publication_runs.set_state(
+                run.id,
+                PublicationState.PREPARING,
+                release_at=run.release_at,
+                decision_at=decided_at,
+                decision_by_user_id=actor_user_id,
+                decision_reason="released_early" if force else "deadline_reached",
+            )
+            await AuditWriter(repositories.audit_logs).success(
+                guild_id=run.guild_id,
+                actor_user_id=actor_user_id,
+                action="publication.guard_released",
+                object_type="publication_run",
+                object_id=str(run.id),
+                correlation_id=correlation_id,
+                after_value={"early": force},
+            )
+        return await self.publish(run_id, correlation_id=correlation_id)
+
+    async def cancel_guard(
+        self,
+        run_id: uuid.UUID,
+        *,
+        correlation_id: str,
+        actor_user_id: int,
+        now: datetime | None = None,
+    ) -> PublicationGuardResult:
+        decided_at = now or datetime.now(UTC)
+        async with self._unit_of_work.transaction() as repositories:
+            run = await repositories.publication_runs.get_for_update(run_id)
+            if run is None:
+                raise LookupError(f"publication run not found: {run_id}")
+            if run.state is PublicationState.CANCELLED:
+                return PublicationGuardResult(run.id, run.state, run.release_at, run.decision_at)
+            if run.state is not PublicationState.WAITING_FOR_RELEASE:
+                raise PublicationGuardPending("publication can no longer be stopped")
+            if run.release_at is not None and decided_at >= run.release_at:
+                raise PublicationGuardPending("publication can no longer be stopped")
+            await repositories.publication_runs.set_state(
+                run.id,
+                PublicationState.CANCELLED,
+                completed_at=decided_at,
+                release_at=run.release_at,
+                decision_at=decided_at,
+                decision_by_user_id=actor_user_id,
+                decision_reason="stopped_by_authorized_user",
+            )
+            await AuditWriter(repositories.audit_logs).success(
+                guild_id=run.guild_id,
+                actor_user_id=actor_user_id,
+                action="publication.guard_cancelled",
+                object_type="publication_run",
+                object_id=str(run.id),
+                correlation_id=correlation_id,
+            )
+        return PublicationGuardResult(
+            run.id, PublicationState.CANCELLED, run.release_at, decided_at
+        )
+
     async def recover(
         self, *, stale_before: datetime, correlation_id: str
     ) -> list[PublicationResult]:
@@ -433,8 +592,23 @@ class PublicationEngine:
             )
         results: list[PublicationResult] = []
         for run in runs:
-            results.append(await self.publish(run.id, correlation_id=correlation_id))
+            results.append(await self.publish(run.id, correlation_id=correlation_id, recovery=True))
         return results
+
+    async def release_due_guards(
+        self, *, now: datetime | None = None, correlation_id: str
+    ) -> list[PublicationGuardResult | PublicationResult]:
+        checked_at = now or datetime.now(UTC)
+        async with self._unit_of_work.transaction() as repositories:
+            runs = await repositories.publication_runs.list_waiting_release_due(now=checked_at)
+        return [
+            await self.release_guard(
+                run.id,
+                correlation_id=correlation_id,
+                now=checked_at,
+            )
+            for run in runs
+        ]
 
     async def _reload_message(
         self, run_id: uuid.UUID, message_id: uuid.UUID

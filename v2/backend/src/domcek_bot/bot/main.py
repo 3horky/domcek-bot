@@ -42,8 +42,14 @@ from domcek_bot.application.publication.engine import (
     DiscordDefinitiveError,
     DiscordTransientError,
     PublicationEngine,
+    PublicationGuardPending,
+    PublicationGuardResult,
 )
 from domcek_bot.application.publication.formatting import neutralize_discord_mentions
+from domcek_bot.application.publication.guard import (
+    PublicationGuardDiscordGateway,
+    PublicationGuardService,
+)
 from domcek_bot.application.publication.intro import IntroService
 from domcek_bot.application.publication.manual import (
     InvalidPublishConfirmation,
@@ -116,6 +122,57 @@ class DiscordPyPublicationGateway:
             raise _classified_discord_error(exc) from exc
 
 
+class DiscordPyPublicationGuardGateway(PublicationGuardDiscordGateway):
+    def __init__(self, client: discord.Client, frontend_base_url: str) -> None:
+        self._client = client
+        self._frontend_base_url = frontend_base_url.rstrip("/")
+
+    async def admin_member_ids(self, guild_id: int, admin_role_id: int) -> tuple[int, ...]:
+        guild = self._client.get_guild(guild_id)
+        if guild is None:
+            guild = await self._client.fetch_guild(guild_id)
+        role = guild.get_role(admin_role_id)
+        if role is None:
+            return ()
+        if not guild.chunked:
+            await guild.chunk(cache=True)
+        return tuple(member.id for member in role.members)
+
+    async def send_guard_dm(
+        self,
+        *,
+        recipient_user_id: int,
+        run_id: uuid.UUID,
+        release_at: datetime,
+        nonce: str,
+    ) -> tuple[int, int]:
+        user = self._client.get_user(recipient_user_id) or await self._client.fetch_user(
+            recipient_user_id
+        )
+        dm = user.dm_channel or await user.create_dm()
+        message = await dm.send(
+            (
+                "**Carlo čaká pred zverejnením oznamov**\n"
+                f"Napíšte sem `stop` pred <t:{int(release_at.timestamp())}:T>, "
+                "ak chcete publikovanie zastaviť.\n"
+                f"[Otvoriť administráciu]({self._frontend_base_url}/?guard={run_id})"
+            ),
+            allowed_mentions=discord.AllowedMentions.none(),
+            nonce=nonce,
+        )
+        return dm.id, message.id
+
+    async def delete_guard_dm(self, *, channel_id: int, message_id: int) -> None:
+        channel = self._client.get_channel(channel_id)
+        if channel is None:
+            channel = await self._client.fetch_channel(channel_id)
+        if isinstance(channel, discord.DMChannel):
+            try:
+                await (await channel.fetch_message(message_id)).delete()
+            except discord.NotFound:
+                return
+
+
 class DiscordPyModeratorAlertTransport:
     def __init__(self, client: discord.Client, frontend_base_url: str) -> None:
         self._client = client
@@ -157,6 +214,97 @@ class DiscordPyChannelGateway(DiscordChannelGateway):
         if not isinstance(channel, discord.TextChannel):
             raise ChannelOperationError("archive target is not a guild text channel")
         return CreatedChannel(channel.id, channel.name, channel.jump_url, channel.category_id)
+
+    async def channel_snapshot(self, *, guild_id: int, channel_id: int) -> dict[str, object] | None:
+        guild = self._client.get_guild(guild_id)
+        channel = guild.get_channel(channel_id) if guild is not None else None
+        if channel is None:
+            return None
+        if not isinstance(channel, discord.TextChannel):
+            raise ChannelOperationError("undo target is not a guild text channel")
+        return {
+            "id": str(channel.id),
+            "name": channel.name,
+            "position": channel.position,
+            "parent_id": None if channel.category_id is None else str(channel.category_id),
+            "topic": channel.topic,
+            "nsfw": channel.nsfw,
+            "rate_limit_per_user": channel.slowmode_delay,
+            "default_auto_archive_duration": (
+                None
+                if channel.default_auto_archive_duration is None
+                else int(channel.default_auto_archive_duration)
+            ),
+            "permission_overwrites": sorted(
+                (
+                    {
+                        "id": str(target.id),
+                        "type": 0 if isinstance(target, discord.Role) else 1,
+                        "allow": str(overwrite.pair()[0].value),
+                        "deny": str(overwrite.pair()[1].value),
+                    }
+                    for target, overwrite in channel.overwrites.items()
+                ),
+                key=lambda item: (item["type"], item["id"]),
+            ),
+            "last_message_id": (
+                None if channel.last_message_id is None else str(channel.last_message_id)
+            ),
+        }
+
+    async def delete_text_channel(self, *, guild_id: int, channel_id: int, reason: str) -> None:
+        guild = self._client.get_guild(guild_id)
+        channel = guild.get_channel(channel_id) if guild is not None else None
+        if channel is None:
+            return
+        if not isinstance(channel, discord.TextChannel):
+            raise ChannelOperationError("undo target is not a guild text channel")
+        await channel.delete(reason=reason)
+
+    async def restore_text_channel(
+        self,
+        *,
+        guild_id: int,
+        channel_id: int,
+        snapshot: dict[str, object],
+        reason: str,
+    ) -> CreatedChannel:
+        guild = self._client.get_guild(guild_id)
+        if guild is None:
+            raise ChannelOperationError("configured guild is unavailable")
+        channel = guild.get_channel(channel_id)
+        if not isinstance(channel, discord.TextChannel):
+            raise ChannelOperationError("undo target is unavailable")
+        parent_id = snapshot.get("parent_id")
+        category = None if parent_id is None else guild.get_channel(int(str(parent_id)))
+        if category is not None and not isinstance(category, discord.CategoryChannel):
+            raise ChannelOperationError("original category is unavailable")
+        topic = snapshot.get("topic")
+        if topic is not None and not isinstance(topic, str):
+            raise ChannelOperationError("stored channel topic is invalid")
+        slowmode = snapshot.get("rate_limit_per_user", 0)
+        if not isinstance(slowmode, int):
+            raise ChannelOperationError("stored channel slowmode is invalid")
+        if topic is None:
+            restored = await channel.edit(
+                name=str(snapshot["name"]),
+                position=int(str(snapshot.get("position", channel.position))),
+                category=category,
+                nsfw=bool(snapshot.get("nsfw", False)),
+                slowmode_delay=slowmode,
+                reason=reason,
+            )
+        else:
+            restored = await channel.edit(
+                name=str(snapshot["name"]),
+                position=int(str(snapshot.get("position", channel.position))),
+                category=category,
+                topic=topic,
+                nsfw=bool(snapshot.get("nsfw", False)),
+                slowmode_delay=slowmode,
+                reason=reason,
+            )
+        return CreatedChannel(restored.id, restored.name, restored.jump_url, restored.category_id)
 
     async def category_allows_project_channel(self, *, guild_id: int, category_id: int) -> bool:
         guild = self._client.get_guild(guild_id)
@@ -640,12 +788,96 @@ class PublishConfirmationView(discord.ui.View):
                 f"Publikovanie skončilo stavom **{result.state.value}**. "
                 f"Termín `{self._preview.slot_key}` už scheduler nezopakuje."
             )
+        elif isinstance(result, PublicationGuardResult) and result.release_at is not None:
+            guard_view = PublishGuardView(
+                service=self._service,
+                principal=principal,
+                run_id=result.run_id,
+            )
+            await interaction.followup.send(
+                "Carlo ešte nič nezverejnil. Ochranná lehota skončí "
+                f"<t:{int(result.release_at.timestamp())}:R>.",
+                view=guard_view,
+                ephemeral=True,
+            )
+            self.stop()
+            return
         else:
             message = (
                 f"Publikovanie skončilo stavom **{result.state.value}** a termín zatiaľ "
                 "nie je úspešne uzavretý. Skontrolujte Históriu publikácií."
             )
         await interaction.followup.send(message, ephemeral=True)
+        self.stop()
+
+
+class PublishGuardView(discord.ui.View):
+    def __init__(
+        self,
+        *,
+        service: ManualPublicationService,
+        principal: Principal,
+        run_id: uuid.UUID,
+    ) -> None:
+        super().__init__(timeout=300)
+        self._service = service
+        self._principal = principal
+        self._run_id = run_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id == self._principal.user_id:
+            return True
+        await interaction.response.send_message(
+            "Toto rozhodnutie patrí inému používateľovi.", ephemeral=True
+        )
+        return False
+
+    @discord.ui.button(label="Zastaviť", style=discord.ButtonStyle.secondary)
+    async def cancel(
+        self, interaction: discord.Interaction, button: discord.ui.Button[discord.ui.View]
+    ) -> None:
+        del button
+        await interaction.response.defer(ephemeral=True)
+        try:
+            principal = await cast(CarloClient, interaction.client).principal(interaction)
+            await self._service.cancel(
+                self._run_id,
+                principal=principal,
+                correlation_id=str(interaction.id),
+            )
+        except (PermissionError, PublicationGuardPending):
+            await interaction.followup.send(
+                "Publikovanie už nemožno zastaviť alebo oprávnenie nie je platné.",
+                ephemeral=True,
+            )
+            return
+        await interaction.followup.send(
+            "Publikovanie bolo zastavené. Na Discord sa nič neodoslalo.", ephemeral=True
+        )
+        self.stop()
+
+    @discord.ui.button(label="Zverejniť teraz", style=discord.ButtonStyle.danger)
+    async def release(
+        self, interaction: discord.Interaction, button: discord.ui.Button[discord.ui.View]
+    ) -> None:
+        del button
+        await interaction.response.defer(ephemeral=True)
+        try:
+            principal = await cast(CarloClient, interaction.client).principal(interaction)
+            result = await self._service.release(
+                self._run_id,
+                principal=principal,
+                correlation_id=str(interaction.id),
+            )
+        except (PermissionError, PublicationGuardPending):
+            await interaction.followup.send(
+                "Publikovanie už prešlo do iného stavu alebo oprávnenie nie je platné.",
+                ephemeral=True,
+            )
+            return
+        await interaction.followup.send(
+            f"Publikovanie skončilo stavom **{result.state.value}**.", ephemeral=True
+        )
         self.stop()
 
 
@@ -696,6 +928,12 @@ class CarloClient(discord.Client):
             engine,
             secret=settings.session_secret_value(),
             publication_enabled=settings.manual_publication_enabled,
+        )
+        self.publication_guard = PublicationGuardService(
+            unit_of_work,
+            engine,
+            DiscordPyPublicationGuardGateway(self, settings.frontend_base_url),
+            publication_alerts,
         )
         self.channel_management = ChannelManagementService(
             unit_of_work, DiscordPyChannelGateway(self), channel_alerts
@@ -751,6 +989,37 @@ class CarloClient(discord.Client):
             guild_ids=[guild.id for guild in self.guilds],
         )
 
+    async def on_interaction(self, interaction: discord.Interaction) -> None:
+        data = interaction.data
+        custom_id = data.get("custom_id") if isinstance(data, dict) else None
+        if isinstance(custom_id, str) and custom_id.startswith("guard:stop:"):
+            await interaction.response.defer(ephemeral=True)
+            guild_id = self.settings.discord_guild_id
+            if guild_id is None:
+                return
+            try:
+                run_id = uuid.UUID(custom_id.removeprefix("guard:stop:"))
+                await self.publication_guard.stop_for_user(
+                    guild_id=guild_id,
+                    user_id=interaction.user.id,
+                    correlation_id=str(interaction.id),
+                    run_id=run_id,
+                )
+            except ValueError:
+                await interaction.followup.send("Toto tlačidlo už nie je platné.", ephemeral=True)
+            except PermissionError:
+                await interaction.followup.send(
+                    "Tento účet nemá oprávnenie zastaviť publikovanie.", ephemeral=True
+                )
+            except PublicationGuardPending:
+                await interaction.followup.send("Publikovanie už nemožno zastaviť.", ephemeral=True)
+            else:
+                await interaction.followup.send(
+                    "Publikovanie bolo zastavené. Na verejný Discord sa nič neodoslalo.",
+                    ephemeral=True,
+                )
+            return
+
     async def on_resumed(self) -> None:
         await self._record_runtime_state("connected")
 
@@ -759,6 +1028,35 @@ class CarloClient(discord.Client):
 
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot:
+            return
+        if (
+            isinstance(message.channel, discord.DMChannel)
+            and message.content.strip().casefold() == "stop"
+        ):
+            guild_id = self.settings.discord_guild_id
+            if guild_id is None:
+                return
+            try:
+                await self.publication_guard.stop_for_user(
+                    guild_id=guild_id,
+                    user_id=message.author.id,
+                    correlation_id=f"dm-stop-{message.id}",
+                )
+            except PermissionError:
+                await message.channel.send(
+                    "Tento účet nemá oprávnenie zastaviť publikovanie.",
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            except PublicationGuardPending:
+                await message.channel.send(
+                    "Aktuálne už nie je žiadne publikovanie, ktoré by sa dalo zastaviť.",
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            else:
+                await message.channel.send(
+                    "Publikovanie bolo zastavené. Na verejný Discord sa nič neodoslalo.",
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
             return
         if (
             self.settings.discord_dm_response_enabled

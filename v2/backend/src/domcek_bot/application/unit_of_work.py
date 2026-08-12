@@ -20,6 +20,7 @@ from domcek_bot.application.repositories import (
     ReactionConfigRepository,
     RuntimeHeartbeatRepository,
     ShadowPublicationRepository,
+    UndoOperationRepository,
     WebSessionRepository,
 )
 
@@ -63,6 +64,9 @@ class RepositorySet(Protocol):
 
     @property
     def channel_archive_requests(self) -> ChannelArchiveRequestRepository: ...
+
+    @property
+    def undo_operations(self) -> UndoOperationRepository: ...
 
     @property
     def web_sessions(self) -> WebSessionRepository: ...

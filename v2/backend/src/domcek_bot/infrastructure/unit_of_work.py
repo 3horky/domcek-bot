@@ -23,6 +23,7 @@ from domcek_bot.application.repositories import (
     ReactionConfigRepository,
     RuntimeHeartbeatRepository,
     ShadowPublicationRepository,
+    UndoOperationRepository,
     WebSessionRepository,
 )
 from domcek_bot.application.unit_of_work import RepositorySet
@@ -43,6 +44,7 @@ from domcek_bot.infrastructure.repositories import (
     SqlAlchemyReactionConfigRepository,
     SqlAlchemyRuntimeHeartbeatRepository,
     SqlAlchemyShadowPublicationRepository,
+    SqlAlchemyUndoOperationRepository,
     SqlAlchemyWebSessionRepository,
 )
 
@@ -62,6 +64,7 @@ class SqlAlchemyRepositorySet:
     runtime_heartbeats: RuntimeHeartbeatRepository
     integration_tasks: IntegrationTaskRepository
     channel_archive_requests: ChannelArchiveRequestRepository
+    undo_operations: UndoOperationRepository
     web_sessions: WebSessionRepository
     audit_logs: AuditLogRepository
 
@@ -88,6 +91,7 @@ class SqlAlchemyUnitOfWork:
                     runtime_heartbeats=SqlAlchemyRuntimeHeartbeatRepository(session),
                     integration_tasks=SqlAlchemyIntegrationTaskRepository(session),
                     channel_archive_requests=SqlAlchemyChannelArchiveRequestRepository(session),
+                    undo_operations=SqlAlchemyUndoOperationRepository(session),
                     web_sessions=SqlAlchemyWebSessionRepository(session),
                     audit_logs=SqlAlchemyAuditLogRepository(session),
                 )

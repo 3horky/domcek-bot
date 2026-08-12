@@ -13,6 +13,7 @@ interface MockState {
   published: boolean
   archives: Record<string, unknown>[]
   memberRoles: string[]
+  undoEffects: Record<string, () => void>
   extraEvents: number
   reactions: Record<string, unknown>
   publicationSettings: Record<string, unknown>
@@ -226,6 +227,7 @@ async function mockCarlo(page: Page, role: Role = 'admin'): Promise<MockState> {
     published: false,
     archives: [],
     memberRoles: [],
+    undoEffects: {},
     extraEvents: 0,
     reactions: defaultReactionSettings(),
     publicationSettings: defaultPublicationSettings(),
@@ -449,8 +451,35 @@ async function handleApi(route: Route, state: MockState) {
   }
   if (path === '/api/v1/publication/manual/confirm') {
     if (!capabilities(role).includes('manual_publish')) return json({ code: 'forbidden' }, 403)
+    return json({
+      run_id: 'run-1',
+      state: 'waiting_for_release',
+      slot_key: 'slot-1',
+      release_at: new Date(Date.now() + 30_000).toISOString(),
+      message_ids: [],
+      warning_codes: [],
+    })
+  }
+  if (path === '/api/v1/publication/manual/release') {
+    if (!capabilities(role).includes('manual_publish')) return json({ code: 'forbidden' }, 403)
     state.published = true
-    return json({ run_id: 'run-1', state: 'succeeded_manual', slot_key: 'slot-1' })
+    return json({
+      run_id: 'run-1',
+      state: 'succeeded_manual',
+      release_at: null,
+      message_ids: ['message-1'],
+      warning_codes: [],
+    })
+  }
+  if (path === '/api/v1/publication/manual/cancel') {
+    if (!capabilities(role).includes('manual_publish')) return json({ code: 'forbidden' }, 403)
+    return json({
+      run_id: 'run-1',
+      state: 'cancelled',
+      release_at: null,
+      message_ids: [],
+      warning_codes: [],
+    })
   }
   if (path === '/api/v1/admin/settings') {
     const sourcePage = new URL(request.headers()['referer'] ?? 'http://localhost/').pathname
@@ -545,6 +574,7 @@ async function handleApi(route: Route, state: MockState) {
       )
     return json(directory())
   }
+  if (path === '/api/v1/admin/undo' && method === 'GET') return json([])
   if (path === '/api/v1/admin/archives' && method === 'GET') return json(state.archives)
   if (path === '/api/v1/admin/archives' && method === 'POST') {
     if (state.archiveRequestFailureStatus)
@@ -563,7 +593,8 @@ async function handleApi(route: Route, state: MockState) {
         state.archiveDecisionFailureStatus,
       )
     state.archives = []
-    return json({ ...archiveRecord(), state: 'executed' })
+    state.undoEffects['archive-undo'] = () => undefined
+    return json({ ...archiveRecord(), state: 'executed', undo_id: 'archive-undo' })
   }
   if (path === '/api/v1/admin/archives/recover' && method === 'POST') {
     if (!state.archiveRecoverySucceeds) return json([])
@@ -579,8 +610,14 @@ async function handleApi(route: Route, state: MockState) {
         { detail: 'Discord kanál sa teraz nedá bezpečne vytvoriť.' },
         state.channelCreateFailureStatus,
       )
+    state.undoEffects['channel-undo'] = () => undefined
     return json(
-      { channel_id: '777', name: 'e2e-projekt', jump_url: 'https://discord.test/777' },
+      {
+        channel_id: '777',
+        name: 'e2e-projekt',
+        jump_url: 'https://discord.test/777',
+        undo_id: 'channel-undo',
+      },
       201,
     )
   }
@@ -637,9 +674,14 @@ async function handleApi(route: Route, state: MockState) {
       )
     const values = body as Record<string, unknown>
     const roleId = values.role === 'admin' ? '900' : '901'
+    const beforeRoles = [...state.memberRoles]
     state.memberRoles = values.enabled
       ? [...new Set([...state.memberRoles, roleId])]
       : state.memberRoles.filter((id) => id !== roleId)
+    const undoId = `role-undo-${state.calls.length}`
+    state.undoEffects[undoId] = () => {
+      state.memberRoles = beforeRoles
+    }
     return json({
       id: String(values.member_id),
       username: values.member_id === '999' ? 'martina.z' : 'martina_90',
@@ -647,7 +689,14 @@ async function handleApi(route: Route, state: MockState) {
       avatar_url:
         values.member_id === '999' ? 'https://cdn.discordapp.com/avatars/999/test.png' : null,
       role_ids: state.memberRoles,
+      undo_id: undoId,
     })
+  }
+  if (path.startsWith('/api/v1/admin/undo/') && method === 'POST') {
+    const undoId = path.split('/').at(-1) ?? ''
+    state.undoEffects[undoId]?.()
+    delete state.undoEffects[undoId]
+    return json({ id: undoId, operation_type: 'role_change', state: 'undone', object_id: '999' })
   }
   if (path === '/api/v1/publication/history') {
     if (state.publicationHistoryFailureStatus)
@@ -789,6 +838,8 @@ function defaultPublicationSettings() {
     generated_intro_enabled: true,
     everyone_mention_enabled: true,
     allow_stale_calendar_cache: false,
+    publication_grace_seconds: 30,
+    publication_guard_recipient_ids: [],
     alert_calendar_sync_enabled: true,
     alert_publication_enabled: true,
     alert_channel_operations_enabled: true,
@@ -1006,7 +1057,7 @@ test('06 používateľ vytvorí INFO oznam s inkluzívnou expiráciou', async ({
   expect(state.infoAnnouncements[0]?.valid_until).toBe('2026-08-20')
 })
 
-test('07 Admin ručne publikuje dvojkrokovo a dvojklik nevytvorí druhý účinok', async ({
+test('07 Admin ručne publikuje cez ochrannú lehotu a dvojklik nevytvorí druhý účinok', async ({
   page,
 }, testInfo) => {
   const state = await mockCarlo(page)
@@ -1022,12 +1073,35 @@ test('07 Admin ručne publikuje dvojkrokovo a dvojklik nevytvorí druhý účino
       fullPage: true,
     })
   }
-  await dialog.getByRole('button', { name: 'Potvrdiť a zverejniť teraz' }).dblclick()
+  await dialog.getByRole('button', { name: 'Potvrdiť publikovanie' }).dblclick()
+  await expect(dialog.getByText('Carlo zatiaľ nič nezverejnil')).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Zastaviť' })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Zverejniť teraz' }).dblclick()
   await expect(page.getByText(/Oznamy boli zverejnené.*pravidelný termín/)).toBeVisible()
   await expect(opener).toBeFocused()
   expect(state.published).toBe(true)
   expect(
     state.calls.filter((call) => call.path === '/api/v1/publication/manual/confirm'),
+  ).toHaveLength(1)
+  expect(
+    state.calls.filter((call) => call.path === '/api/v1/publication/manual/release'),
+  ).toHaveLength(1)
+})
+
+test('07b Admin počas ochrannej lehoty zastaví publikovanie bez externého účinku', async ({
+  page,
+}) => {
+  const state = await mockCarlo(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Pripraviť náhľad na zverejnenie' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Skontrolovať a ručne zverejniť' })
+  await dialog.getByRole('button', { name: 'Potvrdiť publikovanie' }).click()
+  await expect(dialog.getByText('Carlo zatiaľ nič nezverejnil')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Zastaviť' }).click()
+  await expect(page.getByText('Na Discord sa nič neodoslalo.')).toBeVisible()
+  expect(state.published).toBe(false)
+  expect(
+    state.calls.filter((call) => call.path === '/api/v1/publication/manual/cancel'),
   ).toHaveLength(1)
 })
 
@@ -1102,6 +1176,11 @@ test('08 Admin vytvorí súkromný kanál', async ({ page }) => {
   await nameInput.fill('e2e-projekt')
   await dialog.getByRole('button', { name: 'Vytvoriť kanál' }).click()
   await expect(page.getByText(/Kanál #e2e-projekt bol vytvorený/)).toBeVisible()
+  await page.getByRole('button', { name: 'Vrátiť späť' }).click()
+  await expect(page.getByText(/Vytvorenie kanála #e2e-projekt bolo vrátené/)).toBeVisible()
+  expect(
+    state.calls.filter((call) => call.path === '/api/v1/admin/undo/channel-undo'),
+  ).toHaveLength(1)
   expect(state.calls.some((call) => call.path === '/api/v1/admin/channels')).toBe(true)
   const createCall = state.calls.find((call) => call.path === '/api/v1/admin/channels')
   expect((createCall?.body as Record<string, unknown>).member_ids).toEqual(['999'])
@@ -1125,6 +1204,8 @@ test('09 Team Mod požiada o archiváciu a Admin schváli konkrétnu žiadosť',
   await page.getByRole('button', { name: 'Schváliť' }).click()
   await page.getByRole('button', { name: 'Archivovať kanál' }).click()
   await expect(page.getByText('Kanál bol archivovaný.')).toBeVisible()
+  await page.getByRole('button', { name: 'Vrátiť späť' }).click()
+  await expect(page.getByText('Kanál bol obnovený na pôvodnom mieste.')).toBeVisible()
   expect(state.archives).toHaveLength(0)
 })
 
@@ -1160,6 +1241,13 @@ test('10 Admin klávesnicou vyberie človeka a bezpečne zmení obe roly', async
   await expect(page.getByText(/Team Mod oprávnenie bolo udelené človeku Martina/)).toBeVisible()
   expect(state.memberRoles).toEqual(['901'])
   expect(state.calls.filter((call) => call.path === '/api/v1/admin/discord/roles')).toHaveLength(1)
+  await page.getByRole('button', { name: 'Vrátiť späť' }).click()
+  await expect(page.getByText(/Team Mod oprávnenie bolo vrátené/)).toBeVisible()
+  expect(state.memberRoles).toEqual([])
+
+  await page.getByRole('button', { name: 'Udeliť Team Mod' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Udeliť Team Mod' }).click()
+  expect(state.memberRoles).toEqual(['901'])
 
   await page.getByRole('button', { name: 'Udeliť Admin' }).click()
   await page.getByRole('alertdialog').getByRole('button', { name: 'Udeliť Admin' }).click()
@@ -1180,7 +1268,7 @@ test('10 Admin klávesnicou vyberie človeka a bezpečne zmení obe roly', async
     state.calls
       .filter((call) => call.path === '/api/v1/admin/discord/roles')
       .map((call) => (call.body as Record<string, unknown>).enabled),
-  ).toEqual([true, true, false, false])
+  ).toEqual([true, true, true, false, false])
 })
 
 test('11 neoprávnený používateľ neobíde Admin API', async ({ page }) => {
@@ -1230,7 +1318,8 @@ test('14 SDB FMA vidí balík a publikuje, ale nemá ostatnú administráciu', a
   await expect(page.getByRole('link', { name: /Nastavenia/ })).toHaveCount(0)
   await expect(page.getByRole('link', { name: /Audit/ })).toHaveCount(0)
   await page.getByRole('button', { name: 'Pripraviť náhľad na zverejnenie' }).click()
-  await page.getByRole('button', { name: 'Potvrdiť a zverejniť teraz' }).click()
+  await page.getByRole('button', { name: 'Potvrdiť publikovanie' }).click()
+  await page.getByRole('button', { name: 'Zverejniť teraz' }).click()
   expect(state.published).toBe(true)
 })
 

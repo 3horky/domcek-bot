@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from datetime import datetime
 from urllib.parse import quote
 
 import httpx
@@ -79,6 +80,106 @@ class DiscordHttpPublicationGateway:
             raise DiscordDefinitiveError(
                 f"Discord rejected reaction ({response.status_code}, {_discord_code(response)})"
             )
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+
+class DiscordHttpPublicationGuardGateway:
+    def __init__(
+        self, *, bot_token: str, frontend_base_url: str, timeout_seconds: float = 10.0
+    ) -> None:
+        self._frontend_base_url = frontend_base_url.rstrip("/")
+        self._client = httpx.AsyncClient(
+            base_url=DISCORD_API_BASE,
+            headers={"Authorization": f"Bot {bot_token}"},
+            timeout=timeout_seconds,
+        )
+
+    async def admin_member_ids(self, guild_id: int, admin_role_id: int) -> tuple[int, ...]:
+        after = 0
+        members: list[int] = []
+        while True:
+            response = await self._client.get(
+                f"/guilds/{guild_id}/members",
+                params={"limit": 1000, "after": after},
+            )
+            response.raise_for_status()
+            payload: object = response.json()
+            if not isinstance(payload, list):
+                raise RuntimeError("Discord member response is malformed")
+            for item in payload:
+                if not isinstance(item, dict):
+                    continue
+                roles = item.get("roles")
+                user = item.get("user")
+                if (
+                    isinstance(roles, list)
+                    and str(admin_role_id) in {str(role) for role in roles}
+                    and isinstance(user, dict)
+                    and isinstance(user.get("id"), str)
+                ):
+                    members.append(int(user["id"]))
+            if len(payload) < 1000:
+                return tuple(dict.fromkeys(members))
+            last = payload[-1]
+            if not isinstance(last, dict) or not isinstance(last.get("user"), dict):
+                raise RuntimeError("Discord member pagination is malformed")
+            after = int(last["user"]["id"])
+
+    async def send_guard_dm(
+        self,
+        *,
+        recipient_user_id: int,
+        run_id: uuid.UUID,
+        release_at: datetime,
+        nonce: str,
+    ) -> tuple[int, int]:
+        channel_response = await self._client.post(
+            "/users/@me/channels", json={"recipient_id": str(recipient_user_id)}
+        )
+        channel_response.raise_for_status()
+        channel = channel_response.json()
+        if not isinstance(channel, dict) or not isinstance(channel.get("id"), str):
+            raise RuntimeError("Discord DM channel response is malformed")
+        channel_id = int(channel["id"])
+        message_response = await self._client.post(
+            f"/channels/{channel_id}/messages",
+            json={
+                "content": (
+                    "**Carlo čaká pred zverejnením oznamov**\n"
+                    f"Ak chcete publikovanie zastaviť, napíšte sem `stop` pred "
+                    f"<t:{int(release_at.timestamp())}:T>.\n"
+                    f"[Otvoriť administráciu]({self._frontend_base_url}/?guard={run_id})"
+                ),
+                "nonce": nonce,
+                "enforce_nonce": True,
+                "allowed_mentions": {"parse": []},
+                "components": [
+                    {
+                        "type": 1,
+                        "components": [
+                            {
+                                "type": 2,
+                                "style": 4,
+                                "label": "Zastaviť publikovanie",
+                                "custom_id": f"guard:stop:{run_id}",
+                            }
+                        ],
+                    }
+                ],
+            },
+        )
+        message_response.raise_for_status()
+        message = message_response.json()
+        if not isinstance(message, dict) or not isinstance(message.get("id"), str):
+            raise RuntimeError("Discord DM response is malformed")
+        return channel_id, int(message["id"])
+
+    async def delete_guard_dm(self, *, channel_id: int, message_id: int) -> None:
+        response = await self._client.delete(f"/channels/{channel_id}/messages/{message_id}")
+        if response.status_code not in {204, 404}:
+            response.raise_for_status()
 
     async def close(self) -> None:
         await self._client.aclose()

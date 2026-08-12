@@ -6,6 +6,7 @@ import uuid
 from collections.abc import AsyncIterator
 from dataclasses import replace
 from datetime import UTC, datetime, time
+from typing import Any, cast
 
 import pytest
 from sqlalchemy import select, text
@@ -20,6 +21,7 @@ from domcek_bot.application.discord_admin import (
 )
 from domcek_bot.application.records import GuildConfigRecord, ReactionConfigRecord
 from domcek_bot.application.settings import SettingsService, SettingsValidationError
+from domcek_bot.application.undo import UndoService
 from domcek_bot.config import AppEnvironment, Settings
 from domcek_bot.domain.errors import OptimisticLockError
 from domcek_bot.infrastructure.database import Database
@@ -70,6 +72,8 @@ class FakeDiscordAdministration:
     def __init__(self) -> None:
         self.changes = []
         self.reaction_tests: list[tuple[int, int, str]] = []
+        self.member_roles: dict[int, set[int]] = {101: {900}, 102: {900}}
+        self.fail_after_role_change = False
 
     async def directory(self, guild_id: int) -> DiscordDirectory:
         del guild_id
@@ -85,6 +89,16 @@ class FakeDiscordAdministration:
         del guild_id, role_id
         return self.assignable
 
+    async def get_member(self, guild_id: int, member_id: int) -> DiscordMemberOption:
+        del guild_id
+        return DiscordMemberOption(
+            member_id,
+            "member",
+            "Member",
+            None,
+            tuple(sorted(self.member_roles.get(member_id, set()))),
+        )
+
     async def count_role_members(self, guild_id: int, role_id: int) -> int:
         del guild_id, role_id
         await asyncio.sleep(0.01)
@@ -96,9 +110,16 @@ class FakeDiscordAdministration:
         del guild_id, reason
         await asyncio.sleep(0.01)
         self.changes.append((member_id, role_id, enabled))
+        roles = self.member_roles.setdefault(member_id, set())
+        if enabled:
+            roles.add(role_id)
+        else:
+            roles.discard(role_id)
         if not enabled:
             self.admin_count -= 1
-        return DiscordMemberOption(member_id, "member", "Member", None, ())
+        if self.fail_after_role_change:
+            raise RuntimeError("connection lost after Discord accepted the role change")
+        return DiscordMemberOption(member_id, "member", "Member", None, tuple(sorted(roles)))
 
     async def test_reaction(self, guild_id: int, channel_id: int, emoji: str) -> int:
         self.reaction_tests.append((guild_id, channel_id, emoji))
@@ -424,7 +445,24 @@ async def test_role_management_protects_last_admin_and_uses_configured_roles(
         correlation_id="remove-admin",
     )
     assert member.id == 101
+    assert member.undo_id is not None
     assert gateway.changes == [(101, 900, False)]
+
+    undone = await UndoService(uow, gateway, cast(Any, gateway)).undo(
+        uuid.UUID(member.undo_id),
+        principal=_principal(),
+        correlation_id="undo-remove-admin",
+    )
+    assert undone.state.value == "undone"
+    assert gateway.changes[-1] == (101, 900, True)
+
+    replay = await UndoService(uow, gateway, cast(Any, gateway)).undo(
+        uuid.UUID(member.undo_id),
+        principal=_principal(),
+        correlation_id="undo-remove-admin-replay",
+    )
+    assert replay.state.value == "undone"
+    assert gateway.changes.count((101, 900, True)) == 1
 
     with pytest.raises(PermissionError):
         await service.set_application_role(
@@ -482,6 +520,43 @@ async def test_reaction_test_uses_explicit_visible_draft_emoji(database: Databas
             principal=_principal(),
             correlation_id="invalid-double-emoji",
         )
+
+
+async def test_role_undo_survives_ambiguous_crash_after_discord_effect(
+    database: Database,
+) -> None:
+    uow = SqlAlchemyUnitOfWork(database)
+    async with uow.transaction() as repositories:
+        await repositories.guild_configs.add(
+            GuildConfigRecord(guild_id=GUILD_ID, team_mod_role_id=901)
+        )
+    gateway = FakeDiscordAdministration()
+    gateway.fail_after_role_change = True
+    service = DiscordAdministrationService(uow, gateway)
+
+    with pytest.raises(RuntimeError, match="connection lost"):
+        await service.set_application_role(
+            member_id=101,
+            role="team_mod",
+            enabled=True,
+            principal=_principal(),
+            correlation_id="ambiguous-role-change",
+        )
+
+    assert 901 in gateway.member_roles[101]
+    operations = await UndoService(uow, gateway, cast(Any, gateway)).list_available(
+        principal=_principal(), scope="roles"
+    )
+    assert len(operations) == 1
+
+    gateway.fail_after_role_change = False
+    result = await UndoService(uow, gateway, cast(Any, gateway)).undo(
+        operations[0].id,
+        principal=_principal(),
+        correlation_id="undo-ambiguous-role-change",
+    )
+    assert result.state.value == "undone"
+    assert 901 not in gateway.member_roles[101]
 
 
 async def test_concurrent_admin_removals_cannot_remove_both_admins(database: Database) -> None:

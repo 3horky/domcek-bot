@@ -12,6 +12,7 @@ import {
 } from '../api/client'
 import { useAuth } from '../auth/context'
 import { LoadErrorState, LoadingState } from '../components/AsyncState'
+import { UndoHistory } from '../components/UndoHistory'
 import { Button } from '../components/ui/button'
 import { ReactionsPanel } from './ReactionsPanel'
 import { RolesPanel } from './RolesPanel'
@@ -26,6 +27,7 @@ export function ChannelsPage() {
   const [notice, setNotice] = useState<Notice>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [undoRevision, setUndoRevision] = useState(0)
   const load = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
@@ -64,13 +66,20 @@ export function ChannelsPage() {
           onRetry={() => void load()}
         />
       ) : (
-        <ChannelsPanel
-          directory={directory}
-          archives={archives}
-          isAdmin={isAdmin}
-          onArchivesChanged={setArchives}
-          setNotice={setNotice}
-        />
+        <>
+          <ChannelsPanel
+            directory={directory}
+            archives={archives}
+            isAdmin={isAdmin}
+            onArchivesChanged={setArchives}
+            onChanged={async () => {
+              await load()
+              setUndoRevision((current) => current + 1)
+            }}
+            setNotice={setNotice}
+          />
+          <UndoHistory scope="channels" revision={undoRevision} onChanged={load} />
+        </>
       )}
     </AdministrationPage>
   )
@@ -81,6 +90,7 @@ export function RolesPage() {
   const [notice, setNotice] = useState<Notice>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [undoRevision, setUndoRevision] = useState(0)
   const load = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
@@ -114,7 +124,14 @@ export function RolesPage() {
           onRetry={() => void load()}
         />
       ) : (
-        <RolesPanel publication={settings.publication} setNotice={setNotice} />
+        <>
+          <RolesPanel
+            publication={settings.publication}
+            setNotice={setNotice}
+            onChanged={() => setUndoRevision((current) => current + 1)}
+          />
+          <UndoHistory scope="roles" revision={undoRevision} onChanged={load} />
+        </>
       )}
     </AdministrationPage>
   )

@@ -14,6 +14,7 @@ from domcek_bot.application.auth.authorization import Capability, Principal
 from domcek_bot.application.records import (
     ChannelArchiveRequestRecord,
     IntegrationTaskRecord,
+    UndoOperationRecord,
 )
 from domcek_bot.application.unit_of_work import UnitOfWork
 from domcek_bot.domain.enums import ArchiveState, IntegrationTaskState
@@ -44,6 +45,7 @@ class CreatedChannel:
     name: str
     jump_url: str
     category_id: int | None = None
+    undo_id: uuid.UUID | None = None
 
 
 class DiscordChannelGateway(Protocol):
@@ -78,6 +80,21 @@ class DiscordChannelGateway(Protocol):
         channel_id: int,
         archive_category_id: int,
         archived_name: str,
+        reason: str,
+    ) -> CreatedChannel: ...
+
+    async def channel_snapshot(
+        self, *, guild_id: int, channel_id: int
+    ) -> dict[str, object] | None: ...
+
+    async def delete_text_channel(self, *, guild_id: int, channel_id: int, reason: str) -> None: ...
+
+    async def restore_text_channel(
+        self,
+        *,
+        guild_id: int,
+        channel_id: int,
+        snapshot: dict[str, object],
         reason: str,
     ) -> CreatedChannel: ...
 
@@ -254,11 +271,18 @@ class ChannelManagementService:
         role_count: int,
         category_id: int,
     ) -> CreatedChannel:
+        undo_id = task.id
+        snapshot = await self._discord.channel_snapshot(
+            guild_id=principal.guild_id, channel_id=created.channel_id
+        )
+        if snapshot is None:
+            raise ChannelOperationError("created channel disappeared before it could be recorded")
         result_value: dict[str, object] = {
             "channel_id": created.channel_id,
             "name": created.name,
             "jump_url": created.jump_url,
             "category_id": created.category_id,
+            "undo_id": str(undo_id),
         }
         async with self._unit_of_work.transaction() as repositories:
             await repositories.integration_tasks.set_result(
@@ -283,7 +307,20 @@ class ChannelManagementService:
                     "category_id": category_id,
                 },
             )
-        return created
+            existing_undo = await repositories.undo_operations.get(undo_id)
+            if existing_undo is None:
+                await repositories.undo_operations.add(
+                    UndoOperationRecord(
+                        id=undo_id,
+                        guild_id=principal.guild_id,
+                        operation_type="channel_create",
+                        object_id=str(created.channel_id),
+                        actor_user_id=principal.user_id,
+                        before_snapshot={},
+                        after_snapshot=snapshot,
+                    )
+                )
+        return replace(created, undo_id=undo_id)
 
     async def request_archive(
         self,
@@ -444,7 +481,18 @@ class ChannelManagementService:
     ) -> ChannelArchiveRequestRecord:
         decided_at = record.decided_at or datetime.now(UTC)
         archived_name = archive_channel_name(record.original_channel_name, decided_at)
+        restore_snapshot = record.restore_snapshot
         try:
+            if restore_snapshot is None:
+                restore_snapshot = await self._discord.channel_snapshot(
+                    guild_id=record.guild_id, channel_id=record.discord_channel_id
+                )
+                if restore_snapshot is None:
+                    raise ChannelOperationError("archive target disappeared")
+                async with self._unit_of_work.transaction() as repositories:
+                    await repositories.channel_archive_requests.set_restore_snapshot(
+                        record.id, restore_snapshot
+                    )
             current = await self._discord.get_text_channel(
                 guild_id=record.guild_id,
                 channel_id=record.discord_channel_id,
@@ -460,6 +508,11 @@ class ChannelManagementService:
                     archived_name=archived_name,
                     reason=f"Carlo archive {correlation_id}: {record.reason}",
                 )
+            archived_snapshot = await self._discord.channel_snapshot(
+                guild_id=record.guild_id, channel_id=record.discord_channel_id
+            )
+            if archived_snapshot is None:
+                raise ChannelOperationError("archived channel disappeared")
         except Exception as exc:
             async with self._unit_of_work.transaction() as repositories:
                 await AuditWriter(repositories.audit_logs).failure(
@@ -491,6 +544,26 @@ class ChannelManagementService:
                 ),
             )
             if changed:
+                undo_id = record.id
+                existing_undo = await repositories.undo_operations.get(undo_id)
+                if existing_undo is None:
+                    await repositories.undo_operations.add(
+                        UndoOperationRecord(
+                            id=undo_id,
+                            guild_id=record.guild_id,
+                            operation_type="channel_archive",
+                            object_id=str(record.discord_channel_id),
+                            actor_user_id=actor_user_id or record.requested_by_user_id,
+                            before_snapshot=restore_snapshot,
+                            after_snapshot=archived_snapshot,
+                        )
+                    )
+                await repositories.channel_archive_requests.attach_undo(
+                    record.id,
+                    restore_snapshot=restore_snapshot,
+                    archived_snapshot=archived_snapshot,
+                    undo_id=undo_id,
+                )
                 await AuditWriter(repositories.audit_logs).success(
                     guild_id=record.guild_id,
                     actor_user_id=actor_user_id,
@@ -509,6 +582,9 @@ class ChannelManagementService:
             state=ArchiveState.EXECUTED,
             decided_by_user_id=actor_user_id,
             decided_at=decided_at,
+            restore_snapshot=restore_snapshot,
+            archived_snapshot=archived_snapshot,
+            undo_id=record.id,
         )
 
     async def _alert_failure(
@@ -594,6 +670,7 @@ def _created_channel_from_result(value: dict[str, object]) -> CreatedChannel:
     name = value.get("name")
     jump_url = value.get("jump_url")
     category_id = value.get("category_id")
+    undo_id_value = value.get("undo_id")
     if (
         not isinstance(channel_id, int)
         or not isinstance(name, str)
@@ -602,7 +679,11 @@ def _created_channel_from_result(value: dict[str, object]) -> CreatedChannel:
         raise ChannelOperationError("stored channel result is invalid")
     if category_id is not None and not isinstance(category_id, int):
         raise ChannelOperationError("stored channel category result is invalid")
-    return CreatedChannel(channel_id, name, jump_url, category_id)
+    try:
+        undo_id = None if undo_id_value is None else uuid.UUID(str(undo_id_value))
+    except ValueError as exc:
+        raise ChannelOperationError("stored channel undo result is invalid") from exc
+    return CreatedChannel(channel_id, name, jump_url, category_id, undo_id)
 
 
 def _safe_error(exc: BaseException) -> str:

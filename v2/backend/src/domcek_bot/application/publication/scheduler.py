@@ -12,7 +12,6 @@ from domcek_bot.application.publication.engine import (
     ModeratorAlertGateway,
     PublicationAlreadyRunning,
     PublicationEngine,
-    PublicationResult,
 )
 from domcek_bot.application.unit_of_work import UnitOfWork
 from domcek_bot.domain.enums import PublicationMode, PublicationState
@@ -143,6 +142,21 @@ class PublicationScheduler:
                         )
                     )
                     continue
+                if existing.state is PublicationState.WAITING_FOR_RELEASE:
+                    released = await self._engine.release_guard(
+                        existing.id,
+                        correlation_id=correlation,
+                        now=checked_at,
+                    )
+                    decisions.append(
+                        SchedulerDecision(
+                            guild.guild_id,
+                            slot.key,
+                            released.state.value,
+                            released.run_id,
+                        )
+                    )
+                    continue
                 if existing.state is PublicationState.SUCCEEDED_MANUAL:
                     action = "skipped_after_manual"
                 elif existing.state is PublicationState.PUBLISHING:
@@ -230,8 +244,10 @@ class PublicationScheduler:
                 correlation_id=correlation,
             )
             try:
-                published: PublicationResult = await self._engine.publish(
-                    prepared.run.id, correlation_id=correlation
+                guarded = await self._engine.begin_guard(
+                    prepared.run.id,
+                    correlation_id=correlation,
+                    now=checked_at,
                 )
             except PublicationAlreadyRunning:
                 decisions.append(
@@ -244,7 +260,7 @@ class PublicationScheduler:
                 )
                 continue
             decisions.append(
-                SchedulerDecision(guild.guild_id, slot.key, published.state.value, published.run_id)
+                SchedulerDecision(guild.guild_id, slot.key, guarded.state.value, guarded.run_id)
             )
         return decisions
 

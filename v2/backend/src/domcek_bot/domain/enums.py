@@ -17,6 +17,7 @@ class InclusionDecision(StrEnum):
 
 class PublicationState(StrEnum):
     PREPARING = "preparing"
+    WAITING_FOR_RELEASE = "waiting_for_release"
     PUBLISHING = "publishing"
     SUCCEEDED_AUTOMATIC = "succeeded_automatic"
     SUCCEEDED_MANUAL = "succeeded_manual"
@@ -24,6 +25,7 @@ class PublicationState(StrEnum):
     FAILED = "failed"
     RETRY_PENDING = "retry_pending"
     PARTIALLY_PUBLISHED = "partially_published"
+    CANCELLED = "cancelled"
 
 
 class PublicationMode(StrEnum):
@@ -81,6 +83,12 @@ class IntegrationTaskState(StrEnum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     RETRY_PENDING = "retry_pending"
+
+
+class UndoState(StrEnum):
+    AVAILABLE = "available"
+    UNDOING = "undoing"
+    UNDONE = "undone"
 
 
 class AuditResult(StrEnum):

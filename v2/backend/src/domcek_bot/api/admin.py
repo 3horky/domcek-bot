@@ -32,6 +32,7 @@ from domcek_bot.application.records import (
     ReactionConfigRecord,
 )
 from domcek_bot.application.settings import SettingsValidationError
+from domcek_bot.application.undo import UndoUnavailable
 from domcek_bot.domain.errors import OptimisticLockError
 
 router = APIRouter(prefix="/api/v1/admin")
@@ -47,6 +48,8 @@ class PublicationSettingsBody(BaseModel):
     generated_intro_enabled: bool
     everyone_mention_enabled: bool
     allow_stale_calendar_cache: bool = False
+    publication_grace_seconds: int = Field(default=30, ge=0, le=300)
+    publication_guard_recipient_ids: list[str] = Field(default_factory=list, max_length=100)
     alert_calendar_sync_enabled: bool
     alert_publication_enabled: bool
     alert_channel_operations_enabled: bool
@@ -114,6 +117,84 @@ class ArchiveDecisionBody(BaseModel):
     approve: bool
 
 
+@router.get("/undo", response_class=JSONResponse)
+async def list_undo_operations(
+    request: Request,
+    context: Annotated[AuthContext, Depends(authenticated_context)],
+    scope: Literal["roles", "channels"] = Query(),
+) -> JSONResponse:
+    service = _service(request, "undo")
+    try:
+        records = await service.list_available(principal=context.principal, scope=scope)
+    except AuthorizationDenied as exc:
+        raise _forbidden("Nemáte oprávnenie zobraziť vratné zmeny.") from exc
+    return JSONResponse(
+        [
+            {
+                "id": str(record.id),
+                "operation_type": record.operation_type,
+                "object_id": record.object_id,
+                "state": record.state.value,
+                "before_snapshot": record.before_snapshot,
+                "after_snapshot": record.after_snapshot,
+                "created_at": (
+                    None if record.created_at is None else record.created_at.isoformat()
+                ),
+                "last_block_reason": record.last_block_reason,
+            }
+            for record in records
+        ]
+    )
+
+
+@router.post("/undo/{operation_id}", response_class=JSONResponse)
+async def undo_operation(
+    operation_id: uuid.UUID,
+    request: Request,
+    context: Annotated[AuthContext, Depends(csrf_context)],
+) -> JSONResponse:
+    service = _service(request, "undo")
+    try:
+        result = await service.undo(
+            operation_id,
+            principal=context.principal,
+            correlation_id=request.state.correlation_id,
+        )
+    except AuthorizationDenied as exc:
+        raise _forbidden("Túto zmenu už nemáte oprávnenie vrátiť späť.") from exc
+    except LookupError as exc:
+        raise ApplicationError(
+            "undo_not_found", "Zmenu nemožno nájsť", "Obnovte stránku a skúste to znova.", 404
+        ) from exc
+    except UndoUnavailable as exc:
+        details = {
+            "role_changed_since_operation": "Rola sa medzitým zmenila.",
+            "last_admin_protection": "Návrat by odobral posledného Admina.",
+            "created_channel_changed_offer_archive": (
+                "Kanál už nie je prázdny alebo sa zmenil. "
+                "Namiesto odstránenia ho môžete archivovať."
+            ),
+            "archived_channel_changed_since_operation": (
+                "Archivovaný kanál sa medzitým zmenil, preto ho Carlo bezpečne nepresunie späť."
+            ),
+            "archived_channel_missing": "Archivovaný kanál už neexistuje.",
+        }
+        raise ApplicationError(
+            "undo_unavailable",
+            "Zmenu už nemožno bezpečne vrátiť",
+            details.get(exc.reason, "Aktuálny stav Discordu už nezodpovedá pôvodnej zmene."),
+            409,
+        ) from exc
+    return JSONResponse(
+        {
+            "id": str(result.id),
+            "operation_type": result.operation_type,
+            "state": result.state.value,
+            "object_id": result.object_id,
+        }
+    )
+
+
 @router.get("/settings", response_class=JSONResponse)
 async def get_settings(
     request: Request,
@@ -149,8 +230,10 @@ async def update_publication_settings(
                     "moderator_channel_id",
                     "projects_category_id",
                     "archive_category_id",
+                    "publication_guard_recipient_ids",
                 }
             ),
+            publication_guard_recipient_ids=tuple(_ids(body.publication_guard_recipient_ids)),
             announcement_channel_id=_id(body.announcement_channel_id),
             command_channel_id=_id(body.command_channel_id),
             moderator_channel_id=_id(body.moderator_channel_id),
@@ -412,7 +495,12 @@ async def create_channel(
     except (ValueError, ChannelOperationError) as exc:
         raise _invalid("Kanál sa nepodarilo bezpečne vytvoriť.") from exc
     return JSONResponse(
-        {"channel_id": str(result.channel_id), "name": result.name, "jump_url": result.jump_url},
+        {
+            "channel_id": str(result.channel_id),
+            "name": result.name,
+            "jump_url": result.jump_url,
+            "undo_id": None if result.undo_id is None else str(result.undo_id),
+        },
         status_code=201,
     )
 
@@ -524,6 +612,9 @@ def _guild_json(record: GuildConfigRecord) -> dict[str, object]:
         "archive_category_id",
     ):
         data[key] = None if data[key] is None else str(data[key])
+    data["publication_guard_recipient_ids"] = [
+        str(value) for value in record.publication_guard_recipient_ids
+    ]
     data["publication_time"] = record.publication_time.isoformat()
     return dict(data)
 
@@ -559,6 +650,7 @@ def _archive_json(record: ChannelArchiveRequestRecord) -> dict[str, object]:
         "requested_by_user_id",
         "decided_by_user_id",
         "discord_approval_message_id",
+        "undo_id",
     ):
         data[key] = None if data[key] is None else str(data[key])
     data["id"] = str(data["id"])

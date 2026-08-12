@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, replace
 from typing import Protocol
 
 from domcek_bot.application.alerts import ModeratorAlertTransport
 from domcek_bot.application.audit import AuditWriter
 from domcek_bot.application.auth.authorization import Capability, Principal
+from domcek_bot.application.records import UndoOperationRecord
 from domcek_bot.application.repositories import AuditLogRepository
 from domcek_bot.application.unit_of_work import UnitOfWork
 
@@ -48,6 +50,7 @@ class DiscordMemberOption:
     display_name: str
     avatar_url: str | None
     role_ids: tuple[int, ...]
+    undo_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +75,8 @@ class DiscordAdministrationGateway(Protocol):
     async def search_members(
         self, guild_id: int, query: str, *, limit: int = 25
     ) -> tuple[DiscordMemberOption, ...]: ...
+
+    async def get_member(self, guild_id: int, member_id: int) -> DiscordMemberOption: ...
 
     async def role_is_assignable(self, guild_id: int, role_id: int) -> bool: ...
 
@@ -161,6 +166,8 @@ class DiscordAdministrationService:
         failure: Exception | None = None
         denial: Exception | None = None
         member: DiscordMemberOption | None = None
+        before_enabled: bool | None = None
+        undo_id: uuid.UUID | None = None
         async with self._unit_of_work.transaction() as repositories:
             await repositories.guild_configs.lock_role_mutations(principal.guild_id)
             config = await repositories.guild_configs.get(principal.guild_id)
@@ -218,13 +225,45 @@ class DiscordAdministrationService:
                     denial = LastAdminRemovalDenied("the last Carlo Admin cannot be removed")
                 else:
                     try:
-                        member = await self._discord.set_member_role(
-                            principal.guild_id,
-                            member_id,
-                            role_id,
-                            enabled=enabled,
-                            reason=f"Carlo {correlation_id} by {principal.user_id}",
+                        before_member = await self._discord.get_member(
+                            principal.guild_id, member_id
                         )
+                        before_enabled = role_id in before_member.role_ids
+                        if before_enabled == enabled:
+                            member = before_member
+                        else:
+                            # The rollback intent is committed before Discord is touched. If the
+                            # process dies after Discord accepts the mutation, the operation is
+                            # still discoverable and its exact-state precondition makes recovery
+                            # safe. A crash before the mutation becomes an idempotent no-op Undo.
+                            undo_id = uuid.uuid4()
+                            async with self._unit_of_work.transaction() as undo_repositories:
+                                await undo_repositories.undo_operations.add(
+                                    UndoOperationRecord(
+                                        id=undo_id,
+                                        guild_id=principal.guild_id,
+                                        operation_type="role_change",
+                                        object_id=str(member_id),
+                                        actor_user_id=principal.user_id,
+                                        before_snapshot={
+                                            "role": role,
+                                            "enabled": before_enabled,
+                                            "member_name": before_member.display_name,
+                                        },
+                                        after_snapshot={
+                                            "role": role,
+                                            "enabled": enabled,
+                                            "member_name": before_member.display_name,
+                                        },
+                                    )
+                                )
+                            member = await self._discord.set_member_role(
+                                principal.guild_id,
+                                member_id,
+                                role_id,
+                                enabled=enabled,
+                                reason=f"Carlo {correlation_id} by {principal.user_id}",
+                            )
                     except Exception as exc:
                         failure = exc
                         await AuditWriter(repositories.audit_logs).failure(
@@ -258,7 +297,9 @@ class DiscordAdministrationService:
             raise failure
         if member is None:
             raise DiscordAdministrationError("Discord returned no member after role mutation")
-        return member
+        if before_enabled is None or undo_id is None:
+            return member
+        return replace(member, undo_id=str(undo_id))
 
     async def _audit_role_denial(
         self,

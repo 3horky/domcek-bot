@@ -41,6 +41,7 @@ from domcek_bot.domain.enums import (
     PublicationMode,
     PublicationState,
     SyncStatus,
+    UndoState,
 )
 
 NAMING_CONVENTION = {
@@ -74,6 +75,10 @@ class GuildConfigModel(TimestampMixin, Base):
     __tablename__ = "guild_config"
     __table_args__ = (
         CheckConstraint("publication_weekday BETWEEN 0 AND 6", name="publication_weekday"),
+        CheckConstraint(
+            "publication_grace_seconds BETWEEN 0 AND 300",
+            name="publication_grace_seconds",
+        ),
         CheckConstraint("everyone_mention_enabled", name="everyone_mention_required"),
         CheckConstraint("version >= 1", name="positive_version"),
     )
@@ -101,6 +106,10 @@ class GuildConfigModel(TimestampMixin, Base):
     generated_intro_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     everyone_mention_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     allow_stale_calendar_cache: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    publication_grace_seconds: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=30)
+    publication_guard_recipient_ids: Mapped[list[int]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
     alert_calendar_sync_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     alert_publication_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     alert_channel_operations_enabled: Mapped[bool] = mapped_column(
@@ -411,6 +420,33 @@ class PublicationRunModel(TimestampMixin, Base):
     intro_used_fallback: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     outro_text: Mapped[str | None] = mapped_column(Text)
     warning_codes: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    release_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decision_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decision_by_user_id: Mapped[int | None] = mapped_column(BigInteger)
+    decision_reason: Mapped[str | None] = mapped_column(String(64))
+
+
+class PublicationGuardNoticeModel(TimestampMixin, Base):
+    __tablename__ = "publication_guard_notice"
+    __table_args__ = (
+        UniqueConstraint("publication_run_id", "recipient_user_id", name="run_recipient"),
+        CheckConstraint("state IN ('pending', 'sent', 'failed', 'deleted')", name="state"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    publication_run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("publication_run.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    recipient_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    state: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
+    nonce: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    discord_channel_id: Mapped[int | None] = mapped_column(BigInteger)
+    discord_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    error_detail: Mapped[str | None] = mapped_column(Text)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class PublicationItemModel(Base):
@@ -602,6 +638,41 @@ class ChannelArchiveRequestModel(TimestampMixin, Base):
     discord_approval_message_id: Mapped[int | None] = mapped_column(BigInteger)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    restore_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    archived_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    undo_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+
+
+class UndoOperationModel(Base):
+    __tablename__ = "undo_operation"
+    __table_args__ = (
+        CheckConstraint(enum_check("state", UndoState), name="state"),
+        CheckConstraint(
+            "operation_type IN ('role_change', 'channel_create', 'channel_archive')",
+            name="operation_type",
+        ),
+        Index("ix_undo_operation_guild_state_created", "guild_id", "state", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    guild_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("guild_config.guild_id", ondelete="RESTRICT"), nullable=False
+    )
+    operation_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    object_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    before_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    after_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    state: Mapped[str] = mapped_column(
+        String(24), nullable=False, default=UndoState.AVAILABLE.value
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    undone_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    undone_by_user_id: Mapped[int | None] = mapped_column(BigInteger)
+    last_block_reason: Mapped[str | None] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class ReactionConfigModel(TimestampMixin, Base):

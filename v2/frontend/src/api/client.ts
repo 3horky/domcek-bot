@@ -217,6 +217,8 @@ export interface PublicationSettings {
   generated_intro_enabled: boolean
   everyone_mention_enabled: boolean
   allow_stale_calendar_cache: boolean
+  publication_grace_seconds: number
+  publication_guard_recipient_ids: string[]
   alert_calendar_sync_enabled: boolean
   alert_publication_enabled: boolean
   alert_channel_operations_enabled: boolean
@@ -309,6 +311,7 @@ export interface DiscordMemberOption {
   display_name: string
   avatar_url: string | null
   role_ids: string[]
+  undo_id?: string | null
 }
 
 export interface ArchiveRequest {
@@ -319,6 +322,7 @@ export interface ArchiveRequest {
   reason: string
   state: string
   expires_at: string
+  undo_id?: string | null
 }
 
 export interface ManualPublicationPreview {
@@ -330,6 +334,14 @@ export interface ManualPublicationPreview {
   confirmation_token: string
   expires_at: string
   draft: PublicationDraft
+}
+
+export interface PublicationGuardResult {
+  run_id: string
+  state: string
+  message_ids: string[]
+  warning_codes: string[]
+  release_at: string | null
 }
 
 export interface PublicationHistoryItem {
@@ -728,10 +740,36 @@ export function createDiscordChannel(body: {
   category_id: string | null
   idempotency_key: string
 }) {
-  return requestJson<{ channel_id: string; name: string; jump_url: string }>(
-    '/api/v1/admin/channels',
-    { method: 'POST', body: JSON.stringify(body) },
-  )
+  return requestJson<{
+    channel_id: string
+    name: string
+    jump_url: string
+    undo_id: string | null
+  }>('/api/v1/admin/channels', { method: 'POST', body: JSON.stringify(body) })
+}
+
+export function undoDiscordOperation(operationId: string) {
+  return requestJson<{
+    id: string
+    operation_type: 'role_change' | 'channel_create' | 'channel_archive'
+    state: 'undone'
+    object_id: string
+  }>(`/api/v1/admin/undo/${operationId}`, { method: 'POST' })
+}
+
+export interface UndoOperation {
+  id: string
+  operation_type: 'role_change' | 'channel_create' | 'channel_archive'
+  object_id: string
+  state: 'available' | 'undoing'
+  before_snapshot: Record<string, unknown>
+  after_snapshot: Record<string, unknown>
+  created_at: string | null
+  last_block_reason: string | null
+}
+
+export function getUndoOperations(scope: 'roles' | 'channels', signal?: AbortSignal) {
+  return requestJson<UndoOperation[]>(`/api/v1/admin/undo?scope=${scope}`, { signal })
 }
 
 export function getArchiveRequests(signal?: AbortSignal) {
@@ -763,8 +801,22 @@ export function prepareManualPublication() {
 }
 
 export function confirmManualPublication(confirmationToken: string) {
-  return requestJson<{ run_id: string; state: string; message_ids: string[] }>(
-    '/api/v1/publication/manual/confirm',
-    { method: 'POST', body: JSON.stringify({ confirmation_token: confirmationToken }) },
-  )
+  return requestJson<PublicationGuardResult>('/api/v1/publication/manual/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ confirmation_token: confirmationToken }),
+  })
+}
+
+export function releaseManualPublication(runId: string) {
+  return requestJson<PublicationGuardResult>('/api/v1/publication/manual/release', {
+    method: 'POST',
+    body: JSON.stringify({ run_id: runId }),
+  })
+}
+
+export function cancelManualPublication(runId: string) {
+  return requestJson<PublicationGuardResult>('/api/v1/publication/manual/cancel', {
+    method: 'POST',
+    body: JSON.stringify({ run_id: runId }),
+  })
 }

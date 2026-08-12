@@ -48,6 +48,7 @@ import {
   syncCalendarSource,
   updateCalendarSource,
   updatePublicationSettings,
+  undoDiscordOperation,
 } from '../api/client'
 import { useAuth } from '../auth/context'
 import { MemberPicker, RolePicker } from '../components/DiscordPickers'
@@ -85,7 +86,11 @@ import { Textarea } from '../components/ui/textarea'
 const weekdays = ['pondelok', 'utorok', 'streda', 'štvrtok', 'piatok', 'sobota', 'nedeľa']
 const defaultChannelEmojis = ['🏠', '💬', '✨', '🌿']
 
-export type Notice = { kind: 'success' | 'error'; text: string } | null
+export type Notice = {
+  kind: 'success' | 'error'
+  text: string
+  action?: { label: string; run: () => Promise<void> }
+} | null
 
 export function SettingsPage() {
   const auth = useAuth()
@@ -379,6 +384,42 @@ function PublicationPanel({
                 onChecked={(checked) =>
                   setDraft({ ...draft, automatic_publication_enabled: checked })
                 }
+              />
+              <div className="settings-field publication-guard-field">
+                <Label htmlFor="publication-grace-seconds">Ochranná lehota pred zverejnením</Label>
+                <div className="publication-guard-setting">
+                  <Input
+                    id="publication-grace-seconds"
+                    type="number"
+                    min={0}
+                    max={300}
+                    step={5}
+                    value={draft.publication_grace_seconds}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        publication_grace_seconds: Math.min(
+                          300,
+                          Math.max(0, Number(event.target.value)),
+                        ),
+                      })
+                    }
+                  />
+                  <span>sekúnd</span>
+                </div>
+                <small>
+                  Carlo ešte nič verejne neodošle. Počas tejto lehoty možno publikovanie zastaviť;
+                  hodnota 0 ochranu vypne.
+                </small>
+              </div>
+              <MemberPicker
+                label="Ďalší ľudia, ktorí môžu publikovanie zastaviť"
+                description="Aktuálni Admini sú zahrnutí vždy. Tu môžete pridať ďalších dôveryhodných ľudí."
+                value={draft.publication_guard_recipient_ids}
+                onChange={(publication_guard_recipient_ids) =>
+                  setDraft({ ...draft, publication_guard_recipient_ids })
+                }
+                storageKey="carlo-publication-guard-recipients"
               />
               <ToggleRow
                 title="Popisy z Google kalendára"
@@ -890,12 +931,14 @@ export function ChannelsPanel({
   archives,
   isAdmin,
   onArchivesChanged,
+  onChanged,
   setNotice,
 }: {
   directory: DiscordDirectory
   archives: ArchiveRequest[]
   isAdmin: boolean
   onArchivesChanged: (value: ArchiveRequest[]) => void
+  onChanged: () => Promise<void>
   setNotice: (notice: Notice) => void
 }) {
   const auth = useAuth()
@@ -1067,7 +1110,27 @@ export function ChannelsPanel({
         category_id: categoryId || null,
         idempotency_key: createIdempotencyKey.current,
       })
-      setNotice({ kind: 'success', text: `Kanál #${result.name} bol vytvorený.` })
+      setNotice({
+        kind: 'success',
+        text: `Kanál #${result.name} bol vytvorený.`,
+        action: result.undo_id
+          ? {
+              label: 'Vrátiť späť',
+              run: async () => {
+                try {
+                  await undoDiscordOperation(result.undo_id!)
+                  await onChanged()
+                  setNotice({
+                    kind: 'success',
+                    text: `Vytvorenie kanála #${result.name} bolo vrátené.`,
+                  })
+                } catch (error) {
+                  setNotice({ kind: 'error', text: message(error) })
+                }
+              },
+            }
+          : undefined,
+      })
       resetCreate()
       setCreateOpen(false)
       createIdempotencyKey.current = crypto.randomUUID()
@@ -1107,11 +1170,26 @@ export function ChannelsPanel({
     setDecisionBusy(true)
     setDecisionError(null)
     try {
-      await decideArchiveRequest(id, approve)
+      const changed = await decideArchiveRequest(id, approve)
       onArchivesChanged(archives.filter((item) => item.id !== id))
       setNotice({
         kind: 'success',
         text: approve ? 'Kanál bol archivovaný.' : 'Žiadosť bola zamietnutá.',
+        action:
+          approve && changed.undo_id
+            ? {
+                label: 'Vrátiť späť',
+                run: async () => {
+                  try {
+                    await undoDiscordOperation(changed.undo_id!)
+                    await onChanged()
+                    setNotice({ kind: 'success', text: 'Kanál bol obnovený na pôvodnom mieste.' })
+                  } catch (error) {
+                    setNotice({ kind: 'error', text: message(error) })
+                  }
+                },
+              }
+            : undefined,
       })
       setPendingDecision(null)
     } catch (error) {
@@ -1798,6 +1876,7 @@ function EmptyState({
 }
 export function NoticeBanner({ notice }: { notice: Exclude<Notice, null> }) {
   const alertRef = useRef<HTMLDivElement>(null)
+  const [actionBusy, setActionBusy] = useState(false)
   useEffect(() => {
     if (notice.kind === 'error') alertRef.current?.focus()
   }, [notice])
@@ -1813,7 +1892,21 @@ export function NoticeBanner({ notice }: { notice: Exclude<Notice, null> }) {
       ) : (
         <MessageSquareMore aria-hidden="true" />
       )}
-      {notice.text}
+      <span>{notice.text}</span>
+      {notice.action && (
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={actionBusy}
+          onClick={() => {
+            if (actionBusy) return
+            setActionBusy(true)
+            void notice.action?.run().finally(() => setActionBusy(false))
+          }}
+        >
+          {actionBusy ? 'Vraciam späť…' : notice.action.label}
+        </Button>
+      )}
     </div>
   )
 }

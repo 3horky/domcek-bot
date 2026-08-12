@@ -30,6 +30,7 @@ from domcek_bot.application.publication.service import PublicationDraftService
 from domcek_bot.application.publication.shadow import ShadowPublicationService
 from domcek_bot.application.records import GuildConfigRecord
 from domcek_bot.application.settings import SettingsService
+from domcek_bot.application.undo import UndoService
 from domcek_bot.config import ConfigurationError, ProcessKind, load_settings
 from domcek_bot.infrastructure.calendar_factory import build_google_calendar_client
 from domcek_bot.infrastructure.database import Database
@@ -101,6 +102,7 @@ def create_runtime_app() -> FastAPI:
     discord_admin_gateway = DiscordHttpAdministrationGateway(
         bot_token=settings.discord_token_value()
     )
+    channel_service = ChannelManagementService(unit_of_work, discord_admin_gateway, channel_alerts)
     api_services = ApiServices(
         auth=auth,
         sessions=sessions,
@@ -125,7 +127,7 @@ def create_runtime_app() -> FastAPI:
             reaction_validator=discord_admin_gateway,
             discord_settings_validator=discord_admin_gateway,
         ),
-        channels=ChannelManagementService(unit_of_work, discord_admin_gateway, channel_alerts),
+        channels=channel_service,
         discord_admin=DiscordAdministrationService(
             unit_of_work, discord_admin_gateway, role_alerts
         ),
@@ -136,6 +138,7 @@ def create_runtime_app() -> FastAPI:
         ),
         shadow_publications=ShadowPublicationService(unit_of_work, draft_service),
         operations=RuntimeOperationsService(unit_of_work),
+        undo=UndoService(unit_of_work, discord_admin_gateway, discord_admin_gateway),
         resources=tuple(
             resource
             for resource in (

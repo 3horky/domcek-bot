@@ -19,6 +19,7 @@ from domcek_bot.domain.enums import (
     PublicationMode,
     PublicationState,
     SyncStatus,
+    UndoState,
 )
 
 
@@ -33,6 +34,8 @@ class GuildConfigRecord:
     generated_intro_enabled: bool = True
     everyone_mention_enabled: bool = True
     allow_stale_calendar_cache: bool = False
+    publication_grace_seconds: int = 30
+    publication_guard_recipient_ids: tuple[int, ...] = ()
     alert_calendar_sync_enabled: bool = True
     alert_publication_enabled: bool = True
     alert_channel_operations_enabled: bool = True
@@ -194,6 +197,10 @@ class PublicationRunRecord:
     completed_at: datetime | None = None
     error_code: str | None = None
     error_detail: str | None = None
+    release_at: datetime | None = None
+    decision_at: datetime | None = None
+    decision_by_user_id: int | None = None
+    decision_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,6 +245,20 @@ class PublicationMessageRecord:
     reaction_error: str | None = None
     last_attempt_at: datetime | None = None
     sent_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PublicationGuardNoticeRecord:
+    id: uuid.UUID
+    publication_run_id: uuid.UUID
+    recipient_user_id: int
+    state: str
+    nonce: str
+    discord_channel_id: int | None = None
+    discord_message_id: int | None = None
+    error_detail: str | None = None
+    sent_at: datetime | None = None
+    deleted_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -300,6 +321,26 @@ class ChannelArchiveRequestRecord:
     decided_by_user_id: int | None = None
     discord_approval_message_id: int | None = None
     decided_at: datetime | None = None
+    restore_snapshot: dict[str, Any] | None = None
+    archived_snapshot: dict[str, Any] | None = None
+    undo_id: uuid.UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class UndoOperationRecord:
+    id: uuid.UUID
+    guild_id: int
+    operation_type: str
+    object_id: str
+    actor_user_id: int
+    before_snapshot: dict[str, Any]
+    after_snapshot: dict[str, Any]
+    state: UndoState = UndoState.AVAILABLE
+    started_at: datetime | None = None
+    undone_at: datetime | None = None
+    undone_by_user_id: int | None = None
+    last_block_reason: str | None = None
+    created_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -138,15 +138,6 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def block_live_until_product_safety_contracts_exist(self) -> Settings:
-        if self.publication_execution_mode is PublicationExecutionMode.LIVE:
-            raise ValueError(
-                "PUBLICATION_EXECUTION_MODE=live is blocked until the durable publication "
-                "grace period and state-safe Discord Undo contracts are implemented"
-            )
-        return self
-
-    @model_validator(mode="after")
     def validate_web_urls(self) -> Settings:
         for field_name, value in (
             ("FRONTEND_BASE_URL", self.frontend_base_url),

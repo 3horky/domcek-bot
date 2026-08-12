@@ -16,6 +16,7 @@ import {
   type PublicationSettings,
   searchDiscordMembers,
   setDiscordRole,
+  undoDiscordOperation,
 } from '../api/client'
 import {
   AlertDialog,
@@ -52,9 +53,11 @@ const roleCopy: Record<ManagedRole, { name: string; description: string; removal
 export function RolesPanel({
   publication,
   setNotice,
+  onChanged,
 }: {
   publication: PublicationSettings
   setNotice: (notice: Notice) => void
+  onChanged: () => void
 }) {
   const searchId = useId()
   const resultsId = useId()
@@ -115,14 +118,40 @@ export function RolesPanel({
     setActionError(null)
     try {
       const changed = await setDiscordRole(pending.member.id, pending.role, pending.enabled)
+      const before = pending.member
       setSelectedMember(changed)
       setMembers((current) => current.map((item) => (item.id === changed.id ? changed : item)))
       const action = pending.enabled ? 'udelené' : 'odobrané'
       setNotice({
         kind: 'success',
         text: `${roleCopy[pending.role].name} oprávnenie bolo ${action} človeku ${changed.display_name}.`,
+        action: changed.undo_id
+          ? {
+              label: 'Vrátiť späť',
+              run: async () => {
+                try {
+                  await undoDiscordOperation(changed.undo_id!)
+                  setSelectedMember(before)
+                  onChanged()
+                  setNotice({
+                    kind: 'success',
+                    text: `${roleCopy[pending.role].name} oprávnenie bolo vrátené do pôvodného stavu.`,
+                  })
+                } catch (error) {
+                  setNotice({
+                    kind: 'error',
+                    text:
+                      error instanceof ApiError
+                        ? error.message
+                        : 'Zmenu sa nepodarilo bezpečne vrátiť späť.',
+                  })
+                }
+              },
+            }
+          : undefined,
       })
       setPending(null)
+      onChanged()
     } catch (error) {
       setActionError(roleMutationError(error, pending))
     } finally {

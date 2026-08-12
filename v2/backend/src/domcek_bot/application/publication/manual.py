@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import json
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -13,6 +14,7 @@ from domcek_bot.application.auth.authorization import Capability, Principal
 from domcek_bot.application.publication.engine import (
     PreparedPublication,
     PublicationEngine,
+    PublicationGuardResult,
     PublicationResult,
     PublicationSlotChanged,
 )
@@ -109,7 +111,7 @@ class ManualPublicationService:
         principal: Principal,
         correlation_id: str,
         now: datetime | None = None,
-    ) -> tuple[PreparedPublication, PublicationResult]:
+    ) -> tuple[PreparedPublication, PublicationGuardResult | PublicationResult]:
         principal.require(Capability.MANUAL_PUBLISH)
         if not self._publication_enabled:
             raise ManualPublicationDisabled(
@@ -165,8 +167,45 @@ class ManualPublicationService:
             ) from exc
         if prepared.run.slot_key != slot_key:
             raise InvalidPublishConfirmation("publication slot changed; request a new preview")
-        result = await self._engine.publish(prepared.run.id, correlation_id=correlation_id)
+        result = await self._engine.begin_guard(
+            prepared.run.id,
+            correlation_id=correlation_id,
+            now=confirmed_at,
+        )
         return prepared, result
+
+    async def release(
+        self,
+        run_id: uuid.UUID,
+        *,
+        principal: Principal,
+        correlation_id: str,
+        now: datetime | None = None,
+    ) -> PublicationGuardResult | PublicationResult:
+        principal.require(Capability.MANUAL_PUBLISH)
+        return await self._engine.release_guard(
+            run_id,
+            correlation_id=correlation_id,
+            actor_user_id=principal.user_id,
+            force=True,
+            now=now,
+        )
+
+    async def cancel(
+        self,
+        run_id: uuid.UUID,
+        *,
+        principal: Principal,
+        correlation_id: str,
+        now: datetime | None = None,
+    ) -> PublicationGuardResult:
+        principal.require(Capability.MANUAL_PUBLISH)
+        return await self._engine.cancel_guard(
+            run_id,
+            correlation_id=correlation_id,
+            actor_user_id=principal.user_id,
+            now=now,
+        )
 
     def _encode(self, payload: dict[str, object]) -> str:
         body = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()

@@ -3430,6 +3430,54 @@ label:has(input:disabled) {
   color: var(--ink-muted);
   font-size: 0.72rem;
 }
+
+.publication-guard-setting {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.publication-guard-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.publication-guard-setting [data-slot='input'] {
+  width: 7rem;
+}
+
+.publication-guard-setting span {
+  color: var(--muted-foreground);
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.publication-guard-countdown {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  border: 1px solid color-mix(in oklch, var(--primary), white 68%);
+  border-radius: 0.8rem;
+  background: var(--brand-soft);
+  padding: 0.9rem 1rem;
+  color: var(--brand-strong);
+}
+
+.publication-guard-countdown svg {
+  width: 1.4rem;
+  height: 1.4rem;
+  flex: 0 0 auto;
+}
+
+.publication-guard-countdown div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.publication-guard-countdown span {
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+}
 .permission-preview {
   display: flex;
   align-items: center;
@@ -3537,6 +3585,14 @@ label:has(input:disabled) {
   padding: 0.72rem 0.9rem;
   font-size: 0.82rem;
 }
+
+.settings-notice > span {
+  flex: 1;
+}
+
+.settings-notice > button {
+  flex: none;
+}
 .settings-notice svg {
   width: 17px;
 }
@@ -3549,6 +3605,61 @@ label:has(input:disabled) {
   border-color: #ebc6c2;
   background: #fff3f1;
   color: #933b34;
+}
+
+.undo-history {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  padding: clamp(1rem, 2vw, 1.5rem);
+}
+
+.undo-history-heading,
+.undo-history-list article {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.undo-history-heading > svg {
+  width: 1.35rem;
+  color: var(--primary);
+}
+
+.undo-history-heading h2,
+.undo-history-heading p {
+  margin: 0;
+}
+
+.undo-history-heading p,
+.undo-history-list small {
+  color: var(--muted-foreground);
+}
+
+.undo-history-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.undo-history-list article {
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.undo-history-list article > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+@media (max-width: 640px) {
+  .undo-history-list article {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 .calendar-list,
 .archive-list,

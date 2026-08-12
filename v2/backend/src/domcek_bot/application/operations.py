@@ -30,6 +30,7 @@ FAILURE_STATES = {
 }
 IN_PROGRESS_STATES = {
     PublicationState.PREPARING,
+    PublicationState.WAITING_FOR_RELEASE,
     PublicationState.PUBLISHING,
     PublicationState.RETRY_PENDING,
 }

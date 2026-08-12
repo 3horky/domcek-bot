@@ -23,6 +23,8 @@ from domcek_bot.application.publication.composer import PublicationCompositionEr
 from domcek_bot.application.publication.engine import (
     PublicationAlreadyRunning,
     PublicationChannelMissing,
+    PublicationGuardPending,
+    PublicationGuardResult,
     PublicationResult,
 )
 from domcek_bot.application.publication.history import PublicationHistoryEntry
@@ -47,6 +49,10 @@ class ReconcileMessageBody(BaseModel):
 
 class ContinueMessageBody(BaseModel):
     message_position: int = Field(ge=0, le=100)
+
+
+class GuardDecisionBody(BaseModel):
+    run_id: uuid.UUID
 
 
 @router.get("/history", response_class=JSONResponse)
@@ -303,10 +309,84 @@ async def manual_publication_confirm(
             "slot_key": prepared.run.slot_key,
             "created": prepared.created,
             "state": result.state.value,
-            "message_ids": list(result.sent_message_ids),
-            "warning_codes": list(result.warning_codes),
+            "message_ids": list(getattr(result, "sent_message_ids", ())),
+            "warning_codes": list(getattr(result, "warning_codes", ())),
+            "release_at": _iso(result.release_at) if hasattr(result, "release_at") else None,
         }
     )
+
+
+@router.post("/manual/release", response_class=JSONResponse)
+async def manual_publication_release(
+    body: GuardDecisionBody,
+    request: Request,
+    context: Annotated[AuthContext, Depends(csrf_context)],
+) -> JSONResponse:
+    manual = services(request).manual_publications
+    if manual is None:
+        raise _history_unavailable()
+    try:
+        result = await manual.release(
+            body.run_id,
+            principal=context.principal,
+            correlation_id=request.state.correlation_id,
+        )
+    except AuthorizationDenied as exc:
+        raise ApplicationError(
+            "forbidden", "Publikovanie nebolo povolené", "Nemáte oprávnenie.", 403
+        ) from exc
+    except (PublicationAlreadyRunning, PublicationGuardPending) as exc:
+        raise ApplicationError(
+            "publication_guard_closed",
+            "Ochranná lehota už skončila",
+            "Publikovanie už nie je možné týmto krokom zmeniť.",
+            409,
+        ) from exc
+    return JSONResponse(_guard_result_json(result))
+
+
+@router.post("/manual/cancel", response_class=JSONResponse)
+async def manual_publication_cancel(
+    body: GuardDecisionBody,
+    request: Request,
+    context: Annotated[AuthContext, Depends(csrf_context)],
+) -> JSONResponse:
+    manual = services(request).manual_publications
+    if manual is None:
+        raise _history_unavailable()
+    try:
+        result = await manual.cancel(
+            body.run_id,
+            principal=context.principal,
+            correlation_id=request.state.correlation_id,
+        )
+    except AuthorizationDenied as exc:
+        raise ApplicationError(
+            "forbidden", "Publikovanie nebolo povolené", "Nemáte oprávnenie.", 403
+        ) from exc
+    except PublicationGuardPending as exc:
+        raise ApplicationError(
+            "publication_guard_closed",
+            "Publikovanie už nemožno zastaviť",
+            "Ochranná lehota skončila alebo sa už začalo odosielanie.",
+            409,
+        ) from exc
+    return JSONResponse(_guard_result_json(result))
+
+
+def _guard_result_json(
+    result: PublicationGuardResult | PublicationResult,
+) -> dict[str, object]:
+    release_at = result.release_at if isinstance(result, PublicationGuardResult) else None
+    message_ids = result.sent_message_ids if isinstance(result, PublicationResult) else ()
+    warning_codes = result.warning_codes if isinstance(result, PublicationResult) else ()
+    return {
+        "run_id": str(result.run_id),
+        "state": result.state.value,
+        "release_at": _iso(release_at),
+        "message_ids": list(message_ids),
+        "warning_codes": list(warning_codes),
+    }
 
 
 def _manual_publication_disabled() -> ApplicationError:

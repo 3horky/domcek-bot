@@ -13,6 +13,7 @@ from domcek_bot.application.alerts import AlertCategory, ConfiguredModeratorAler
 from domcek_bot.application.calendar.sync import CalendarSyncPolicy, CalendarSyncService
 from domcek_bot.application.operations import RuntimeOperationsService
 from domcek_bot.application.publication.engine import ModeratorAlertGateway, PublicationEngine
+from domcek_bot.application.publication.guard import PublicationGuardService
 from domcek_bot.application.publication.intro import IntroService
 from domcek_bot.application.publication.scheduler import PublicationScheduler
 from domcek_bot.application.publication.service import PublicationDraftService
@@ -22,6 +23,7 @@ from domcek_bot.infrastructure.calendar_factory import build_google_calendar_cli
 from domcek_bot.infrastructure.database import Database
 from domcek_bot.infrastructure.discord_publication import (
     DiscordHttpPublicationGateway,
+    DiscordHttpPublicationGuardGateway,
     DiscordModeratorAlertGateway,
 )
 from domcek_bot.infrastructure.gemini_intro import GeminiIntroGenerator
@@ -104,6 +106,9 @@ async def serve() -> None:
 
     token = settings.discord_token_value()
     discord = DiscordHttpPublicationGateway(bot_token=token)
+    guard_discord = DiscordHttpPublicationGuardGateway(
+        bot_token=token, frontend_base_url=settings.frontend_base_url
+    )
     alerts = DiscordModeratorAlertGateway(
         bot_token=token, frontend_base_url=settings.frontend_base_url
     )
@@ -156,6 +161,9 @@ async def serve() -> None:
         reminder_alerts=reminder_alerts,
         reminder_lead=timedelta(hours=settings.publication_reminder_lead_hours),
     )
+    publication_guard = PublicationGuardService(
+        unit_of_work, engine, guard_discord, publication_alerts
+    )
 
     await database.ping()
     await logger.ainfo(
@@ -201,7 +209,11 @@ async def serve() -> None:
                     seconds=settings.calendar_sync_interval_seconds
                 )
             if settings.publication_execution_mode is PublicationExecutionMode.LIVE:
-                await _run_scheduler(scheduler)
+                await publication_guard.release_due(
+                    now=now,
+                    correlation_id=f"guard-release-{runtime_instance_id}-{int(now.timestamp())}",
+                )
+                await _run_scheduler(scheduler, publication_guard)
             await _heartbeat_worker(
                 unit_of_work,
                 runtime_operations,
@@ -230,6 +242,7 @@ async def serve() -> None:
         await calendar_client.close()
         await alerts.close()
         await discord.close()
+        await guard_discord.close()
         await database.close()
         await logger.ainfo("worker_stopped")
 
@@ -349,11 +362,19 @@ async def _capture_shadow_publication(
         )
 
 
-async def _run_scheduler(scheduler: PublicationScheduler) -> None:
+async def _run_scheduler(
+    scheduler: PublicationScheduler, publication_guard: PublicationGuardService
+) -> None:
     correlation_id = str(uuid.uuid4())
     try:
         reminder_decisions = await scheduler.send_upcoming_reminders(correlation_id=correlation_id)
         decisions = await scheduler.run_due(correlation_id=correlation_id)
+        for decision in decisions:
+            if decision.action == "waiting_for_release" and decision.run_id is not None:
+                await publication_guard.notify(
+                    decision.run_id,
+                    correlation_id=f"guard-notify-{decision.run_id}",
+                )
         interesting = [
             decision
             for decision in (*reminder_decisions, *decisions)

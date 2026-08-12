@@ -45,7 +45,9 @@ from domcek_bot.application.records import (
     PublicationMessageRecord,
 )
 from domcek_bot.application.settings import SettingsService
+from domcek_bot.application.undo import UndoResult
 from domcek_bot.config import AppEnvironment, Settings
+from domcek_bot.domain.enums import UndoState
 from domcek_bot.infrastructure.database import Database
 from domcek_bot.infrastructure.models import Base
 from domcek_bot.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
@@ -129,6 +131,20 @@ class MatrixRoleAdministration:
         principal = cast(Principal, values["principal"])
         principal.require(Capability.MANAGE_SETTINGS)
         return 123
+
+
+class MatrixUndoAdministration:
+    async def list_available(self, *, principal: Principal, scope: str) -> list[Any]:
+        del scope
+        principal.require(Capability.MANAGE_ROLES)
+        return []
+
+    async def undo(
+        self, operation_id: uuid.UUID, *, principal: Principal, correlation_id: str
+    ) -> UndoResult:
+        del correlation_id
+        principal.require(Capability.MANAGE_ROLES)
+        return UndoResult(operation_id, "role_change", UndoState.UNDONE, "123456789")
 
 
 @pytest.fixture
@@ -242,6 +258,7 @@ async def test_direct_api_role_matrix(database: Database, tmp_path: Path) -> Non
         operations=RuntimeOperationsService(unit_of_work),
         channels=cast(Any, MatrixChannelAdministration()),
         discord_admin=cast(Any, MatrixRoleAdministration()),
+        undo=cast(Any, MatrixUndoAdministration()),
     )
     app = create_app(settings=settings, database=database, services=services)
     transport = httpx.ASGITransport(app=app)
@@ -407,6 +424,8 @@ async def test_direct_api_role_matrix(database: Database, tmp_path: Path) -> Non
         "generated_intro_enabled": True,
         "everyone_mention_enabled": True,
         "allow_stale_calendar_cache": False,
+        "publication_grace_seconds": 30,
+        "publication_guard_recipient_ids": [],
         "alert_calendar_sync_enabled": True,
         "alert_publication_enabled": True,
         "alert_channel_operations_enabled": True,
@@ -498,6 +517,22 @@ async def test_direct_api_role_matrix(database: Database, tmp_path: Path) -> Non
             },
         )
         assert response.status_code == expected
+
+    for role_id, expected in zip(roles, (403, 403, 200, 401), strict=True):
+        response = await request(role_id, "GET", "/api/v1/admin/undo?scope=roles")
+        assert response.status_code == expected
+
+    undo_id = uuid.uuid4()
+    for role_id, expected in zip(roles, (403, 403, 200, 401), strict=True):
+        response = await request(role_id, "POST", f"/api/v1/admin/undo/{undo_id}")
+        assert response.status_code == expected
+        if expected == 200:
+            assert response.json() == {
+                "id": str(undo_id),
+                "operation_type": "role_change",
+                "state": "undone",
+                "object_id": "123456789",
+            }
 
     malformed_member = await request(
         ADMIN_ROLE,

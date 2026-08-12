@@ -26,6 +26,7 @@ from domcek_bot.application.publication.service import PublicationDraftService
 from domcek_bot.application.publication.shadow import ShadowPublicationService
 from domcek_bot.application.records import WebSessionRecord
 from domcek_bot.application.settings import SettingsService
+from domcek_bot.application.undo import UndoService
 
 SESSION_COOKIE = "domcek_session"
 CSRF_COOKIE = "domcek_csrf"
@@ -53,6 +54,7 @@ class ApiServices:
     publication_history: PublicationHistoryService | None = None
     shadow_publications: ShadowPublicationService | None = None
     operations: RuntimeOperationsService | None = None
+    undo: UndoService | None = None
     resources: tuple[AsyncCloseable, ...] = ()
 
     async def close(self) -> None:

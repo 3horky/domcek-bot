@@ -119,6 +119,86 @@ class DiscordHttpAdministrationGateway:
             _optional_snowflake(payload.get("parent_id")),
         )
 
+    async def channel_snapshot(self, *, guild_id: int, channel_id: int) -> dict[str, object] | None:
+        try:
+            response = await self._request("GET", f"/channels/{channel_id}", expected={200, 404})
+        except DiscordAdministrationError as exc:
+            raise ChannelOperationError("Discord channel could not be inspected") from exc
+        if response.status_code == 404:
+            return None
+        payload = _object(response.json())
+        if _optional_snowflake(payload.get("guild_id")) != guild_id or payload.get("type") != 0:
+            raise ChannelOperationError("undo target is not a guild text channel")
+        overwrites = payload.get("permission_overwrites", [])
+        if not isinstance(overwrites, list):
+            raise ChannelOperationError("Discord channel permissions are malformed")
+        return {
+            "id": str(channel_id),
+            "name": str(payload.get("name", "")),
+            "position": int(payload.get("position", 0)),
+            "parent_id": payload.get("parent_id"),
+            "topic": payload.get("topic"),
+            "nsfw": bool(payload.get("nsfw", False)),
+            "rate_limit_per_user": int(payload.get("rate_limit_per_user", 0)),
+            "default_auto_archive_duration": payload.get("default_auto_archive_duration"),
+            "permission_overwrites": sorted(
+                (
+                    {
+                        "id": str(item.get("id", "")),
+                        "type": int(item.get("type", 0)),
+                        "allow": str(item.get("allow", "0")),
+                        "deny": str(item.get("deny", "0")),
+                    }
+                    for item in overwrites
+                    if isinstance(item, dict)
+                ),
+                key=lambda item: (item["type"], item["id"]),
+            ),
+            "last_message_id": payload.get("last_message_id"),
+        }
+
+    async def delete_text_channel(self, *, guild_id: int, channel_id: int, reason: str) -> None:
+        await self.get_text_channel(guild_id=guild_id, channel_id=channel_id)
+        await self._request(
+            "DELETE",
+            f"/channels/{channel_id}",
+            headers={"X-Audit-Log-Reason": quote(reason[:512], safe="")},
+            expected={200},
+        )
+
+    async def restore_text_channel(
+        self,
+        *,
+        guild_id: int,
+        channel_id: int,
+        snapshot: dict[str, object],
+        reason: str,
+    ) -> CreatedChannel:
+        await self.get_text_channel(guild_id=guild_id, channel_id=channel_id)
+        payload = _object(
+            await self._json(
+                "PATCH",
+                f"/channels/{channel_id}",
+                json={
+                    "name": snapshot["name"],
+                    "position": snapshot.get("position"),
+                    "parent_id": snapshot.get("parent_id"),
+                    "topic": snapshot.get("topic"),
+                    "nsfw": snapshot.get("nsfw", False),
+                    "rate_limit_per_user": snapshot.get("rate_limit_per_user", 0),
+                    "default_auto_archive_duration": snapshot.get("default_auto_archive_duration"),
+                    "permission_overwrites": snapshot.get("permission_overwrites", []),
+                },
+                headers={"X-Audit-Log-Reason": quote(reason[:512], safe="")},
+            )
+        )
+        return CreatedChannel(
+            channel_id,
+            str(payload.get("name", "")),
+            _jump_url(guild_id, channel_id),
+            _optional_snowflake(payload.get("parent_id")),
+        )
+
     async def _parallel_directory(
         self, guild_id: int
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -140,6 +220,10 @@ class DiscordHttpAdministrationGateway:
             params={"query": query, "limit": min(max(limit, 1), 100)},
         )
         return tuple(_member(item) for item in _objects(payload))
+
+    async def get_member(self, guild_id: int, member_id: int) -> DiscordMemberOption:
+        payload = await self._json("GET", f"/guilds/{guild_id}/members/{member_id}")
+        return _member(_object(payload))
 
     async def validate_reaction_targets(
         self,
@@ -504,6 +588,7 @@ def _member(payload: dict[str, Any]) -> DiscordMemberOption:
         display_name=display_name,
         avatar_url=avatar_url,
         role_ids=tuple(sorted(_snowflake_value(value) for value in role_values)),
+        undo_id=None,
     )
 
 

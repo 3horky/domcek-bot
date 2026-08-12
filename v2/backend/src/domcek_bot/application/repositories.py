@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Protocol
+from typing import Any, Protocol
 
 from domcek_bot.application.records import (
     AuditLogRecord,
@@ -17,12 +17,14 @@ from domcek_bot.application.records import (
     InfoAnnouncementRecord,
     IntegrationTaskRecord,
     ManualEventRecord,
+    PublicationGuardNoticeRecord,
     PublicationItemRecord,
     PublicationMessageRecord,
     PublicationRunRecord,
     ReactionConfigRecord,
     RuntimeHeartbeatRecord,
     ShadowPublicationRecord,
+    UndoOperationRecord,
     WebSessionRecord,
 )
 from domcek_bot.domain.enums import ArchiveState, IntegrationTaskState, PublicationState
@@ -164,11 +166,13 @@ class InfoAnnouncementRepository(Protocol):
 
 
 class PublicationRunRepository(Protocol):
+    async def get(self, run_id: uuid.UUID) -> PublicationRunRecord | None: ...
+
+    async def get_for_update(self, run_id: uuid.UUID) -> PublicationRunRecord | None: ...
+
     async def completed_slot_keys(self, guild_id: int) -> frozenset[str]: ...
 
     async def lock_slot(self, guild_id: int, slot_key: str) -> None: ...
-
-    async def get(self, run_id: uuid.UUID) -> PublicationRunRecord | None: ...
 
     async def get_for_slot(self, guild_id: int, slot_key: str) -> PublicationRunRecord | None: ...
 
@@ -224,6 +228,10 @@ class PublicationRunRepository(Protocol):
         error_detail: str | None = None,
         increment_attempt: bool = False,
         warning_codes: tuple[str, ...] | None = None,
+        release_at: datetime | None = None,
+        decision_at: datetime | None = None,
+        decision_by_user_id: int | None = None,
+        decision_reason: str | None = None,
     ) -> None: ...
 
     async def mark_uncertain(
@@ -247,6 +255,33 @@ class PublicationRunRepository(Protocol):
     async def list_recoverable(
         self, *, attempted_before: datetime
     ) -> list[PublicationRunRecord]: ...
+
+    async def list_waiting_release_due(self, *, now: datetime) -> list[PublicationRunRecord]: ...
+
+    async def get_waiting_guard(
+        self, guild_id: int, *, now: datetime, run_id: uuid.UUID | None = None
+    ) -> PublicationRunRecord | None: ...
+
+    async def add_guard_notices(
+        self, notices: tuple[PublicationGuardNoticeRecord, ...]
+    ) -> None: ...
+
+    async def list_guard_notices(self, run_id: uuid.UUID) -> list[PublicationGuardNoticeRecord]: ...
+
+    async def mark_guard_notice_sent(
+        self,
+        notice_id: uuid.UUID,
+        *,
+        channel_id: int,
+        message_id: int,
+        sent_at: datetime,
+    ) -> None: ...
+
+    async def mark_guard_notice_failed(self, notice_id: uuid.UUID, *, detail: str) -> None: ...
+
+    async def mark_guard_notice_deleted(
+        self, notice_id: uuid.UUID, *, deleted_at: datetime
+    ) -> None: ...
 
 
 class ShadowPublicationRepository(Protocol):
@@ -317,6 +352,39 @@ class ChannelArchiveRequestRepository(Protocol):
         state: ArchiveState,
         expected_states: tuple[ArchiveState, ...] = (ArchiveState.ARCHIVING,),
     ) -> bool: ...
+
+    async def attach_undo(
+        self,
+        request_id: uuid.UUID,
+        *,
+        restore_snapshot: dict[str, Any],
+        archived_snapshot: dict[str, Any],
+        undo_id: uuid.UUID,
+    ) -> None: ...
+
+    async def set_restore_snapshot(
+        self, request_id: uuid.UUID, snapshot: dict[str, Any]
+    ) -> None: ...
+
+
+class UndoOperationRepository(Protocol):
+    async def add(self, record: UndoOperationRecord) -> None: ...
+
+    async def get(self, operation_id: uuid.UUID) -> UndoOperationRecord | None: ...
+
+    async def get_for_update(self, operation_id: uuid.UUID) -> UndoOperationRecord | None: ...
+
+    async def list_available(
+        self, guild_id: int, *, operation_types: tuple[str, ...]
+    ) -> list[UndoOperationRecord]: ...
+
+    async def mark_undoing(self, operation_id: uuid.UUID, *, started_at: datetime) -> None: ...
+
+    async def mark_undone(
+        self, operation_id: uuid.UUID, *, undone_at: datetime, undone_by_user_id: int
+    ) -> None: ...
+
+    async def mark_blocked(self, operation_id: uuid.UUID, *, reason: str) -> None: ...
 
 
 class WebSessionRepository(Protocol):

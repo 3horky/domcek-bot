@@ -111,6 +111,8 @@ class SettingsService:
         alert_role_operations_enabled: bool | None = None,
         alert_publication_reminder_enabled: bool | None = None,
         allow_stale_calendar_cache: bool = False,
+        publication_grace_seconds: int = 30,
+        publication_guard_recipient_ids: tuple[int, ...] = (),
     ) -> GuildConfigRecord:
         principal.require(Capability.MANAGE_SETTINGS)
         normalized_timezone = _timezone(timezone)
@@ -118,6 +120,11 @@ class SettingsService:
             raise SettingsValidationError("publication weekday must be between 0 and 6")
         if not everyone_mention_enabled:
             raise SettingsValidationError("every successful publication must mention @everyone")
+        if not 0 <= publication_grace_seconds <= 300:
+            raise SettingsValidationError("publication grace period must be between 0 and 300")
+        if any(value <= 0 for value in publication_guard_recipient_ids):
+            raise SettingsValidationError("publication guard recipients must be positive")
+        guard_recipients = tuple(dict.fromkeys(publication_guard_recipient_ids))
         ids = (
             announcement_channel_id,
             command_channel_id,
@@ -163,6 +170,8 @@ class SettingsService:
                 generated_intro_enabled=generated_intro_enabled,
                 everyone_mention_enabled=True,
                 allow_stale_calendar_cache=allow_stale_calendar_cache,
+                publication_grace_seconds=publication_grace_seconds,
+                publication_guard_recipient_ids=guard_recipients,
                 alert_calendar_sync_enabled=current.alert_calendar_sync_enabled
                 if alert_calendar_sync_enabled is None
                 else alert_calendar_sync_enabled,

@@ -23,12 +23,14 @@ from domcek_bot.application.records import (
     InfoAnnouncementRecord,
     IntegrationTaskRecord,
     ManualEventRecord,
+    PublicationGuardNoticeRecord,
     PublicationItemRecord,
     PublicationMessageRecord,
     PublicationRunRecord,
     ReactionConfigRecord,
     RuntimeHeartbeatRecord,
     ShadowPublicationRecord,
+    UndoOperationRecord,
     WebSessionRecord,
 )
 from domcek_bot.domain.enums import (
@@ -44,6 +46,7 @@ from domcek_bot.domain.enums import (
     PublicationMode,
     PublicationState,
     SyncStatus,
+    UndoState,
 )
 from domcek_bot.domain.errors import OptimisticLockError
 from domcek_bot.infrastructure.models import (
@@ -57,6 +60,7 @@ from domcek_bot.infrastructure.models import (
     InfoAnnouncementModel,
     IntegrationTaskModel,
     ManualEventModel,
+    PublicationGuardNoticeModel,
     PublicationIncidentModel,
     PublicationItemModel,
     PublicationMessageModel,
@@ -65,6 +69,7 @@ from domcek_bot.infrastructure.models import (
     ReactionConfigModel,
     RuntimeHeartbeatModel,
     ShadowPublicationModel,
+    UndoOperationModel,
     WebSessionModel,
 )
 
@@ -80,6 +85,8 @@ def _guild_record(model: GuildConfigModel) -> GuildConfigRecord:
         generated_intro_enabled=model.generated_intro_enabled,
         everyone_mention_enabled=model.everyone_mention_enabled,
         allow_stale_calendar_cache=model.allow_stale_calendar_cache,
+        publication_grace_seconds=model.publication_grace_seconds,
+        publication_guard_recipient_ids=tuple(model.publication_guard_recipient_ids),
         alert_calendar_sync_enabled=model.alert_calendar_sync_enabled,
         alert_publication_enabled=model.alert_publication_enabled,
         alert_channel_operations_enabled=model.alert_channel_operations_enabled,
@@ -267,6 +274,27 @@ def _publication_run_record(model: PublicationRunModel) -> PublicationRunRecord:
         completed_at=model.completed_at,
         error_code=model.error_code,
         error_detail=model.error_detail,
+        release_at=model.release_at,
+        decision_at=model.decision_at,
+        decision_by_user_id=model.decision_by_user_id,
+        decision_reason=model.decision_reason,
+    )
+
+
+def _publication_guard_notice_record(
+    model: PublicationGuardNoticeModel,
+) -> PublicationGuardNoticeRecord:
+    return PublicationGuardNoticeRecord(
+        id=model.id,
+        publication_run_id=model.publication_run_id,
+        recipient_user_id=model.recipient_user_id,
+        state=model.state,
+        nonce=model.nonce,
+        discord_channel_id=model.discord_channel_id,
+        discord_message_id=model.discord_message_id,
+        error_detail=model.error_detail,
+        sent_at=model.sent_at,
+        deleted_at=model.deleted_at,
     )
 
 
@@ -347,6 +375,27 @@ def _archive_request_record(model: ChannelArchiveRequestModel) -> ChannelArchive
         decided_by_user_id=model.decided_by_user_id,
         discord_approval_message_id=model.discord_approval_message_id,
         decided_at=model.decided_at,
+        restore_snapshot=model.restore_snapshot,
+        archived_snapshot=model.archived_snapshot,
+        undo_id=model.undo_id,
+    )
+
+
+def _undo_operation_record(model: UndoOperationModel) -> UndoOperationRecord:
+    return UndoOperationRecord(
+        id=model.id,
+        guild_id=model.guild_id,
+        operation_type=model.operation_type,
+        object_id=model.object_id,
+        actor_user_id=model.actor_user_id,
+        before_snapshot=model.before_snapshot,
+        after_snapshot=model.after_snapshot,
+        state=UndoState(model.state),
+        started_at=model.started_at,
+        undone_at=model.undone_at,
+        undone_by_user_id=model.undone_by_user_id,
+        last_block_reason=model.last_block_reason,
+        created_at=model.created_at,
     )
 
 
@@ -906,6 +955,7 @@ class SqlAlchemyPublicationRunRepository:
         PublicationState.SUCCEEDED_AUTOMATIC.value,
         PublicationState.SUCCEEDED_MANUAL.value,
         PublicationState.SKIPPED_AFTER_MANUAL.value,
+        PublicationState.CANCELLED.value,
     )
 
     def __init__(self, session: AsyncSession) -> None:
@@ -928,6 +978,16 @@ class SqlAlchemyPublicationRunRepository:
 
     async def get(self, run_id: uuid.UUID) -> PublicationRunRecord | None:
         model = await self._session.get(PublicationRunModel, run_id)
+        return None if model is None else _publication_run_record(model)
+
+    async def get_for_update(self, run_id: uuid.UUID) -> PublicationRunRecord | None:
+        model = (
+            await self._session.scalars(
+                select(PublicationRunModel)
+                .where(PublicationRunModel.id == run_id)
+                .with_for_update()
+            )
+        ).one_or_none()
         return None if model is None else _publication_run_record(model)
 
     async def get_for_slot(self, guild_id: int, slot_key: str) -> PublicationRunRecord | None:
@@ -985,6 +1045,10 @@ class SqlAlchemyPublicationRunRepository:
                 completed_at=run.completed_at,
                 error_code=run.error_code,
                 error_detail=run.error_detail,
+                release_at=run.release_at,
+                decision_at=run.decision_at,
+                decision_by_user_id=run.decision_by_user_id,
+                decision_reason=run.decision_reason,
             )
         )
         # These models deliberately expose no ORM relationships; flush the parent
@@ -1172,6 +1236,10 @@ class SqlAlchemyPublicationRunRepository:
         error_detail: str | None = None,
         increment_attempt: bool = False,
         warning_codes: tuple[str, ...] | None = None,
+        release_at: datetime | None = None,
+        decision_at: datetime | None = None,
+        decision_by_user_id: int | None = None,
+        decision_reason: str | None = None,
     ) -> None:
         values: dict[str, object] = {
             "state": state.value,
@@ -1179,6 +1247,14 @@ class SqlAlchemyPublicationRunRepository:
             "error_code": error_code,
             "error_detail": error_detail,
         }
+        if release_at is not None:
+            values["release_at"] = release_at
+        if decision_at is not None:
+            values["decision_at"] = decision_at
+        if decision_by_user_id is not None:
+            values["decision_by_user_id"] = decision_by_user_id
+        if decision_reason is not None:
+            values["decision_reason"] = decision_reason
         if increment_attempt:
             values["attempt"] = PublicationRunModel.attempt + 1
         if warning_codes is not None:
@@ -1296,6 +1372,85 @@ class SqlAlchemyPublicationRunRepository:
             .order_by(PublicationRunModel.scheduled_for)
         )
         return [_publication_run_record(model) for model in result]
+
+    async def list_waiting_release_due(self, *, now: datetime) -> list[PublicationRunRecord]:
+        result = await self._session.scalars(
+            select(PublicationRunModel)
+            .where(
+                PublicationRunModel.state == PublicationState.WAITING_FOR_RELEASE.value,
+                PublicationRunModel.release_at.is_not(None),
+                PublicationRunModel.release_at <= now,
+            )
+            .order_by(PublicationRunModel.release_at, PublicationRunModel.id)
+        )
+        return [_publication_run_record(model) for model in result]
+
+    async def get_waiting_guard(
+        self, guild_id: int, *, now: datetime, run_id: uuid.UUID | None = None
+    ) -> PublicationRunRecord | None:
+        query = (
+            select(PublicationRunModel)
+            .where(
+                PublicationRunModel.guild_id == guild_id,
+                PublicationRunModel.state == PublicationState.WAITING_FOR_RELEASE.value,
+                PublicationRunModel.release_at.is_not(None),
+                PublicationRunModel.release_at > now,
+            )
+            .order_by(PublicationRunModel.release_at.desc(), PublicationRunModel.id.desc())
+        )
+        if run_id is not None:
+            query = query.where(PublicationRunModel.id == run_id)
+        model = await self._session.scalar(query.limit(1))
+        return _publication_run_record(model) if model is not None else None
+
+    async def add_guard_notices(self, notices: tuple[PublicationGuardNoticeRecord, ...]) -> None:
+        self._session.add_all(
+            PublicationGuardNoticeModel(**_record_values(notice)) for notice in notices
+        )
+        await self._session.flush()
+
+    async def list_guard_notices(self, run_id: uuid.UUID) -> list[PublicationGuardNoticeRecord]:
+        result = await self._session.scalars(
+            select(PublicationGuardNoticeModel)
+            .where(PublicationGuardNoticeModel.publication_run_id == run_id)
+            .order_by(PublicationGuardNoticeModel.recipient_user_id)
+        )
+        return [_publication_guard_notice_record(model) for model in result]
+
+    async def mark_guard_notice_sent(
+        self,
+        notice_id: uuid.UUID,
+        *,
+        channel_id: int,
+        message_id: int,
+        sent_at: datetime,
+    ) -> None:
+        await self._session.execute(
+            update(PublicationGuardNoticeModel)
+            .where(PublicationGuardNoticeModel.id == notice_id)
+            .values(
+                state="sent",
+                discord_channel_id=channel_id,
+                discord_message_id=message_id,
+                sent_at=sent_at,
+            )
+        )
+
+    async def mark_guard_notice_failed(self, notice_id: uuid.UUID, *, detail: str) -> None:
+        await self._session.execute(
+            update(PublicationGuardNoticeModel)
+            .where(PublicationGuardNoticeModel.id == notice_id)
+            .values(state="failed", error_detail=detail)
+        )
+
+    async def mark_guard_notice_deleted(
+        self, notice_id: uuid.UUID, *, deleted_at: datetime
+    ) -> None:
+        await self._session.execute(
+            update(PublicationGuardNoticeModel)
+            .where(PublicationGuardNoticeModel.id == notice_id)
+            .values(state="deleted", deleted_at=deleted_at)
+        )
 
 
 class SqlAlchemyShadowPublicationRepository:
@@ -1593,6 +1748,115 @@ class SqlAlchemyChannelArchiveRequestRepository:
         )
         return result.rowcount == 1
 
+    async def attach_undo(
+        self,
+        request_id: uuid.UUID,
+        *,
+        restore_snapshot: dict[str, Any],
+        archived_snapshot: dict[str, Any],
+        undo_id: uuid.UUID,
+    ) -> None:
+        await self._session.execute(
+            update(ChannelArchiveRequestModel)
+            .where(ChannelArchiveRequestModel.id == request_id)
+            .values(
+                restore_snapshot=restore_snapshot,
+                archived_snapshot=archived_snapshot,
+                undo_id=undo_id,
+            )
+        )
+
+    async def set_restore_snapshot(self, request_id: uuid.UUID, snapshot: dict[str, Any]) -> None:
+        await self._session.execute(
+            update(ChannelArchiveRequestModel)
+            .where(
+                ChannelArchiveRequestModel.id == request_id,
+                ChannelArchiveRequestModel.restore_snapshot.is_(None),
+            )
+            .values(restore_snapshot=snapshot)
+        )
+
+
+class SqlAlchemyUndoOperationRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, record: UndoOperationRecord) -> None:
+        self._session.add(
+            UndoOperationModel(
+                id=record.id,
+                guild_id=record.guild_id,
+                operation_type=record.operation_type,
+                object_id=record.object_id,
+                actor_user_id=record.actor_user_id,
+                before_snapshot=record.before_snapshot,
+                after_snapshot=record.after_snapshot,
+                state=record.state.value,
+                started_at=record.started_at,
+                undone_at=record.undone_at,
+                undone_by_user_id=record.undone_by_user_id,
+                last_block_reason=record.last_block_reason,
+            )
+        )
+        await self._session.flush()
+
+    async def get(self, operation_id: uuid.UUID) -> UndoOperationRecord | None:
+        model = await self._session.get(UndoOperationModel, operation_id)
+        return None if model is None else _undo_operation_record(model)
+
+    async def get_for_update(self, operation_id: uuid.UUID) -> UndoOperationRecord | None:
+        model = await self._session.scalar(
+            select(UndoOperationModel)
+            .where(UndoOperationModel.id == operation_id)
+            .with_for_update()
+        )
+        return None if model is None else _undo_operation_record(model)
+
+    async def list_available(
+        self, guild_id: int, *, operation_types: tuple[str, ...]
+    ) -> list[UndoOperationRecord]:
+        result = await self._session.scalars(
+            select(UndoOperationModel)
+            .where(
+                UndoOperationModel.guild_id == guild_id,
+                UndoOperationModel.operation_type.in_(operation_types),
+                UndoOperationModel.state.in_((UndoState.AVAILABLE.value, UndoState.UNDOING.value)),
+            )
+            .order_by(UndoOperationModel.created_at.desc(), UndoOperationModel.id.desc())
+        )
+        return [_undo_operation_record(model) for model in result]
+
+    async def mark_undoing(self, operation_id: uuid.UUID, *, started_at: datetime) -> None:
+        await self._session.execute(
+            update(UndoOperationModel)
+            .where(
+                UndoOperationModel.id == operation_id,
+                UndoOperationModel.state == UndoState.AVAILABLE.value,
+            )
+            .values(state=UndoState.UNDOING.value, started_at=started_at, last_block_reason=None)
+        )
+
+    async def mark_undone(
+        self, operation_id: uuid.UUID, *, undone_at: datetime, undone_by_user_id: int
+    ) -> None:
+        await self._session.execute(
+            update(UndoOperationModel)
+            .where(UndoOperationModel.id == operation_id)
+            .values(
+                state=UndoState.UNDONE.value,
+                undone_at=undone_at,
+                undone_by_user_id=undone_by_user_id,
+                last_block_reason=None,
+            )
+        )
+
+    async def mark_blocked(self, operation_id: uuid.UUID, *, reason: str) -> None:
+        await self._session.execute(
+            update(UndoOperationModel)
+            .where(UndoOperationModel.id == operation_id)
+            .values(state=UndoState.AVAILABLE.value, last_block_reason=reason[:100])
+        )
+
 
 class SqlAlchemyWebSessionRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -1684,6 +1948,7 @@ PersistenceRecord = (
     | WebSessionRecord
     | AuditLogRecord
     | ReactionConfigRecord
+    | PublicationGuardNoticeRecord
 )
 
 

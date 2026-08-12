@@ -17,9 +17,11 @@ import { Link } from 'react-router-dom'
 
 import {
   ApiError,
+  cancelManualPublication,
   confirmManualPublication,
   getDashboardSummary,
   prepareManualPublication,
+  releaseManualPublication,
   type DashboardSummary,
   type ManualPublicationPreview,
 } from '../api/client'
@@ -58,15 +60,36 @@ export function DashboardPage() {
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [publishPreview, setPublishPreview] = useState<ManualPublicationPreview | null>(null)
   const [publishBusy, setPublishBusy] = useState(false)
+  const [pendingPublication, setPendingPublication] = useState<{
+    runId: string
+    releaseAt: string
+  } | null>(null)
+  const [remainingSeconds, setRemainingSeconds] = useState(0)
   const [publishNotice, setPublishNotice] = useState<{
     kind: 'success' | 'error'
     text: string
   } | null>(null)
   const prepareInFlight = useRef(false)
   const confirmInFlight = useRef(false)
+  const automaticReleaseStarted = useRef(false)
   const prepareButtonRef = useRef<HTMLButtonElement>(null)
   const canPublish =
     auth.status === 'authenticated' && auth.session.capabilities.includes('manual_publish')
+
+  useEffect(() => {
+    if (!pendingPublication) return
+    const update = () => {
+      setRemainingSeconds(
+        Math.max(
+          0,
+          Math.ceil((new Date(pendingPublication.releaseAt).getTime() - Date.now()) / 1000),
+        ),
+      )
+    }
+    update()
+    const timer = window.setInterval(update, 250)
+    return () => window.clearInterval(timer)
+  }, [pendingPublication])
 
   const loadSummary = useCallback(async (signal?: AbortSignal) => {
     setSummaryLoading(true)
@@ -82,6 +105,34 @@ export function DashboardPage() {
       if (!signal?.aborted) setSummaryLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    if (!pendingPublication || remainingSeconds > 0 || automaticReleaseStarted.current) return
+    automaticReleaseStarted.current = true
+    const runId = pendingPublication.runId
+    void releaseManualPublication(runId)
+      .then(async (result) => {
+        setPendingPublication(null)
+        setPublishPreview(null)
+        window.setTimeout(() => prepareButtonRef.current?.focus(), 180)
+        setPublishNotice({
+          kind: result.state.startsWith('succeeded') ? 'success' : 'error',
+          text: result.state.startsWith('succeeded')
+            ? 'Oznamy boli zverejnené. Najbližší pravidelný termín Carlo preskočí.'
+            : 'Carlo nepotvrdil úspešné zverejnenie. Skontrolujte Históriu publikácií.',
+        })
+        await Promise.all([reload(), loadSummary()])
+      })
+      .catch((caught: unknown) => {
+        setPublishNotice({
+          kind: 'error',
+          text: caught instanceof ApiError ? caught.message : 'Publikovanie sa nedokončilo.',
+        })
+      })
+      .finally(() => {
+        automaticReleaseStarted.current = false
+      })
+  }, [pendingPublication, remainingSeconds, loadSummary, reload])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -153,7 +204,11 @@ export function DashboardPage() {
     setPublishNotice(null)
     try {
       const result = await confirmManualPublication(publishPreview.confirmation_token)
-      if (result.state.startsWith('succeeded')) {
+      if (result.state === 'waiting_for_release' && result.release_at) {
+        setPendingPublication({ runId: result.run_id, releaseAt: result.release_at })
+        setRemainingSeconds(1)
+        setPublishNotice(null)
+      } else if (result.state.startsWith('succeeded')) {
         closePublishPreview()
         setPublishNotice({
           kind: 'success',
@@ -178,9 +233,39 @@ export function DashboardPage() {
     }
   }
 
+  async function decideGuard(action: 'cancel' | 'release') {
+    if (!pendingPublication || confirmInFlight.current) return
+    confirmInFlight.current = true
+    setPublishBusy(true)
+    try {
+      const result =
+        action === 'cancel'
+          ? await cancelManualPublication(pendingPublication.runId)
+          : await releaseManualPublication(pendingPublication.runId)
+      setPendingPublication(null)
+      closePublishPreview()
+      setPublishNotice({
+        kind: result.state === 'cancelled' ? 'success' : 'success',
+        text:
+          result.state === 'cancelled'
+            ? 'Publikovanie bolo zastavené. Na Discord sa nič neodoslalo.'
+            : 'Oznamy boli zverejnené. Najbližší pravidelný termín Carlo preskočí.',
+      })
+      await Promise.all([reload(), loadSummary()])
+    } catch (caught) {
+      setPublishNotice({
+        kind: 'error',
+        text: caught instanceof ApiError ? caught.message : 'Rozhodnutie sa nepodarilo vykonať.',
+      })
+    } finally {
+      confirmInFlight.current = false
+      setPublishBusy(false)
+    }
+  }
+
   function closePublishPreview() {
     setPublishPreview(null)
-    window.setTimeout(() => prepareButtonRef.current?.focus(), 180)
+    window.setTimeout(() => prepareButtonRef.current?.focus({ preventScroll: true }), 350)
   }
 
   return (
@@ -295,19 +380,53 @@ export function DashboardPage() {
               </div>
             </>
           )}
+          {pendingPublication && (
+            <div className="publication-guard-countdown" role="status" aria-live="polite">
+              <Clock3 aria-hidden="true" />
+              <div>
+                <strong>Carlo zatiaľ nič nezverejnil</strong>
+                <span>
+                  Automatické zverejnenie začne o {remainingSeconds}{' '}
+                  {remainingSeconds === 1 ? 'sekundu' : 'sekúnd'}.
+                </span>
+              </div>
+            </div>
+          )}
           <DialogFooter>
-            <Button
-              variant="outline"
-              type="button"
-              disabled={publishBusy}
-              onClick={closePublishPreview}
-            >
-              <X aria-hidden="true" /> Zrušiť
-            </Button>
-            <Button type="button" disabled={publishBusy} onClick={() => void confirmPublish()}>
-              <Send aria-hidden="true" />
-              {publishBusy ? 'Zverejňujem…' : 'Potvrdiť a zverejniť teraz'}
-            </Button>
+            {pendingPublication ? (
+              <>
+                <Button
+                  variant="outline"
+                  type="button"
+                  disabled={publishBusy || remainingSeconds <= 0}
+                  onClick={() => void decideGuard('cancel')}
+                >
+                  <X aria-hidden="true" /> Zastaviť
+                </Button>
+                <Button
+                  type="button"
+                  disabled={publishBusy}
+                  onClick={() => void decideGuard('release')}
+                >
+                  <Send aria-hidden="true" /> Zverejniť teraz
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  type="button"
+                  disabled={publishBusy}
+                  onClick={closePublishPreview}
+                >
+                  <X aria-hidden="true" /> Zrušiť
+                </Button>
+                <Button type="button" disabled={publishBusy} onClick={() => void confirmPublish()}>
+                  <Send aria-hidden="true" />
+                  {publishBusy ? 'Pripravujem…' : 'Potvrdiť publikovanie'}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

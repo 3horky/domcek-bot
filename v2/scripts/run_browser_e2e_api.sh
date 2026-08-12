@@ -33,11 +33,9 @@ if [[ "$action" == "cleanup" ]]; then
       --filter publish=4180
   )
   exec docker compose run --rm --no-deps \
-    -e TEST_DATABASE_URL=postgresql+asyncpg://domcek:domcek-local-only@db:5432/domcek_test \
-    api python scripts/run_browser_e2e_api.py --cleanup
+    api sh -lc 'TEST_DATABASE_URL="${DATABASE_URL%/*}/domcek_test" exec /opt/domcek-venv/bin/python scripts/run_browser_e2e_api.py --cleanup'
 fi
 exec docker compose run --rm --no-deps \
   -p 127.0.0.1:4180:4180 \
   -e CARLO_E2E_API_HOST=0.0.0.0 \
-  -e TEST_DATABASE_URL=postgresql+asyncpg://domcek:domcek-local-only@db:5432/domcek_test \
-  api python scripts/run_browser_e2e_api.py
+  api sh -lc 'TEST_DATABASE_URL="${DATABASE_URL%/*}/domcek_test" exec /opt/domcek-venv/bin/python scripts/run_browser_e2e_api.py'

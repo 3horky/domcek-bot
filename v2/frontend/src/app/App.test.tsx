@@ -298,6 +298,8 @@ describe('authenticated application shell', () => {
         generated_intro_enabled: true,
         everyone_mention_enabled: true,
         allow_stale_calendar_cache: false,
+        publication_grace_seconds: 30,
+        publication_guard_recipient_ids: [],
         alert_calendar_sync_enabled: true,
         alert_publication_enabled: true,
         alert_channel_operations_enabled: true,

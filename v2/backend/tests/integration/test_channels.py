@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 import pytest
 from sqlalchemy import select, text
@@ -18,6 +20,7 @@ from domcek_bot.application.channels import (
     normalize_channel_name,
 )
 from domcek_bot.application.records import GuildConfigRecord
+from domcek_bot.application.undo import UndoService, UndoUnavailable
 from domcek_bot.config import Settings
 from domcek_bot.domain.enums import ArchiveState
 from domcek_bot.infrastructure.database import Database
@@ -60,6 +63,7 @@ class RecordingChannels:
         self.crash_after_create = False
         self.created_markers: dict[str, CreatedChannel] = {}
         self.disallowed_categories: set[int] = set()
+        self.last_message_ids: dict[int, int | None] = {7000: None}
 
     async def category_allows_project_channel(self, *, guild_id: int, category_id: int) -> bool:
         assert guild_id == GUILD_ID
@@ -76,6 +80,41 @@ class RecordingChannels:
             f"https://discord.test/channels/{guild_id}/{channel_id}",
             self.channel_categories[channel_id],
         )
+
+    async def channel_snapshot(self, *, guild_id: int, channel_id: int) -> dict[str, object] | None:
+        assert guild_id == GUILD_ID
+        if channel_id not in self.channel_names:
+            return None
+        return {
+            "id": str(channel_id),
+            "name": self.channel_names[channel_id],
+            "position": 0,
+            "parent_id": str(self.channel_categories[channel_id]),
+            "topic": f"topic:{channel_id}",
+            "nsfw": False,
+            "rate_limit_per_user": 0,
+            "default_auto_archive_duration": None,
+            "permission_overwrites": [],
+            "last_message_id": self.last_message_ids.get(channel_id),
+        }
+
+    async def delete_text_channel(self, *, guild_id: int, channel_id: int, reason: str) -> None:
+        assert guild_id == GUILD_ID and reason.startswith("Carlo undo")
+        self.channel_names.pop(channel_id, None)
+        self.channel_categories.pop(channel_id, None)
+
+    async def restore_text_channel(
+        self,
+        *,
+        guild_id: int,
+        channel_id: int,
+        snapshot: dict[str, object],
+        reason: str,
+    ) -> CreatedChannel:
+        assert guild_id == GUILD_ID and reason.startswith("Carlo undo")
+        self.channel_names[channel_id] = str(snapshot["name"])
+        self.channel_categories[channel_id] = int(str(snapshot["parent_id"]))
+        return await self.get_text_channel(guild_id=guild_id, channel_id=channel_id)
 
     async def create_text_channel(
         self,
@@ -99,6 +138,9 @@ class RecordingChannels:
             category_id,
         )
         self.created_markers[operation_marker] = created
+        self.channel_names[created.channel_id] = created.name
+        self.channel_categories[created.channel_id] = created.category_id
+        self.last_message_ids[created.channel_id] = None
         if self.crash_after_create:
             self.crash_after_create = False
             raise SimulatedProcessCrash
@@ -215,12 +257,16 @@ async def test_channel_creation_is_normalized_authorized_and_idempotent(
     async with database.session() as session:
         tasks = list(await session.scalars(select(IntegrationTaskModel)))
     assert len(tasks) == 1
-    assert tasks[0].result_value == {
+    assert tasks[0].result_value is not None
+    assert {
+        key: tasks[0].result_value[key] for key in ("channel_id", "name", "jump_url", "category_id")
+    } == {
         "channel_id": 5000,
         "name": "🛠️・nový-žltý-projekt",
         "jump_url": f"https://discord.test/channels/{GUILD_ID}/5000",
         "category_id": PROJECTS_CATEGORY,
     }
+    assert uuid.UUID(str(tasks[0].result_value["undo_id"])) == first.undo_id
     assert normalize_channel_emoji("  🏡  ") == "🏡"
 
 
@@ -279,6 +325,45 @@ async def test_channel_creation_rejects_category_with_voice_channels(database: D
     assert gateway.created == []
 
 
+async def test_created_channel_undo_deletes_only_unchanged_empty_channel(
+    database: Database,
+) -> None:
+    service, gateway = await _service(database)
+    principal = _principal(AppRole.ADMIN)
+    created = await service.create_channel(
+        name="Vratny kanal",
+        member_ids=(),
+        role_ids=(),
+        idempotency_key="undo-create",
+        principal=principal,
+        correlation_id="undo-create",
+        now=NOW,
+    )
+    assert created.undo_id is not None
+    undo = UndoService(SqlAlchemyUnitOfWork(database), cast(Any, gateway), gateway)
+    await undo.undo(created.undo_id, principal=principal, correlation_id="undo-create-do")
+    assert created.channel_id not in gateway.channel_names
+
+    second = await service.create_channel(
+        name="Uz pouzity kanal",
+        member_ids=(),
+        role_ids=(),
+        idempotency_key="undo-create-changed",
+        principal=principal,
+        correlation_id="undo-create-changed",
+        now=NOW,
+    )
+    assert second.undo_id is not None
+    gateway.last_message_ids[second.channel_id] = 999
+    with pytest.raises(UndoUnavailable, match="created_channel_changed_offer_archive"):
+        await undo.undo(
+            second.undo_id,
+            principal=principal,
+            correlation_id="undo-create-changed-do",
+        )
+    assert second.channel_id in gateway.channel_names
+
+
 async def test_archive_request_is_single_use_and_requires_fresh_admin_authorization(
     database: Database,
 ) -> None:
@@ -315,7 +400,15 @@ async def test_archive_request_is_single_use_and_requires_fresh_admin_authorizat
         now=NOW + timedelta(minutes=1),
     )
     assert result.state is ArchiveState.EXECUTED
+    assert result.undo_id is not None
     assert gateway.archived == [(7000, "projekt-alfa-2026-08-09")]
+    await UndoService(SqlAlchemyUnitOfWork(database), cast(Any, gateway), gateway).undo(
+        result.undo_id,
+        principal=_principal(AppRole.ADMIN, USER_ID + 10),
+        correlation_id="archive-undo",
+    )
+    assert gateway.channel_names[7000] == "projekt-alfa"
+    assert gateway.channel_categories[7000] == PROJECTS_CATEGORY
     with pytest.raises(ArchiveDecisionConflict, match="already decided"):
         await service.decide_archive(
             request.id,
