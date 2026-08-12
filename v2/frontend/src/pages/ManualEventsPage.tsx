@@ -152,7 +152,9 @@ export function ManualEditor({
   const [allDay, setAllDay] = useState(recovered?.allDay ?? initial.allDay)
   const [startDate, setStartDate] = useState(recovered?.startDate ?? initial.startDate)
   const [endDate, setEndDate] = useState(recovered?.endDate ?? initial.endDate)
-  const [startDateTime, setStartDateTime] = useState(recovered?.startDateTime ?? initial.startDateTime)
+  const [startDateTime, setStartDateTime] = useState(
+    recovered?.startDateTime ?? initial.startDateTime,
+  )
   const [endDateTime, setEndDateTime] = useState(recovered?.endDateTime ?? initial.endDateTime)
   const [linkUrl, setLinkUrl] = useState(recovered?.linkUrl ?? initial.linkUrl)
   const [active, setActive] = useState(recovered?.active ?? initial.active)
