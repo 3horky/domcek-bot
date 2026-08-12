@@ -411,6 +411,15 @@ export interface DashboardSummary {
   automatic_publication_enabled: boolean
   last_calendar_sync_at: string | null
   pending_archive_count: number
+  discord_places_configured: boolean
+  active_calendars: Array<{
+    id: string
+    display_name: string
+    sync_status: string
+    freshness: 'fresh' | 'stale_warning' | 'unsafe'
+    last_sync_success_at: string | null
+    last_sync_error: string | null
+  }>
   last_publication: {
     id: string
     scheduled_for: string

@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   Archive,
   ArrowRight,
   CalendarDays,
@@ -11,7 +12,7 @@ import {
   Send,
   X,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import {
@@ -23,6 +24,17 @@ import {
   type ManualPublicationPreview,
 } from '../api/client'
 import { useAuth } from '../auth/context'
+import { DiscordPreview } from '../components/DiscordPreview'
+import { EmptyState, LoadErrorState, LoadingState } from '../components/AsyncState'
+import { Button } from '../components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog'
 import { usePublicationDraft } from '../hooks/usePublicationDraft'
 
 const publicationDate = new Intl.DateTimeFormat('sk-SK', {
@@ -42,62 +54,133 @@ export function DashboardPage() {
   const auth = useAuth()
   const { draft, error, loading, reload } = usePublicationDraft()
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
+  const [summaryLoading, setSummaryLoading] = useState(true)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
   const [publishPreview, setPublishPreview] = useState<ManualPublicationPreview | null>(null)
   const [publishBusy, setPublishBusy] = useState(false)
-  const [publishNotice, setPublishNotice] = useState<string | null>(null)
+  const [publishNotice, setPublishNotice] = useState<{
+    kind: 'success' | 'error'
+    text: string
+  } | null>(null)
+  const prepareInFlight = useRef(false)
+  const confirmInFlight = useRef(false)
+  const prepareButtonRef = useRef<HTMLButtonElement>(null)
   const canPublish =
     auth.status === 'authenticated' && auth.session.capabilities.includes('manual_publish')
 
-  useEffect(() => {
-    const controller = new AbortController()
-    void getDashboardSummary(controller.signal)
-      .then(setSummary)
-      .catch(() => setSummary(null))
-    return () => controller.abort()
+  const loadSummary = useCallback(async (signal?: AbortSignal) => {
+    setSummaryLoading(true)
+    setSummaryError(null)
+    try {
+      setSummary(await getDashboardSummary(signal))
+    } catch (caught) {
+      if (signal?.aborted) return
+      setSummaryError(
+        caught instanceof ApiError ? caught.message : 'Prevádzkový stav sa nepodarilo načítať.',
+      )
+    } finally {
+      if (!signal?.aborted) setSummaryLoading(false)
+    }
   }, [])
 
-  if (loading) return <PageState title="Pripravujem prehľad…" />
+  useEffect(() => {
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => void loadSummary(controller.signal), 0)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [loadSummary])
+
+  if (loading) return <LoadingState label="Pripravujem prehľad…" />
   if (error) {
-    return <PageState title="Prehľad sa nepodarilo načítať" detail={error.message} retry={reload} />
+    return (
+      <LoadErrorState
+        title="Prehľad sa nepodarilo načítať"
+        detail={error.message}
+        onRetry={reload}
+      />
+    )
   }
   if (!draft)
-    return <PageState title="Najbližšie zverejnenie zatiaľ nie je dostupné" retry={reload} />
+    return (
+      <EmptyState
+        title="Najbližšie zverejnenie zatiaľ nie je dostupné"
+        detail="Carlo ešte nemá z čoho zostaviť náhľad. Skúste údaje načítať znova."
+        action={<Button onClick={reload}>Načítať znova</Button>}
+      />
+    )
 
   const eventCount = draft.public_items.filter((item) => item.kind !== 'info').length
   const infoCount = draft.public_items.filter((item) => item.kind === 'info').length
   const excludedCount = draft.editor_events.filter((item) => !item.included).length
-  const needsAttention = draft.warnings.length > 0
+  const calendarNeedsAttention =
+    summary?.active_calendars.some(
+      (calendar) => calendar.freshness !== 'fresh' || calendar.sync_status === 'failed',
+    ) ?? false
+  const needsAttention =
+    draft.warnings.length > 0 ||
+    calendarNeedsAttention ||
+    summary?.automatic_publication_enabled === false ||
+    Boolean(summaryError)
   const upcoming = draft.public_items.slice(0, 5)
 
   async function preparePublish() {
+    if (prepareInFlight.current) return
+    prepareInFlight.current = true
     setPublishBusy(true)
     setPublishNotice(null)
     try {
       setPublishPreview(await prepareManualPublication())
     } catch (caught) {
-      setPublishNotice(
-        caught instanceof ApiError ? caught.message : 'Ručné zverejnenie sa nepodarilo pripraviť.',
-      )
+      setPublishNotice({
+        kind: 'error',
+        text:
+          caught instanceof ApiError
+            ? caught.message
+            : 'Ručné zverejnenie sa nepodarilo pripraviť.',
+      })
     } finally {
+      prepareInFlight.current = false
       setPublishBusy(false)
     }
   }
 
   async function confirmPublish() {
-    if (!publishPreview) return
+    if (!publishPreview || confirmInFlight.current) return
+    confirmInFlight.current = true
     setPublishBusy(true)
     setPublishNotice(null)
     try {
       const result = await confirmManualPublication(publishPreview.confirmation_token)
-      setPublishPreview(null)
-      setPublishNotice(`Publikovanie skončilo stavom ${result.state}.`)
+      if (result.state.startsWith('succeeded')) {
+        closePublishPreview()
+        setPublishNotice({
+          kind: 'success',
+          text: 'Oznamy boli zverejnené. Najbližší pravidelný termín Carlo preskočí.',
+        })
+        await Promise.all([reload(), loadSummary()])
+      } else {
+        setPublishNotice({
+          kind: 'error',
+          text: 'Carlo nepotvrdil úspešné zverejnenie. Skontrolujte Históriu publikácií.',
+        })
+      }
     } catch (caught) {
-      setPublishNotice(
-        caught instanceof ApiError ? caught.message : 'Ručné zverejnenie sa nepodarilo dokončiť.',
-      )
+      setPublishNotice({
+        kind: 'error',
+        text:
+          caught instanceof ApiError ? caught.message : 'Ručné zverejnenie sa nepodarilo dokončiť.',
+      })
     } finally {
+      confirmInFlight.current = false
       setPublishBusy(false)
     }
+  }
+
+  function closePublishPreview() {
+    setPublishPreview(null)
+    window.setTimeout(() => prepareButtonRef.current?.focus(), 180)
   }
 
   return (
@@ -116,23 +199,44 @@ export function DashboardPage() {
         </div>
         <div className="next-publication-copy">
           <span
-            className={`status-pill ${needsAttention || summary?.automatic_publication_enabled === false ? 'status-warning' : 'status-ready'}`}
+            className={`status-pill ${needsAttention || summaryLoading ? 'status-warning' : 'status-ready'}`}
           >
-            {summary?.automatic_publication_enabled === false
-              ? 'Automatické publikovanie je pozastavené'
-              : needsAttention
-                ? 'Treba skontrolovať'
-                : 'Pripravené na automatické zverejnenie'}
+            {summaryLoading
+              ? 'Kontrolujem prevádzkový stav'
+              : summaryError
+                ? 'Prevádzkový stav treba overiť'
+                : summary?.automatic_publication_enabled === false
+                  ? 'Automatické publikovanie je pozastavené'
+                  : calendarNeedsAttention || draft.warnings.length > 0
+                    ? 'Treba skontrolovať'
+                    : 'Pripravené na automatické zverejnenie'}
           </span>
           <p>Najbližšie zverejnenie</p>
           <h2>{publicationDate.format(new Date(draft.scheduled_for))}</h2>
-          <small>Ak nič nezmeníš, Carlo oznamy zverejní automaticky v tomto termíne.</small>
+          <small>Ak nič nezmeníte, Carlo oznamy zverejní automaticky v tomto termíne.</small>
         </div>
         <Link className="primary-button publication-action" to="/oznamy">
           Skontrolovať oznamy
           <ArrowRight aria-hidden="true" />
         </Link>
       </article>
+
+      {summaryError && (
+        <div className="dashboard-summary-warning" role="alert">
+          <AlertTriangle aria-hidden="true" />
+          <div>
+            <strong>Prevádzkový stav nie je úplný</strong>
+            <p>{summaryError} Obsah náhľadu zostal dostupný, no pred publikovaním stav overte.</p>
+          </div>
+          <Button variant="outline" onClick={() => void loadSummary()}>
+            Skúsiť znova
+          </Button>
+        </div>
+      )}
+
+      {summary && !summary.last_publication && (
+        <FirstRunGuide summary={summary} scheduledFor={draft.scheduled_for} />
+      )}
 
       {canPublish && (
         <section className="dashboard-manual-publish" aria-labelledby="manual-publish-title">
@@ -141,48 +245,80 @@ export function DashboardPage() {
             <h2 id="manual-publish-title">Ručné zverejnenie</h2>
             <p>Vyžaduje dve potvrdenia. Úspech preskočí práve najbližší pravidelný termín.</p>
           </div>
-          {publishPreview ? (
-            <div className="dashboard-publish-confirm">
-              <p>
-                <strong>{publishPreview.announcement_count} položiek</strong> ·{' '}
-                {publishPreview.message_count} správ
-              </p>
-              <button
-                className="secondary-button"
-                type="button"
-                disabled={publishBusy}
-                onClick={() => setPublishPreview(null)}
-              >
-                <X aria-hidden="true" /> Zrušiť
-              </button>
-              <button type="button" disabled={publishBusy} onClick={() => void confirmPublish()}>
-                <Send aria-hidden="true" />
-                {publishBusy ? 'Publikujem…' : 'Potvrdiť a zverejniť'}
-              </button>
-            </div>
-          ) : (
-            <button type="button" disabled={publishBusy} onClick={() => void preparePublish()}>
-              <Send aria-hidden="true" />
-              {publishBusy ? 'Pripravujem…' : 'Pripraviť ručné zverejnenie'}
-            </button>
-          )}
+          <Button
+            ref={prepareButtonRef}
+            type="button"
+            disabled={publishBusy}
+            onClick={() => void preparePublish()}
+          >
+            <Eye aria-hidden="true" />
+            {publishBusy ? 'Pripravujem náhľad…' : 'Pripraviť náhľad na zverejnenie'}
+          </Button>
           {publishNotice && (
-            <p className="dashboard-publish-notice" role="status">
-              {publishNotice}
+            <p
+              className={`dashboard-publish-notice ${publishNotice.kind}`}
+              role={publishNotice.kind === 'error' ? 'alert' : 'status'}
+            >
+              {publishNotice.text}
             </p>
           )}
         </section>
       )}
 
+      <Dialog
+        open={publishPreview !== null}
+        onOpenChange={(open) => {
+          if (!open && !publishBusy) closePublishPreview()
+        }}
+      >
+        <DialogContent
+          className="dashboard-publish-dialog"
+          finalFocus={() => prepareButtonRef.current}
+          showCloseButton={!publishBusy}
+        >
+          <DialogHeader>
+            <DialogTitle>Skontrolovať a ručne zverejniť</DialogTitle>
+            <DialogDescription>
+              Toto je presne obsah, ktorý Carlo po potvrdení odošle na Discord. Úspech preskočí
+              najbližší pravidelný termín.
+            </DialogDescription>
+          </DialogHeader>
+          {publishPreview && (
+            <>
+              <p className="dashboard-publish-counts">
+                <strong>{publishPreview.announcement_count} položiek</strong> v{' '}
+                {publishPreview.message_count}{' '}
+                {publishPreview.message_count === 1 ? 'správe' : 'správach'}
+              </p>
+              <div className="dashboard-publish-preview">
+                <DiscordPreview draft={publishPreview.draft} />
+              </div>
+            </>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              type="button"
+              disabled={publishBusy}
+              onClick={closePublishPreview}
+            >
+              <X aria-hidden="true" /> Zrušiť
+            </Button>
+            <Button type="button" disabled={publishBusy} onClick={() => void confirmPublish()}>
+              <Send aria-hidden="true" />
+              {publishBusy ? 'Zverejňujem…' : 'Potvrdiť a zverejniť teraz'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <section className="operational-strip" aria-label="Aktuálny prevádzkový stav">
         <OperationalItem
           icon={RefreshCw}
-          label="Posledná synchronizácia"
-          value={
-            summary?.last_calendar_sync_at
-              ? compactDate(summary.last_calendar_sync_at)
-              : 'Zatiaľ bez syncu'
-          }
+          label="Google kalendáre"
+          value={calendarSummary(summary, summaryLoading, summaryError)}
+          to="/nastavenia"
+          attention={calendarNeedsAttention || Boolean(summaryError)}
         />
         <OperationalItem
           icon={History}
@@ -192,15 +328,22 @@ export function DashboardPage() {
               ? compactDate(
                   summary.last_publication.completed_at ?? summary.last_publication.scheduled_for,
                 )
-              : 'Zatiaľ bez publikácie'
+              : 'Ešte nepublikoval'
           }
           to="/historia"
         />
         <OperationalItem
           icon={Archive}
           label="Čakajúce archivácie"
-          value={`${summary?.pending_archive_count ?? 0}`}
-          to="/nastavenia"
+          value={
+            summaryLoading || summaryError
+              ? 'Stav neznámy'
+              : summary?.pending_archive_count
+                ? `${summary.pending_archive_count}`
+                : 'Žiadna'
+          }
+          to="/kanaly"
+          attention={Boolean(summary?.pending_archive_count) || Boolean(summaryError)}
         />
       </section>
 
@@ -291,15 +434,17 @@ function OperationalItem({
   label,
   value,
   to,
+  attention = false,
 }: {
   icon: typeof RefreshCw
   label: string
   value: string
   to?: string
+  attention?: boolean
 }) {
   const content = (
     <>
-      <Icon aria-hidden="true" />
+      <Icon className={attention ? 'attention' : undefined} aria-hidden="true" />
       <span>
         <small>{label}</small>
         <strong>{value}</strong>
@@ -309,29 +454,90 @@ function OperationalItem({
   return to ? <Link to={to}>{content}</Link> : <div>{content}</div>
 }
 
+function FirstRunGuide({
+  summary,
+  scheduledFor,
+}: {
+  summary: DashboardSummary
+  scheduledFor: string
+}) {
+  return (
+    <section className="first-run-guide" aria-labelledby="first-run-title">
+      <header>
+        <div>
+          <p className="eyebrow">Prvé spustenie</p>
+          <h2 id="first-run-title">Dokončite základné nastavenie Carla</h2>
+          <p>Kalendár je voliteľný. Oznamy môžete pripraviť aj iba z ručne pridaného obsahu.</p>
+        </div>
+        <span>
+          {summary.discord_places_configured ? 'Základ je pripravený' : 'Začnite miestami'}
+        </span>
+      </header>
+      <ol>
+        <li className={summary.discord_places_configured ? 'complete' : 'current'}>
+          <CheckCircle2 aria-hidden="true" />
+          <div>
+            <strong>Miesta na Discorde</strong>
+            <small>
+              {summary.discord_places_configured
+                ? 'Kanál pre oznamy je vybraný.'
+                : 'Vyberte, kam má Carlo oznamy posielať.'}
+            </small>
+          </div>
+          <Link to="/nastavenia">
+            {summary.discord_places_configured ? 'Skontrolovať' : 'Nastaviť'}
+          </Link>
+        </li>
+        <li className={summary.active_calendars.length > 0 ? 'complete' : ''}>
+          <CalendarDays aria-hidden="true" />
+          <div>
+            <strong>Google kalendár</strong>
+            <small>
+              {summary.active_calendars.length > 0
+                ? `${summary.active_calendars.length} aktívnych zdrojov.`
+                : 'Voliteľné — Carlo funguje aj bez kalendára.'}
+            </small>
+          </div>
+          <Link to="/nastavenia">
+            {summary.active_calendars.length > 0 ? 'Skontrolovať' : 'Pridať'}
+          </Link>
+        </li>
+        <li className="complete">
+          <Clock3 aria-hidden="true" />
+          <div>
+            <strong>Harmonogram</strong>
+            <small>Najbližšie zverejnenie {publicationDate.format(new Date(scheduledFor))}.</small>
+          </div>
+          <Link to="/nastavenia">Upraviť</Link>
+        </li>
+        <li className="current">
+          <Eye aria-hidden="true" />
+          <div>
+            <strong>Skontrolovať výsledok</strong>
+            <small>Otvorte kanonický Discord náhľad pred prvým zverejnením.</small>
+          </div>
+          <Link to="/oznamy">Otvoriť náhľad</Link>
+        </li>
+      </ol>
+    </section>
+  )
+}
+
+function calendarSummary(summary: DashboardSummary | null, loading: boolean, error: string | null) {
+  if (loading) return 'Kontrolujem stav…'
+  if (error || !summary) return 'Stav neznámy'
+  if (summary.active_calendars.length === 0) return 'Funguje bez kalendára'
+  const attention = summary.active_calendars.filter(
+    (calendar) => calendar.freshness !== 'fresh' || calendar.sync_status === 'failed',
+  ).length
+  if (attention > 0) return `${attention} z ${summary.active_calendars.length} vyžaduje pozornosť`
+  return `${summary.active_calendars.length} z ${summary.active_calendars.length} pripravené`
+}
+
 function compactDate(value: string) {
   return new Intl.DateTimeFormat('sk-SK', {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone: 'Europe/Bratislava',
   }).format(new Date(value))
-}
-
-function PageState({
-  title,
-  detail,
-  retry,
-}: {
-  title: string
-  detail?: string
-  retry?: () => void
-}) {
-  return (
-    <section className="content-state" aria-live="polite">
-      <span className="loading-orb" aria-hidden="true" />
-      <h1>{title}</h1>
-      {detail && <p>{detail}</p>}
-      {retry && <button onClick={retry}>Skúsiť znova</button>}
-    </section>
-  )
 }

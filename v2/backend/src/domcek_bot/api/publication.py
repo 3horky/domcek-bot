@@ -113,6 +113,18 @@ async def publication_dashboard(
             "automatic_publication_enabled": summary.automatic_publication_enabled,
             "last_calendar_sync_at": _iso(summary.last_calendar_sync_at),
             "pending_archive_count": summary.pending_archive_count,
+            "discord_places_configured": summary.discord_places_configured,
+            "active_calendars": [
+                {
+                    "id": str(calendar.id),
+                    "display_name": calendar.display_name,
+                    "sync_status": calendar.sync_status,
+                    "freshness": calendar.freshness.value,
+                    "last_sync_success_at": _iso(calendar.last_sync_success_at),
+                    "last_sync_error": calendar.last_sync_error,
+                }
+                for calendar in summary.active_calendars
+            ],
             "last_publication": None
             if last is None
             else {

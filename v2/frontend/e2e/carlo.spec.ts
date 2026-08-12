@@ -17,6 +17,7 @@ interface MockState {
   reactions: Record<string, unknown>
   publicationSettings: Record<string, unknown>
   calendars: Record<string, unknown>[]
+  dashboardFailureStatus: number | null
   directoryFailureStatus: number | null
   settingsFailureStatus: number | null
   settingsSaveFailureStatus: number | null
@@ -94,6 +95,7 @@ async function mockCarlo(page: Page, role: Role = 'admin'): Promise<MockState> {
     reactions: defaultReactionSettings(),
     publicationSettings: defaultPublicationSettings(),
     calendars: [],
+    dashboardFailureStatus: null,
     directoryFailureStatus: null,
     settingsFailureStatus: null,
     settingsSaveFailureStatus: null,
@@ -143,11 +145,28 @@ async function handleApi(route: Route, state: MockState) {
   }
   if (role === 'none') return json({ code: 'authentication_required' }, 401)
   if (path === '/api/v1/publication/draft') return json(draft(state))
-  if (path === '/api/v1/publication/dashboard')
+  if (path === '/api/v1/publication/dashboard') {
+    if (state.dashboardFailureStatus)
+      return json(
+        { detail: 'Prevádzkový stav sa teraz nepodarilo načítať.' },
+        state.dashboardFailureStatus,
+      )
     return json({
       automatic_publication_enabled: true,
-      last_calendar_sync_at: '2026-08-10T18:00:00Z',
+      last_calendar_sync_at:
+        state.calendars.length > 0 ? String(state.calendars[0]?.last_sync_success_at ?? '') : null,
       pending_archive_count: state.archives.length,
+      discord_places_configured: true,
+      active_calendars: state.calendars
+        .filter((calendar) => calendar.active)
+        .map((calendar) => ({
+          id: calendar.id,
+          display_name: calendar.display_name,
+          sync_status: calendar.sync_status,
+          freshness: calendar.sync_status === 'failed' ? 'unsafe' : 'fresh',
+          last_sync_success_at: calendar.last_sync_success_at,
+          last_sync_error: calendar.last_sync_error,
+        })),
       last_publication: state.published
         ? {
             id: 'run-1',
@@ -158,6 +177,7 @@ async function handleApi(route: Route, state: MockState) {
           }
         : null,
     })
+  }
   if (path === '/api/v1/manual-events' && method === 'GET') return json(state.manualEvents)
   if (path === '/api/v1/manual-events' && method === 'POST') {
     const values = body as Record<string, unknown>
@@ -718,12 +738,25 @@ test('06 používateľ vytvorí INFO oznam s inkluzívnou expiráciou', async ({
   expect(state.infoAnnouncements[0]?.valid_until).toBe('2026-08-20')
 })
 
-test('07 Admin ručne publikuje dvojkrokovo a dvojklik nevytvorí druhý účinok', async ({ page }) => {
+test('07 Admin ručne publikuje dvojkrokovo a dvojklik nevytvorí druhý účinok', async ({
+  page,
+}, testInfo) => {
   const state = await mockCarlo(page)
   await page.goto('/')
-  await page.getByRole('button', { name: 'Pripraviť ručné zverejnenie' }).click()
-  await page.getByRole('button', { name: 'Potvrdiť a zverejniť' }).dblclick()
-  await expect(page.getByText(/Publikovanie skončilo stavom succeeded_manual/)).toBeVisible()
+  const opener = page.getByRole('button', { name: 'Pripraviť náhľad na zverejnenie' })
+  await opener.click()
+  const dialog = page.getByRole('dialog', { name: 'Skontrolovať a ručne zverejniť' })
+  await expect(dialog.getByLabel('Náhľad správ v Discord kanáli oznamy')).toContainText('@everyone')
+  await expect(dialog.getByText('Otvorený Domček')).toBeVisible()
+  if (process.env.CARLO_VISUAL_AUDIT_DIR) {
+    await page.screenshot({
+      path: `${process.env.CARLO_VISUAL_AUDIT_DIR}/prehlad--rucne-publikovanie--${testInfo.project.name}.png`,
+      fullPage: true,
+    })
+  }
+  await dialog.getByRole('button', { name: 'Potvrdiť a zverejniť teraz' }).dblclick()
+  await expect(page.getByText(/Oznamy boli zverejnené.*pravidelný termín/)).toBeVisible()
+  await expect(opener).toBeFocused()
   expect(state.published).toBe(true)
   expect(
     state.calls.filter((call) => call.path === '/api/v1/publication/manual/confirm'),
@@ -928,8 +961,8 @@ test('14 SDB FMA vidí balík a publikuje, ale nemá ostatnú administráciu', a
   await expect(page.getByRole('heading', { name: 'Ručné zverejnenie' })).toBeVisible()
   await expect(page.getByRole('link', { name: /Nastavenia/ })).toHaveCount(0)
   await expect(page.getByRole('link', { name: /Audit/ })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Pripraviť ručné zverejnenie' }).click()
-  await page.getByRole('button', { name: 'Potvrdiť a zverejniť' }).click()
+  await page.getByRole('button', { name: 'Pripraviť náhľad na zverejnenie' }).click()
+  await page.getByRole('button', { name: 'Potvrdiť a zverejniť teraz' }).click()
   expect(state.published).toBe(true)
 })
 
@@ -1427,4 +1460,58 @@ test('38 vypršaná relácia neodošle formulár znova a zachová otvorený form
   await dialog.getByRole('button', { name: 'Overiť prihlásenie' }).click()
   await expect(dialog).toBeHidden()
   await expect(closingMessage).toHaveValue('Tento text čaká na opätovné prihlásenie')
+})
+
+test('39 prvé spustenie vedie správcu v poradí a nevyžaduje kalendár', async ({
+  page,
+}, testInfo) => {
+  await mockCarlo(page)
+  await page.goto('/')
+  const guide = page.getByRole('region', { name: 'Dokončite základné nastavenie Carla' })
+  await expect(guide).toBeVisible()
+  await expect(guide.getByRole('listitem')).toHaveCount(4)
+  await expect(guide.getByText('Miesta na Discorde')).toBeVisible()
+  await expect(guide.getByText('Google kalendár')).toBeVisible()
+  await expect(guide.getByText('Voliteľné — Carlo funguje aj bez kalendára.')).toBeVisible()
+  await expect(guide.getByText('Harmonogram')).toBeVisible()
+  await expect(guide.getByText('Skontrolovať výsledok')).toBeVisible()
+  await expect(page.getByText('Funguje bez kalendára')).toBeVisible()
+  if (process.env.CARLO_VISUAL_AUDIT_DIR) {
+    await page.screenshot({
+      path: `${process.env.CARLO_VISUAL_AUDIT_DIR}/prehlad--prve-spustenie--${testInfo.project.name}.png`,
+      fullPage: true,
+    })
+  }
+})
+
+test('40 Prehľad nezakryje zlyhaný aktívny kalendár úspechom iného zdroja', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.calendars = [
+    mockCalendar({ id: 'fresh', display_name: 'Program', sync_status: 'succeeded' }),
+    mockCalendar({
+      id: 'failed',
+      display_name: 'Komunita',
+      sync_status: 'failed',
+      last_sync_error: 'permission denied',
+    }),
+  ]
+  await page.goto('/')
+  await expect(page.getByText('Treba skontrolovať', { exact: true })).toBeVisible()
+  await expect(page.getByText('1 z 2 vyžaduje pozornosť')).toBeVisible()
+  await expect(page.getByText(/Pripravené na automatické zverejnenie/)).toHaveCount(0)
+})
+
+test('41 neúplný prevádzkový stav neprikrášli nuly a dá sa obnoviť', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.dashboardFailureStatus = 503
+  await page.goto('/')
+  const warning = page.getByRole('alert').filter({ hasText: 'Prevádzkový stav nie je úplný' })
+  await expect(warning).toContainText('Obsah náhľadu zostal dostupný')
+  await expect(page.getByText('Stav neznámy')).toHaveCount(2)
+  await expect(page.getByText('Žiadna')).toHaveCount(0)
+  state.dashboardFailureStatus = null
+  await warning.getByRole('button', { name: 'Skúsiť znova' }).click()
+  await expect(warning).toBeHidden()
+  await expect(page.getByText('Funguje bez kalendára')).toBeVisible()
+  await expect(page.getByText('Žiadna')).toBeVisible()
 })

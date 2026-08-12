@@ -73,11 +73,19 @@ Inventár východiskového dlhu: 241 hex výskytov v monolitickom `global.css`, 
 
 ## UX5 – Prehľad
 
-Nasleduje po uzavretom UX4.
+| ID     | Etapa | Oblasť a úloha                                         | Štandard      | Závažnosť | Dodanie | Stav súladu   | Dôkaz                           | Dopad                                                                          | Cieľové správanie                                                             | Akceptácia                                                           | Vynútenie | Plánovaná etapa | Stav opravy |
+| ------ | ----- | ------------------------------------------------------ | ------------- | --------- | ------- | ------------- | ------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | -------------------------------------------------------------------- | --------- | --------------- | ----------- |
+| UX5-01 | UX5   | jeden čerstvý kalendár zakryl problém iného zdroja     | 3.5, 11, 13.5 | P0        | BLOKUJE | opravené      | backend integrácia + browser 40 | Prehľad mohol klamlivo tvrdiť pripravenosť na publikovanie                     | každý aktívny zdroj má sync stav a čerstvosť z rovnakých serverových limitov  | failed/never/unsafe zdroj vždy prepne hlavný stav na kontrolu        | test      | UX5             | hotovo      |
+| UX5-02 | UX5   | zlyhaný prevádzkový súhrn sa zmenil na falošné nuly    | 3.5, 11.5, 15 | P0        | BLOKUJE | opravené      | browser 41                      | neznámy stav vyzeral ako nula archivácií či bez synchronizácie                 | obsah ostane dostupný, no neznáme hodnoty sú pomenované a majú lokálny retry  | žiadna falošná nula ani pozitívny hlavný stav pri 503                | test      | UX5             | hotovo      |
+| UX5-03 | UX5   | prvé spustenie nemalo zoradený vstupný tok             | 4.3, 6.7      | P1        | BACKLOG | opravené      | browser 39 + render             | nový správca musel poradie nastavení odhaliť na viacerých route                | Discord miesta → voliteľný kalendár → harmonogram → kanonický náhľad          | tok výslovne funguje bez kalendára a zmizne po prvej publikácii      | test      | UX5             | hotovo      |
+| UX5-04 | UX5   | ručný publish potvrdzoval iba počty bez verného obsahu | 3.6, 13.2     | P0        | BLOKUJE | opravené      | browser 07 + render             | Admin nevidel presný externý účinok pred potvrdením                            | potvrdenie používa kanonický Discord snapshot a vysvetlí preskočenie termínu  | @everyone, obsah, správy a palety sú rovnaké ako odosielaný snapshot | test      | UX5             | hotovo      |
+| UX5-05 | UX5   | interný enum bol vydávaný za výsledok publikovania     | 3.4, 9.2, 11  | P0        | BLOKUJE | opravené      | browser 07                      | `succeeded_manual` nehovoril človeku, čo sa reálne stalo                       | úspech potvrdí zverejnenie a preskočenie; neistý stav odkáže na Históriu      | výsledok je ľudský, pravdivý a nikdy neoslavuje neúspech             | test      | UX5             | hotovo      |
+| UX5-06 | UX5   | ručný tok nemal úplný guard a spoľahlivý návrat fokusu | 3.6, 10.9, 14 | P0        | BLOKUJE | opravené      | browser 07                      | dvojklik alebo asynchrónne zatvorenie mohli duplikovať účinok či stratiť fokus | príprava aj confirm majú ref guard; modal sa vráti na opener                  | presne jeden confirm request a fokus po animovanom zatvorení         | test      | UX5             | hotovo      |
+| UX5-07 | UX5   | ochranná lehota publikovania zatiaľ nie je v runtime   | 13.7          | P0        | BLOKUJE | špecifikované | implementačný backlog           | verejný účinok dnes nastane hneď po potvrdení                                  | nastaviteľný odpočet, stop/teraz, DM `stop`, atómový prechod a restart safety | backend stavový automat a end-to-end externý dôkaz pred live         | test      | E7 follow-up    | backlog     |
 
 ## UX6 – Redakčný pult a Discord náhľad
 
-Čaká na UX5.
+Nasleduje po uzavretom UX5.
 
 ## UX7 – Kanály
 

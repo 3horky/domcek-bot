@@ -186,6 +186,17 @@ async def test_dashboard_uses_live_configuration_latest_sync_run_and_pending_arc
                 last_sync_success_at=latest_sync,
             )
         )
+        await repositories.calendar_sources.add(
+            CalendarSourceRecord(
+                id=uuid.uuid4(),
+                guild_id=GUILD_ID,
+                provider="google",
+                external_calendar_id="failed@example.test",
+                display_name="Nikdy nesynchronizovaný",
+                sync_status=SyncStatus.FAILED,
+                last_sync_error="permission denied",
+            )
+        )
         await repositories.publication_runs.add_snapshot(*latest)
         await repositories.channel_archive_requests.add(
             ChannelArchiveRequestRecord(
@@ -201,9 +212,20 @@ async def test_dashboard_uses_live_configuration_latest_sync_run_and_pending_arc
             )
         )
 
-    summary = await PublicationHistoryService(uow).dashboard(_principal(AppRole.ADMIN))
+    summary = await PublicationHistoryService(uow, clock=lambda: NOW).dashboard(
+        _principal(AppRole.ADMIN)
+    )
 
     assert not summary.automatic_publication_enabled
     assert summary.last_calendar_sync_at == latest_sync
     assert summary.last_publication == latest[0]
     assert summary.pending_archive_count == 1
+    assert not summary.discord_places_configured
+    calendar_states = {
+        calendar.display_name: calendar.freshness.value for calendar in summary.active_calendars
+    }
+    assert calendar_states == {
+        "Starší sync": "fresh",
+        "Čerstvý sync": "fresh",
+        "Nikdy nesynchronizovaný": "unsafe",
+    }

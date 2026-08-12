@@ -127,7 +127,11 @@ def create_runtime_app() -> FastAPI:
         discord_admin=DiscordAdministrationService(
             unit_of_work, discord_admin_gateway, role_alerts
         ),
-        publication_history=PublicationHistoryService(unit_of_work),
+        publication_history=PublicationHistoryService(
+            unit_of_work,
+            calendar_warning_age=timedelta(minutes=settings.calendar_stale_warning_minutes),
+            calendar_max_safe_age=timedelta(minutes=settings.calendar_max_safe_age_minutes),
+        ),
         shadow_publications=ShadowPublicationService(unit_of_work, draft_service),
         operations=RuntimeOperationsService(unit_of_work),
         resources=tuple(
