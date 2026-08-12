@@ -14,7 +14,7 @@ Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny post
 | UX7   | Kanály                             | funkčný rez hotový | 15 unit, 110 browser; Undo → UX10  | `c8f4b6d`      |
 | UX8   | História publikácií a Audit        | hotovo             | 15 unit, 122 browser, 2 backend    | `08a3fee`      |
 | UX9   | Stav systému a systémové obrazovky | hotovo             | 16 unit, 132 browser, Axe + render | `b9cdc1f`      |
-| UX10  | finálna konzistencia a regresia    | audit uzavretý     | 195 backend, 16 unit, 132 browser  | `5797694`; CI fix |
+| UX10  | finálna konzistencia a regresia    | audit uzavretý     | 195 backend, 16 unit, 132 browser  | `5797694`; CI rerun |
 
 ## Pravidlá pokračovania
 
@@ -27,5 +27,5 @@ Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny post
 ## Posledný checkpoint
 
 - **Aktuálna etapa:** autonómny UX0–UX10 audit je uzavretý ako bezpečný shadow build; nejde o povolenie `live`
-- **Najbližší krok:** opraviť mechanický Prettier nález z runu `31558315155` a odmonitorovať opakovaný CI; UX10-01/02 zostávajú samostatný stop-ship implementačný balík
+- **Najbližší krok:** pushnúť robustné relatívne meranie double-click requestu po CI Strict Mode náleze v rune `31558518628` a odmonitorovať opakovaný CI; UX10-01/02 zostávajú samostatný stop-ship implementačný balík
 - **Okamžitý blokátor:** žiadny

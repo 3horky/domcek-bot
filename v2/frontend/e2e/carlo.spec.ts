@@ -2113,12 +2113,15 @@ test('57 Stav systému rozlíši výpadok, skryje referenciu a obnoví sa jedný
   await expect(page.getByText('live-reference-e2e')).not.toBeVisible()
   await page.getByText('Technické údaje pre riešenie problému').click()
   await expect(page.getByText('live-reference-e2e')).toBeVisible()
+  const requestsBeforeRefresh = state.calls.filter((call) => call.path === '/health/live').length
 
   state.livenessFailureStatus = null
   state.statusDelayMs = 100
   await page.getByRole('button', { name: 'Skontrolovať znova' }).dblclick()
   await expect(page.getByRole('heading', { name: 'Carlo je pripravený' })).toBeVisible()
-  expect(state.calls.filter((call) => call.path === '/health/live')).toHaveLength(2)
+  await expect
+    .poll(() => state.calls.filter((call) => call.path === '/health/live').length)
+    .toBe(requestsBeforeRefresh + 1)
 })
 
 test('58 Prihlasovacia chyba a neznáma adresa zostanú ľudské a použiteľné', async ({ page }) => {
