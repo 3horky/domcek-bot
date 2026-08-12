@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import {
   ApiError,
@@ -131,26 +131,65 @@ export function ManualEditor({
   onClose: () => void
   onSaved: () => Promise<void>
 }) {
-  const [title, setTitle] = useState(record?.title ?? '')
-  const [description, setDescription] = useState(record?.description ?? '')
-  const [allDay, setAllDay] = useState(record?.is_all_day ?? false)
-  const [startDate, setStartDate] = useState(
-    record?.starts_on ?? localDate(record?.starts_at) ?? '',
+  const draftKey = `carlo:manual-event:${record?.id ?? 'new'}`
+  const initial = useMemo(
+    () => ({
+      title: record?.title ?? '',
+      description: record?.description ?? '',
+      allDay: record?.is_all_day ?? false,
+      startDate: record?.starts_on ?? localDate(record?.starts_at) ?? '',
+      endDate: record?.ends_on ? addDays(record.ends_on, -1) : (localDate(record?.ends_at) ?? ''),
+      startDateTime: localDateTime(record?.starts_at),
+      endDateTime: localDateTime(record?.ends_at),
+      linkUrl: record?.link_url ?? '',
+      active: record?.active ?? true,
+    }),
+    [record],
   )
-  const [endDate, setEndDate] = useState(
-    record?.ends_on ? addDays(record.ends_on, -1) : (localDate(record?.ends_at) ?? ''),
-  )
-  const [startDateTime, setStartDateTime] = useState(localDateTime(record?.starts_at))
-  const [endDateTime, setEndDateTime] = useState(localDateTime(record?.ends_at))
-  const [linkUrl, setLinkUrl] = useState(record?.link_url ?? '')
-  const [active, setActive] = useState(record?.active ?? true)
+  const recovered = useMemo(() => readDraft<typeof initial>(draftKey), [draftKey])
+  const [title, setTitle] = useState(recovered?.title ?? initial.title)
+  const [description, setDescription] = useState(recovered?.description ?? initial.description)
+  const [allDay, setAllDay] = useState(recovered?.allDay ?? initial.allDay)
+  const [startDate, setStartDate] = useState(recovered?.startDate ?? initial.startDate)
+  const [endDate, setEndDate] = useState(recovered?.endDate ?? initial.endDate)
+  const [startDateTime, setStartDateTime] = useState(recovered?.startDateTime ?? initial.startDateTime)
+  const [endDateTime, setEndDateTime] = useState(recovered?.endDateTime ?? initial.endDateTime)
+  const [linkUrl, setLinkUrl] = useState(recovered?.linkUrl ?? initial.linkUrl)
+  const [active, setActive] = useState(recovered?.active ?? initial.active)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
+  const [expectedVersion, setExpectedVersion] = useState(record?.version)
+  const [discarding, setDiscarding] = useState(false)
+  const [versionNotice, setVersionNotice] = useState<string | null>(null)
+  const saveInFlight = useRef(false)
+  const values = useMemo(
+    () => ({
+      title,
+      description,
+      allDay,
+      startDate,
+      endDate,
+      startDateTime,
+      endDateTime,
+      linkUrl,
+      active,
+    }),
+    [active, allDay, description, endDate, endDateTime, linkUrl, startDate, startDateTime, title],
+  )
+  const dirty = JSON.stringify(values) !== JSON.stringify(initial)
+
+  useEffect(() => {
+    if (dirty) window.sessionStorage.setItem(draftKey, JSON.stringify(values))
+    else window.sessionStorage.removeItem(draftKey)
+  }, [dirty, draftKey, values])
 
   async function submit(event: FormEvent) {
     event.preventDefault()
+    if (saveInFlight.current) return
+    saveInFlight.current = true
     setBusy(true)
     setError(null)
+    setVersionNotice(null)
     try {
       await saveManualEvent(
         {
@@ -164,10 +203,11 @@ export function ManualEditor({
           timezone: 'Europe/Bratislava',
           link_url: optional(linkUrl),
           active,
-          ...(record ? { expected_version: record.version } : {}),
+          ...(expectedVersion ? { expected_version: expectedVersion } : {}),
         },
         record?.id,
       )
+      window.sessionStorage.removeItem(draftKey)
       await onSaved()
     } catch (caught) {
       setError(
@@ -176,8 +216,34 @@ export function ManualEditor({
           : new ApiError('Udalosť sa nepodarilo uložiť.', 0, null),
       )
     } finally {
+      saveInFlight.current = false
       setBusy(false)
     }
+  }
+
+  async function refreshVersion() {
+    if (!record) return
+    try {
+      const latest = (await getManualEvents()).find((item) => item.id === record.id)
+      if (!latest) {
+        setVersionNotice('Udalosť už neexistuje. Rozpracované hodnoty zostali zachované.')
+        return
+      }
+      setExpectedVersion(latest.version)
+      setError(null)
+      setVersionNotice(
+        'Načítaná je novšia verzia záznamu. Vaše rozpracované hodnoty zostali zachované.',
+      )
+    } catch (caught) {
+      setVersionNotice(
+        caught instanceof ApiError ? caught.message : 'Novšiu verziu sa nepodarilo načítať.',
+      )
+    }
+  }
+
+  function requestClose() {
+    if (dirty) setDiscarding(true)
+    else onClose()
   }
 
   return (
@@ -186,7 +252,7 @@ export function ManualEditor({
       title={record?.title ?? 'Pridať udalosť'}
       subtitle="Použite iba pre obsah, ktorý nie je v Google kalendári."
       busy={busy}
-      onClose={onClose}
+      onClose={requestClose}
     >
       <form className="drawer-form" onSubmit={submit}>
         <label className="form-field">
@@ -316,15 +382,20 @@ export function ManualEditor({
               <button
                 className="secondary-button alert-action"
                 type="button"
-                onClick={() => void onSaved()}
+                onClick={() => void refreshVersion()}
               >
-                Načítať aktuálny záznam
+                Načítať novšiu verziu a ponechať moje hodnoty
               </button>
             )}
           </div>
         )}
+        {versionNotice && (
+          <p className="form-notice" role="status">
+            {versionNotice}
+          </p>
+        )}
         <footer className="drawer-actions">
-          <button className="secondary-button" type="button" onClick={onClose} disabled={busy}>
+          <button className="secondary-button" type="button" onClick={requestClose} disabled={busy}>
             Zrušiť
           </button>
           <button type="submit" disabled={busy}>
@@ -332,8 +403,32 @@ export function ManualEditor({
           </button>
         </footer>
       </form>
+      {discarding && (
+        <ConfirmDialog
+          title="Zahodiť rozpracovanú udalosť?"
+          detail="Neuložené hodnoty sa odstránia. Uložená udalosť zostane bez zmeny."
+          busy={false}
+          cancelLabel="Pokračovať v úprave"
+          confirmLabel="Zahodiť zmeny"
+          onCancel={() => setDiscarding(false)}
+          onConfirm={() => {
+            window.sessionStorage.removeItem(draftKey)
+            setDiscarding(false)
+            onClose()
+          }}
+        />
+      )}
     </ContentDialog>
   )
+}
+
+function readDraft<T>(key: string): T | null {
+  try {
+    const value = window.sessionStorage.getItem(key)
+    return value ? (JSON.parse(value) as T) : null
+  } catch {
+    return null
+  }
 }
 
 function optional(value: string) {

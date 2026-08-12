@@ -516,7 +516,7 @@ async def test_transient_delivery_has_bounded_run_attempts_and_terminal_incident
     assert incidents[0].kind == "discord_delivery_exhausted"
 
 
-async def test_seen_reaction_uses_live_guild_configuration(database: Database) -> None:
+async def test_seen_reaction_is_snapshotted_from_guild_configuration(database: Database) -> None:
     await _seed(database, event_count=1)
     async with database.session() as session, session.begin():
         session.add(
@@ -535,6 +535,11 @@ async def test_seen_reaction_uses_live_guild_configuration(database: Database) -
         initiated_by_user_id=USER_ID,
         correlation_id="configured-seen",
     )
+    async with database.session() as session, session.begin():
+        config = await session.get(ReactionConfigModel, GUILD_ID)
+        assert config is not None
+        config.seen_emoji_id = None
+        config.seen_emoji_unicode = "❌"
     await engine.publish(prepared.run.id, correlation_id="configured-seen")
     assert discord.reactions == [(CHANNEL_ID, 9001, "_:778899")]
 

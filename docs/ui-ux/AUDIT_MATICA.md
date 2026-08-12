@@ -85,11 +85,22 @@ Inventár východiskového dlhu: 241 hex výskytov v monolitickom `global.css`, 
 
 ## UX6 – Redakčný pult a Discord náhľad
 
-Nasleduje po uzavretom UX5.
+| ID     | Etapa | Oblasť a úloha                                             | Štandard       | Závažnosť | Dodanie | Stav súladu | Dôkaz                         | Dopad                                                                | Cieľové správanie                                                        | Akceptácia                                                     | Vynútenie | Plánovaná etapa | Stav opravy |
+| ------ | ----- | ---------------------------------------------------------- | -------------- | --------- | ------- | ----------- | ----------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------- | --------- | --------------- | ----------- |
+| UX6-01 | UX6   | Discord náhľad domýšľal seen reakciu                       | 3.4, 13.2      | P0        | BLOKUJE | opravené    | backend integrácia + browser 43 | náhľad mohol ukázať ✅, hoci sa mala odoslať iná alebo žiadna reakcia | reaction emoji je súčasť nemenného snapshotu pre preview aj skutočný send | custom aj vypnutá reakcia sú pred odoslaním zobrazené presne     | test      | UX6             | hotovo      |
+| UX6-02 | UX6   | chyba vlastného obsahu sa tvárila ako nula                  | 3.5, 11.5, 15  | P0        | BLOKUJE | opravené    | browser 42                    | zlyhané načítanie mohlo predstierať, že manuálne a INFO položky nie sú | neznámy počet je `—`, pracovisko je označené ako neúplné a má lokálny retry | 503 nikdy nezobrazí falošnú nulu; retry obnoví pravdivé počty    | test      | UX6             | hotovo      |
+| UX6-03 | UX6   | zatvorenie editora mohlo zahodiť rozpracovanú prácu        | 3.5, 10.9, 15  | P0        | BLOKUJE | opravené    | browser 44                    | Escape, klik mimo alebo reload mohli bez súhlasu stratiť úpravu        | dirty dialóg chráni odchod a session draft prežije nečakaný reload        | pokračovanie aj reload zachovajú hodnoty; vedomé zahodenie vyčistí draft | test      | UX6             | hotovo      |
+| UX6-04 | UX6   | konflikt načítal novší záznam za cenu straty draftu        | 3.5, 11.4, 16  | P0        | BLOKUJE | opravené    | editor flow + typová kontrola | recovery po 409 mohol zavrieť editor a odstrániť vlastné hodnoty       | obnoví sa iba očakávaná verzia; rozpracované polia zostanú nedotknuté    | hlásenie výslovne potvrdí zachovanie hodnôt a druhý save je možný | test      | UX6             | hotovo      |
+| UX6-05 | UX6   | súbežné uloženie alebo odstránenie nemalo úplný UI guard   | 3.6, 10.2      | P0        | BLOKUJE | opravené    | ref guard + browser regresia  | dvojklik mohol vytvoriť viac mutation requestov                         | synchrónny guard vznikne pred prvým awaitom a busy stav vysvetlí čakanie | opakované potvrdenie nevytvorí druhý request                 | test      | UX6             | hotovo      |
+| UX6-06 | UX6   | redakčný zoznam nemal explicitné spoločné chronologické radenie | 3.3, 7.1   | P1        | BACKLOG | opravené    | source audit + browser 05/15  | položky rôznych zdrojov mohli pôsobiť náhodne                           | jeden stabilný sort používa čas/dátum a až potom názov a identitu          | viacdenná manuálna udalosť ostáva čitateľná a poradie stabilné   | test      | UX6             | hotovo      |
+| UX6-07 | UX6   | INFO upload nemal samostatný browser dôkaz                 | 10.3, 11       | P1        | BACKLOG | opravené    | browser 45                    | regresia uploadu či náhrady obrázka by sa zistila až pri ručnej práci   | upload prebehne priamo v modale, ukáže spracovaný náhľad a zachová formulár | jediný upload request a uložený výsledný `image_url`              | test      | UX6             | hotovo      |
+| UX6-08 | UX6   | editor mohol presiahnuť nízky notebookový viewport         | 7.2, 12.2      | P0        | BLOKUJE | opravené    | browser 46 + vizuálny render  | spodná akcia mohla byť neprístupná bez zrozumiteľného vnútorného scrollu | centrovaný modal je najviac vysoký ako viewport a jeho obsah sa posúva vnútri | akcia je dostupná pri 1440 × 650 aj na mobile                    | test      | UX6             | hotovo      |
+
+Vizuálny baseline 1920 px a mobil potvrdil jedno pracovisko s tromi zdrojmi a súčasne viditeľným Discord výsledkom; finálna regresia zahŕňa 102 desktop/mobile browser scenárov. Globálna ochranná lehota publikovania zostáva samostatným blokátorom `UX5-07`, pretože patrí do vykonávacieho toku, nie do editora obsahu.
 
 ## UX7 – Kanály
 
-Čaká na UX6.
+Nasleduje po uzavretom UX6.
 
 ## UX8 – História publikácií a Audit
 

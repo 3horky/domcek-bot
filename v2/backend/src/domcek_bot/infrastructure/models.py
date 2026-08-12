@@ -534,6 +534,7 @@ class PublicationMessageModel(Base):
     embeds: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
     allowed_mentions: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     seen_target: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reaction_emoji: Mapped[str | None] = mapped_column(String(200))
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     reaction_error: Mapped[str | None] = mapped_column(Text)
     last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

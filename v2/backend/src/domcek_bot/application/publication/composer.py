@@ -172,6 +172,7 @@ def compose_publication(snapshot: PublicationComposeSnapshot) -> PublicationDraf
         everyone_enabled=True,
         items=public_items,
         palette_month=slot.local_datetime.month,
+        seen_reaction_emoji=snapshot.seen_reaction_emoji,
     )
     return PublicationDraft(
         composer_version=COMPOSER_VERSION,
@@ -215,6 +216,7 @@ def plan_discord_messages(
     everyone_enabled: bool,
     items: tuple[PublicationDraftItem, ...],
     palette_month: int = 1,
+    seen_reaction_emoji: str | None = "✅",
 ) -> tuple[DiscordMessagePlan, ...]:
     first_content = f"@everyone\n{intro_text}" if everyone_enabled else intro_text
     if len(first_content) > DISCORD_CONTENT_LIMIT:
@@ -268,6 +270,7 @@ def plan_discord_messages(
                 embeds=tuple(batch),
                 allowed_mentions=("everyone",) if position == 0 and everyone_enabled else (),
                 seen_target=position == len(batches) - 1,
+                reaction_emoji=seen_reaction_emoji if position == len(batches) - 1 else None,
             )
         )
     return tuple(messages)

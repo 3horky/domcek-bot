@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { ImagePlus, UploadCloud, X } from 'lucide-react'
 
 import {
@@ -132,17 +132,45 @@ export function InfoEditor({
   onSaved: () => Promise<void>
 }) {
   const today = new Date().toISOString().slice(0, 10)
-  const [title, setTitle] = useState(record?.title ?? '')
-  const [description, setDescription] = useState(record?.description ?? '')
-  const [validFrom, setValidFrom] = useState(record?.valid_from ?? today)
-  const [validUntil, setValidUntil] = useState(record?.valid_until ?? today)
-  const [linkUrl, setLinkUrl] = useState(record?.link_url ?? '')
-  const [imageUrl, setImageUrl] = useState(record?.image_url ?? '')
+  const draftKey = `carlo:info-announcement:${record?.id ?? 'new'}`
+  const initial = useMemo(
+    () => ({
+      title: record?.title ?? '',
+      description: record?.description ?? '',
+      validFrom: record?.valid_from ?? today,
+      validUntil: record?.valid_until ?? today,
+      linkUrl: record?.link_url ?? '',
+      imageUrl: record?.image_url ?? '',
+      active: record?.active ?? true,
+    }),
+    [record, today],
+  )
+  const recovered = useMemo(() => readInfoDraft<typeof initial>(draftKey), [draftKey])
+  const [title, setTitle] = useState(recovered?.title ?? initial.title)
+  const [description, setDescription] = useState(recovered?.description ?? initial.description)
+  const [validFrom, setValidFrom] = useState(recovered?.validFrom ?? initial.validFrom)
+  const [validUntil, setValidUntil] = useState(recovered?.validUntil ?? initial.validUntil)
+  const [linkUrl, setLinkUrl] = useState(recovered?.linkUrl ?? initial.linkUrl)
+  const [imageUrl, setImageUrl] = useState(recovered?.imageUrl ?? initial.imageUrl)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const [active, setActive] = useState(record?.active ?? true)
+  const [active, setActive] = useState(recovered?.active ?? initial.active)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
+  const [expectedVersion, setExpectedVersion] = useState(record?.version)
+  const [discarding, setDiscarding] = useState(false)
+  const [versionNotice, setVersionNotice] = useState<string | null>(null)
+  const saveInFlight = useRef(false)
+  const values = useMemo(
+    () => ({ title, description, validFrom, validUntil, linkUrl, imageUrl, active }),
+    [active, description, imageUrl, linkUrl, title, validFrom, validUntil],
+  )
+  const dirty = JSON.stringify(values) !== JSON.stringify(initial)
+
+  useEffect(() => {
+    if (dirty) window.sessionStorage.setItem(draftKey, JSON.stringify(values))
+    else window.sessionStorage.removeItem(draftKey)
+  }, [dirty, draftKey, values])
 
   async function chooseImage(file: File | undefined) {
     if (!file) return
@@ -162,8 +190,11 @@ export function InfoEditor({
 
   async function submit(event: FormEvent) {
     event.preventDefault()
+    if (saveInFlight.current) return
+    saveInFlight.current = true
     setBusy(true)
     setError(null)
+    setVersionNotice(null)
     try {
       await saveInfoAnnouncement(
         {
@@ -174,18 +205,45 @@ export function InfoEditor({
           link_url: optional(linkUrl),
           image_url: optional(imageUrl),
           active,
-          ...(record ? { expected_version: record.version } : {}),
+          ...(expectedVersion ? { expected_version: expectedVersion } : {}),
         },
         record?.id,
       )
+      window.sessionStorage.removeItem(draftKey)
       await onSaved()
     } catch (caught) {
       setError(
         caught instanceof ApiError ? caught : new ApiError('Oznam sa nepodarilo uložiť.', 0, null),
       )
     } finally {
+      saveInFlight.current = false
       setBusy(false)
     }
+  }
+
+  async function refreshVersion() {
+    if (!record) return
+    try {
+      const latest = (await getInfoAnnouncements()).find((item) => item.id === record.id)
+      if (!latest) {
+        setVersionNotice('INFO oznam už neexistuje. Rozpracované hodnoty zostali zachované.')
+        return
+      }
+      setExpectedVersion(latest.version)
+      setError(null)
+      setVersionNotice(
+        'Načítaná je novšia verzia záznamu. Vaše rozpracované hodnoty zostali zachované.',
+      )
+    } catch (caught) {
+      setVersionNotice(
+        caught instanceof ApiError ? caught.message : 'Novšiu verziu sa nepodarilo načítať.',
+      )
+    }
+  }
+
+  function requestClose() {
+    if (dirty) setDiscarding(true)
+    else onClose()
   }
 
   return (
@@ -194,7 +252,7 @@ export function InfoEditor({
       title={record?.title ?? 'Pridať INFO oznam'}
       subtitle="Platnosť zahŕňa aj posledný zvolený deň."
       busy={busy || uploading}
-      onClose={onClose}
+      onClose={requestClose}
     >
       <form className="drawer-form" onSubmit={submit}>
         <label className="form-field">
@@ -324,18 +382,23 @@ export function InfoEditor({
               <button
                 className="secondary-button alert-action"
                 type="button"
-                onClick={() => void onSaved()}
+                onClick={() => void refreshVersion()}
               >
-                Načítať aktuálny záznam
+                Načítať novšiu verziu a ponechať moje hodnoty
               </button>
             )}
           </div>
+        )}
+        {versionNotice && (
+          <p className="form-notice" role="status">
+            {versionNotice}
+          </p>
         )}
         <footer className="drawer-actions">
           <button
             className="secondary-button"
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             disabled={busy || uploading}
           >
             Zrušiť
@@ -345,8 +408,32 @@ export function InfoEditor({
           </button>
         </footer>
       </form>
+      {discarding && (
+        <ConfirmDialog
+          title="Zahodiť rozpracovaný INFO oznam?"
+          detail="Neuložené hodnoty sa odstránia. Uložený oznam zostane bez zmeny."
+          busy={false}
+          cancelLabel="Pokračovať v úprave"
+          confirmLabel="Zahodiť zmeny"
+          onCancel={() => setDiscarding(false)}
+          onConfirm={() => {
+            window.sessionStorage.removeItem(draftKey)
+            setDiscarding(false)
+            onClose()
+          }}
+        />
+      )}
     </ContentDialog>
   )
+}
+
+function readInfoDraft<T>(key: string): T | null {
+  try {
+    const value = window.sessionStorage.getItem(key)
+    return value ? (JSON.parse(value) as T) : null
+  } catch {
+    return null
+  }
 }
 
 function ContentState({ text, retry }: { text: string; retry?: () => void }) {

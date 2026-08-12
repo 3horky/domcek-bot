@@ -94,6 +94,7 @@ const draft = {
       ],
       allowed_mentions: ['everyone'],
       seen_target: true,
+      reaction_emoji: '✅',
     },
   ],
 }
@@ -244,6 +245,7 @@ describe('authenticated application shell', () => {
                   embeds: [],
                   allowed_mentions: ['everyone'],
                   seen_target: true,
+                  reaction_emoji: '✅',
                   attempt_count: 1,
                   error_detail: 'Neistý výsledok',
                   reaction_error: null,

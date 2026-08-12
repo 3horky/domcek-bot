@@ -62,6 +62,8 @@ export function ConfirmDialog({
   onCancel,
   onConfirm,
   error,
+  confirmLabel = 'Odstrániť',
+  cancelLabel = 'Ponechať',
 }: {
   title: string
   detail: string
@@ -69,6 +71,8 @@ export function ConfirmDialog({
   onCancel: () => void
   onConfirm: () => void
   error?: string | null
+  confirmLabel?: string
+  cancelLabel?: string
 }) {
   return (
     <AlertDialog
@@ -91,9 +95,9 @@ export function ConfirmDialog({
           </p>
         )}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy}>Ponechať</AlertDialogCancel>
+          <AlertDialogCancel disabled={busy}>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={onConfirm} disabled={busy}>
-            {busy ? 'Odstraňujem…' : 'Odstrániť'}
+            {busy ? 'Pracujem…' : confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -230,6 +230,7 @@ class PublicationMessageRecord:
     embeds: tuple[dict[str, Any], ...]
     allowed_mentions: tuple[str, ...]
     seen_target: bool
+    reaction_emoji: str | None = None
     state: PublicationMessageState = PublicationMessageState.PENDING
     discord_message_id: int | None = None
     attempt_count: int = 0

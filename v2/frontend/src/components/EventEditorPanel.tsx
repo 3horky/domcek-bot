@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   Dialog,
@@ -7,12 +7,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { ConfirmDialog } from './ContentDrawer'
 
 import {
   ApiError,
   type DescriptionState,
   type DraftItem,
   type InclusionDecision,
+  getPublicationDraft,
   updateEventOverride,
   updateSeriesOverride,
 } from '../api/client'
@@ -24,7 +26,6 @@ interface EventEditorPanelProps {
   canForceInclusion: boolean
   onClose: () => void
   onSaved: () => Promise<void> | void
-  onConflictReload: () => Promise<void> | void
 }
 
 export function EventEditorPanel({
@@ -32,17 +33,48 @@ export function EventEditorPanel({
   canForceInclusion,
   onClose,
   onSaved,
-  onConflictReload,
 }: EventEditorPanelProps) {
-  const [scope, setScope] = useState<EditScope>('instance')
-  const [publicTitle, setPublicTitle] = useState(item.instance_public_title ?? '')
-  const [descriptionState, setDescriptionState] = useState<DescriptionState>(() =>
-    initialDescriptionState(item),
+  const draftKey = `carlo:calendar-event:${item.source_id}`
+
+  const initial = useMemo(
+    () => ({
+      scope: 'instance' as EditScope,
+      publicTitle: item.instance_public_title ?? '',
+      descriptionState: initialDescriptionState(item),
+      publicDescription: initialDescription(item),
+      inclusion: item.inclusion_decision,
+    }),
+    [item],
   )
-  const [publicDescription, setPublicDescription] = useState(() => initialDescription(item))
-  const [inclusion, setInclusion] = useState<InclusionDecision>(item.inclusion_decision)
+  const recovered = useMemo(() => readEventDraft<typeof initial>(draftKey), [draftKey])
+  const [scope, setScope] = useState<EditScope>(recovered?.scope ?? initial.scope)
+  const [publicTitle, setPublicTitle] = useState(recovered?.publicTitle ?? initial.publicTitle)
+  const [descriptionState, setDescriptionState] = useState<DescriptionState>(
+    recovered?.descriptionState ?? initial.descriptionState,
+  )
+  const [publicDescription, setPublicDescription] = useState(
+    recovered?.publicDescription ?? initial.publicDescription,
+  )
+  const [inclusion, setInclusion] = useState<InclusionDecision>(
+    recovered?.inclusion ?? initial.inclusion,
+  )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
+  const [instanceVersion, setInstanceVersion] = useState(item.instance_override_version)
+  const [seriesVersion, setSeriesVersion] = useState(item.series_override_version)
+  const [discarding, setDiscarding] = useState(false)
+  const [versionNotice, setVersionNotice] = useState<string | null>(null)
+  const saveInFlight = useRef(false)
+  const values = useMemo(
+    () => ({ scope, publicTitle, descriptionState, publicDescription, inclusion }),
+    [descriptionState, inclusion, publicDescription, publicTitle, scope],
+  )
+  const dirty = JSON.stringify(values) !== JSON.stringify(initial)
+
+  useEffect(() => {
+    if (dirty) window.sessionStorage.setItem(draftKey, JSON.stringify(values))
+    else window.sessionStorage.removeItem(draftKey)
+  }, [dirty, draftKey, values])
 
   function changeScope(nextScope: EditScope) {
     setScope(nextScope)
@@ -60,11 +92,13 @@ export function EventEditorPanel({
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (saveInFlight.current) return
+    saveInFlight.current = true
     setSaving(true)
     setError(null)
+    setVersionNotice(null)
     const body = {
-      expected_version:
-        scope === 'series' ? item.series_override_version : item.instance_override_version,
+      expected_version: scope === 'series' ? seriesVersion : instanceVersion,
       public_title: cleanOptional(publicTitle),
       description_state: descriptionState,
       public_description: descriptionState === 'custom' ? cleanOptional(publicDescription) : null,
@@ -73,14 +107,42 @@ export function EventEditorPanel({
     try {
       if (scope === 'series') await updateSeriesOverride(item.source_id, body)
       else await updateEventOverride(item.source_id, body)
+      window.sessionStorage.removeItem(draftKey)
       await onSaved()
     } catch (caught) {
       setError(
         caught instanceof ApiError ? caught : new ApiError('Úpravu sa nepodarilo uložiť.', 0, null),
       )
     } finally {
+      saveInFlight.current = false
       setSaving(false)
     }
+  }
+
+  async function refreshVersion() {
+    try {
+      const latestDraft = await getPublicationDraft()
+      const latest = latestDraft.editor_events.find((entry) => entry.source_id === item.source_id)
+      if (!latest) {
+        setVersionNotice('Udalosť už nie je v najbližšom období. Vaše hodnoty zostali zachované.')
+        return
+      }
+      setInstanceVersion(latest.instance_override_version)
+      setSeriesVersion(latest.series_override_version)
+      setError(null)
+      setVersionNotice(
+        'Načítaná je novšia verzia udalosti. Vaše rozpracované hodnoty zostali zachované.',
+      )
+    } catch (caught) {
+      setVersionNotice(
+        caught instanceof ApiError ? caught.message : 'Novšiu verziu sa nepodarilo načítať.',
+      )
+    }
+  }
+
+  function requestClose() {
+    if (dirty) setDiscarding(true)
+    else onClose()
   }
 
   return (
@@ -88,7 +150,7 @@ export function EventEditorPanel({
       open
       disablePointerDismissal={saving}
       onOpenChange={(open) => {
-        if (!open && !saving) onClose()
+        if (!open && !saving) requestClose()
       }}
     >
       <DialogContent className="content-dialog event-editor-dialog" showCloseButton={!saving}>
@@ -235,17 +297,27 @@ export function EventEditorPanel({
                 <button
                   className="secondary-button alert-action"
                   type="button"
-                  onClick={() => void onConflictReload()}
+                  onClick={() => void refreshVersion()}
                 >
-                  Načítať aktuálnu verziu
+                  Načítať novšiu verziu a ponechať moje hodnoty
                 </button>
               )}
               {error.correlationId && <small>Referenčné ID: {error.correlationId}</small>}
             </div>
           )}
+          {versionNotice && (
+            <p className="form-notice" role="status">
+              {versionNotice}
+            </p>
+          )}
 
           <footer className="drawer-actions">
-            <button className="secondary-button" type="button" onClick={onClose} disabled={saving}>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={requestClose}
+              disabled={saving}
+            >
               Zrušiť
             </button>
             <button type="submit" disabled={saving}>
@@ -253,6 +325,21 @@ export function EventEditorPanel({
             </button>
           </footer>
         </form>
+        {discarding && (
+          <ConfirmDialog
+            title="Zahodiť redakčnú úpravu?"
+            detail="Neuložený titulok, popis a zaradenie sa odstránia. Kalendárová udalosť zostane bez zmeny."
+            busy={false}
+            cancelLabel="Pokračovať v úprave"
+            confirmLabel="Zahodiť zmeny"
+            onCancel={() => setDiscarding(false)}
+            onConfirm={() => {
+              window.sessionStorage.removeItem(draftKey)
+              setDiscarding(false)
+              onClose()
+            }}
+          />
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -261,6 +348,16 @@ export function EventEditorPanel({
 function cleanOptional(value: string): string | null {
   const clean = value.trim()
   return clean.length > 0 ? clean : null
+}
+
+function readEventDraft<T>(key: string): T | null {
+  try {
+    const value = window.sessionStorage.getItem(key)
+    return value ? (JSON.parse(value) as T) : null
+  } catch {
+    window.sessionStorage.removeItem(key)
+    return null
+  }
 }
 
 function initialDescriptionState(item: DraftItem): DescriptionState {

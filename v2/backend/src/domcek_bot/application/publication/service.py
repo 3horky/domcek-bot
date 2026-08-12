@@ -22,8 +22,9 @@ class PublicationConfigurationNotFound(LookupError):
 class PublicationDraftService:
     """Load one consistent database snapshot and compose the next publication."""
 
-    def __init__(self, unit_of_work: UnitOfWork) -> None:
+    def __init__(self, unit_of_work: UnitOfWork, *, default_seen_emoji: str = "✅") -> None:
         self._unit_of_work = unit_of_work
+        self._default_seen_emoji = default_seen_emoji
 
     async def compose_next(
         self,
@@ -59,6 +60,7 @@ class PublicationDraftService:
             series = await repositories.event_series_overrides.list_for_sources(source_ids)
             manual = await repositories.manual_events.list_for_guild(guild_id)
             info = await repositories.info_announcements.list_for_guild(guild_id)
+            reactions = await repositories.reaction_configs.get(guild_id)
             completed = await repositories.publication_runs.completed_slot_keys(guild_id)
 
         return PublicationComposeSnapshot(
@@ -118,4 +120,18 @@ class PublicationDraftService:
             ),
             completed_slot_keys=completed,
             intro_text=intro_text,
+            seen_reaction_emoji=_seen_reaction_emoji(
+                reactions, default_emoji=self._default_seen_emoji
+            ),
         )
+
+
+def _seen_reaction_emoji(config: object | None, *, default_emoji: str) -> str | None:
+    if config is None:
+        return default_emoji
+    if not getattr(config, "seen_enabled", False):
+        return None
+    emoji_id = getattr(config, "seen_emoji_id", None)
+    if emoji_id is not None:
+        return f"_:{emoji_id}"
+    return getattr(config, "seen_emoji_unicode", None) or default_emoji

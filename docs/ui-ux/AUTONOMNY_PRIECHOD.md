@@ -9,9 +9,9 @@ Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny post
 | UX2   | Roly                               | hotovo    | 15 unit, 68 browser, 2 full-stack  | `0d7e1ba`      |
 | UX3   | Nastavenia                         | hotovo    | 15 unit, 80 browser, 2 full-stack  | `a9dcbbe`      |
 | UX4   | aplikačný rámec a spoločné stavy   | hotovo    | 15 unit, 86 browser, 2 full-stack  | `be701aa`      |
-| UX5   | Prehľad                            | hotovo    | 193 backend, 15 unit, 92 browser   | čaká na commit |
-| UX6   | Redakčný pult a Discord náhľad     | nasleduje | baseline sa pripraví               | –              |
-| UX7   | Kanály                             | čaká      | –                                  | –              |
+| UX5   | Prehľad                            | hotovo    | 193 backend, 15 unit, 92 browser   | `2a45873`      |
+| UX6   | Redakčný pult a Discord náhľad     | hotovo    | 194 backend, 15 unit, 102 browser  | čaká na commit |
+| UX7   | Kanály                             | nasleduje | regresný audit sa pripraví         | –              |
 | UX8   | História publikácií a Audit        | čaká      | –                                  | –              |
 | UX9   | Stav systému a systémové obrazovky | čaká      | –                                  | –              |
 | UX10  | finálna konzistencia a regresia    | čaká      | –                                  | –              |
@@ -26,6 +26,6 @@ Tento súbor je pracovný index nočného priechodu UX0–UX10. Normatívny post
 
 ## Posledný checkpoint
 
-- **Aktuálna etapa:** UX5 lokálne uzavretá; nasleduje UX6
-- **Najbližší krok:** commit/push zelenej UX5 brány, potom audit Redakčného pultu a Discord náhľadu
+- **Aktuálna etapa:** UX6 lokálne uzavretá; nasleduje UX7
+- **Najbližší krok:** commit/push zelenej UX6 brány, potom regresný audit Kanálov
 - **Okamžitý blokátor:** žiadny

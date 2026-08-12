@@ -74,6 +74,10 @@ export interface DraftItem {
   day_name: string | null
   day_emoji: string | null
   is_all_day: boolean | null
+  starts_at?: string | null
+  ends_at?: string | null
+  starts_on?: string | null
+  ends_on?: string | null
   source_title: string | null
   source_description: string | null
   is_recurring: boolean
@@ -183,6 +187,7 @@ export interface DiscordMessagePlan {
   embeds: DiscordEmbedPlan[]
   allowed_mentions: string[]
   seen_target: boolean
+  reaction_emoji: string | null
 }
 
 export interface PublicationDraft {

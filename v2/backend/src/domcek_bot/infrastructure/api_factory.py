@@ -64,7 +64,9 @@ def create_runtime_app() -> FastAPI:
     if guild_id is None:
         raise RuntimeError("validated API settings have no Discord guild ID")
     auth = AuthService(unit_of_work, discord, sessions, guild_id=guild_id)
-    draft_service = PublicationDraftService(unit_of_work)
+    draft_service = PublicationDraftService(
+        unit_of_work, default_seen_emoji=settings.publication_seen_emoji
+    )
     intro_key = settings.optional_intro_generator_key()
     intro_generator = (
         GeminiIntroGenerator(

@@ -660,6 +660,7 @@ def test_message_plan_respects_limits_everyone_nonce_and_seen_target() -> None:
     assert all(len(message.nonce) == 25 for message in messages)
     assert len({message.part_key for message in messages}) == len(messages)
     assert [message.seen_target for message in messages] == [False, False, True]
+    assert [message.reaction_emoji for message in messages] == [None, None, "✅"]
     assert all(len(message.embeds) <= 10 for message in messages)
     assert all(message.embed_character_count <= 6000 for message in messages)
     assert all(len(message.content or "") <= DISCORD_CONTENT_LIMIT for message in messages)
@@ -670,6 +671,13 @@ def test_composer_enforces_everyone_even_for_legacy_disabled_record() -> None:
 
     assert sum((message.content or "").count("@everyone") for message in draft.messages) == 1
     assert draft.messages[0].allowed_mentions == ("everyone",)
+
+
+def test_preview_omits_disabled_seen_reaction() -> None:
+    draft = compose_publication(replace(_snapshot(), seen_reaction_emoji=None))
+
+    assert draft.messages[-1].seen_target
+    assert draft.messages[-1].reaction_emoji is None
 
 
 def test_message_plan_splits_on_total_characters_and_rejects_item_limit() -> None:
@@ -720,5 +728,5 @@ def test_fixed_fixture_has_stable_canonical_snapshot() -> None:
 
     assert first == second
     assert hashlib.sha256(first.encode()).hexdigest() == (
-        "9f43c8dc6aba1a975130be0ee42323fbed932a7ca721420baf600c8d46e0bf06"
+        "7d2410453348b59b1c734c8750fc1f6cb5b6b5940aee8e81988f8449cd7984ef"
     )

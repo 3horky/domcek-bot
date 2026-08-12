@@ -23,6 +23,7 @@ interface MockState {
   settingsSaveFailureStatus: number | null
   memberSearchFailureStatus: number | null
   roleMutationFailure: 'last_admin' | 'discord_unavailable' | null
+  contentFailureStatus: number | null
 }
 
 const normalEvent = {
@@ -101,6 +102,7 @@ async function mockCarlo(page: Page, role: Role = 'admin'): Promise<MockState> {
     settingsSaveFailureStatus: null,
     memberSearchFailureStatus: null,
     roleMutationFailure: null,
+    contentFailureStatus: null,
   }
   await page
     .context()
@@ -115,6 +117,12 @@ async function mockCarlo(page: Page, role: Role = 'admin'): Promise<MockState> {
     route.fulfill({
       contentType: 'image/svg+xml',
       body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" rx="32" fill="#e4f1e9"/><circle cx="32" cy="24" r="11" fill="#2f7552"/><path d="M13 56c3-14 12-20 19-20s16 6 19 20" fill="#2f7552"/></svg>',
+    }),
+  )
+  await page.route('**/media/info/e2e.webp', (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="#d5f5e3"/></svg>',
     }),
   )
   await page.route('**/api/v1/**', async (route) => handleApi(route, state))
@@ -178,7 +186,14 @@ async function handleApi(route: Route, state: MockState) {
         : null,
     })
   }
-  if (path === '/api/v1/manual-events' && method === 'GET') return json(state.manualEvents)
+  if (path === '/api/v1/manual-events' && method === 'GET') {
+    if (state.contentFailureStatus)
+      return json(
+        { detail: 'Manuálne udalosti sa nepodarilo načítať.' },
+        state.contentFailureStatus,
+      )
+    return json(state.manualEvents)
+  }
   if (path === '/api/v1/manual-events' && method === 'POST') {
     const values = body as Record<string, unknown>
     const record = {
@@ -200,8 +215,11 @@ async function handleApi(route: Route, state: MockState) {
     state.manualEvents = [record]
     return json(record, 201)
   }
-  if (path === '/api/v1/info-announcements' && method === 'GET')
+  if (path === '/api/v1/info-announcements' && method === 'GET') {
+    if (state.contentFailureStatus)
+      return json({ detail: 'INFO oznamy sa nepodarilo načítať.' }, state.contentFailureStatus)
     return json(state.infoAnnouncements)
+  }
   if (path === '/api/v1/info-announcements' && method === 'POST') {
     const values = body as Record<string, unknown>
     const record = {
@@ -497,6 +515,11 @@ function draft(state: MockState) {
         })),
         allowed_mentions: ['everyone'],
         seen_target: true,
+        reaction_emoji: state.reactions.seen_enabled
+          ? state.reactions.seen_emoji_id
+            ? `_:` + String(state.reactions.seen_emoji_id)
+            : String(state.reactions.seen_emoji_unicode ?? '✅')
+          : null,
       },
     ],
   }
@@ -1514,4 +1537,107 @@ test('41 neúplný prevádzkový stav neprikrášli nuly a dá sa obnoviť', asy
   await expect(warning).toBeHidden()
   await expect(page.getByText('Funguje bez kalendára')).toBeVisible()
   await expect(page.getByText('Žiadna')).toBeVisible()
+})
+
+test('42 Redakčný pult neprikrášli zlyhané zdroje nulou', async ({ page }) => {
+  const state = await mockCarlo(page, 'team_mod')
+  state.contentFailureStatus = 503
+  await page.goto('/oznamy')
+
+  const warning = page.getByRole('alert').filter({ hasText: 'Vlastný obsah nie je úplne načítaný' })
+  await expect(warning).toContainText(/Počty manuálnych udalostí a INFO oznamov/)
+  await expect(page.getByRole('button', { name: /Manuálne.*Počet nie je známy/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /INFO.*Počet nie je známy/ })).toBeVisible()
+  await expect(page.getByText('Neúplné údaje')).toBeVisible()
+
+  state.contentFailureStatus = null
+  await warning.getByRole('button', { name: 'Skúsiť znova' }).click()
+  await expect(warning).toBeHidden()
+  await expect(page.getByRole('button', { name: /Manuálne.*0/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /INFO.*0/ })).toBeVisible()
+})
+
+test('43 Discord náhľad ukáže presne nastavenú seen reakciu alebo žiadnu', async ({ page }) => {
+  const state = await mockCarlo(page)
+  state.reactions = {
+    ...state.reactions,
+    seen_emoji_id: '990',
+    seen_emoji_unicode: null,
+  }
+  await page.goto('/oznamy')
+  const preview = page.getByLabel('Náhľad správ v Discord kanáli oznamy')
+  await expect(preview.getByLabel('Na túto správu Carlo pridá seen reakciu')).toBeVisible()
+  await expect(preview.locator('.discord-reaction-emoji')).toHaveAttribute(
+    'src',
+    /cdn\.discordapp\.com\/emojis\/990\.webp/,
+  )
+  await expect(preview).not.toContainText('✅')
+
+  state.reactions = { ...state.reactions, seen_enabled: false }
+  await page.reload()
+  await expect(preview.locator('.discord-reactions')).toHaveCount(0)
+})
+
+test('44 rozpracovaný oznam sa bez súhlasu nestratí ani po obnovení stránky', async ({ page }) => {
+  await mockCarlo(page, 'team_mod')
+  await page.goto('/oznamy')
+  const opener = page.getByRole('button', { name: 'Manuálnu udalosť' })
+  await opener.click()
+  await page.getByLabel('Názov').fill('Rozpracovaný tábor')
+  await page.keyboard.press('Escape')
+
+  const discard = page.getByRole('alertdialog', { name: 'Zahodiť rozpracovanú udalosť?' })
+  await expect(discard).toBeVisible()
+  await discard.getByRole('button', { name: 'Pokračovať v úprave' }).click()
+  await expect(page.getByLabel('Názov')).toHaveValue('Rozpracovaný tábor')
+
+  await page.reload()
+  await opener.click()
+  await expect(page.getByLabel('Názov')).toHaveValue('Rozpracovaný tábor')
+  await page.keyboard.press('Escape')
+  await page
+    .getByRole('alertdialog', { name: 'Zahodiť rozpracovanú udalosť?' })
+    .getByRole('button', { name: 'Zahodiť zmeny' })
+    .click()
+  await expect(opener).toBeFocused()
+})
+
+test('45 INFO obrázok sa nahrá priamo v editore a formulár ostane použiteľný', async ({
+  page,
+}) => {
+  const state = await mockCarlo(page, 'team_mod')
+  await page.goto('/oznamy')
+  await page.getByRole('button', { name: 'INFO oznam' }).click()
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'oznam.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    ),
+  })
+  await expect(page.getByAltText('Náhľad obrázka INFO oznamu')).toHaveAttribute(
+    'src',
+    '/media/info/e2e.webp',
+  )
+  await page.getByLabel('Názov').fill('INFO s obrázkom')
+  await page.getByLabel('Popis').fill('Obrázok je súčasťou výsledku.')
+  await page.getByRole('button', { name: 'Uložiť oznam' }).dblclick()
+  await expect(page.getByText('INFO s obrázkom').first()).toBeVisible()
+  expect(state.calls.filter((call) => call.path === '/api/v1/uploads/info-images')).toHaveLength(1)
+  expect(state.infoAnnouncements[0]?.image_url).toBe('/media/info/e2e.webp')
+})
+
+test('46 editor zostane celý dostupný aj na nízkom notebookovom viewporte', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 650 })
+  await mockCarlo(page, 'team_mod')
+  await page.goto('/oznamy')
+  await page.getByRole('button', { name: 'INFO oznam' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Pridať INFO oznam' })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: 'Uložiť oznam' }).scrollIntoViewIfNeeded()
+  await expect(dialog.getByRole('button', { name: 'Uložiť oznam' })).toBeVisible()
+  const box = await dialog.boundingBox()
+  expect(box).not.toBeNull()
+  expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(650)
 })

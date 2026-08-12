@@ -17,7 +17,7 @@ from domcek_bot.application.records import (
 )
 from domcek_bot.domain.enums import DescriptionState, InclusionDecision
 
-COMPOSER_VERSION = "e4-v2"
+COMPOSER_VERSION = "e4-v3"
 
 
 class DraftItemKind(StrEnum):
@@ -105,6 +105,7 @@ class PublicationComposeSnapshot:
     info_announcements: tuple[InfoAnnouncementInput, ...] = ()
     completed_slot_keys: frozenset[str] = frozenset()
     intro_text: str = "Ahojte, prinášame prehľad udalostí na najbližšie dva týždne."
+    seen_reaction_emoji: str | None = "✅"
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +176,7 @@ class DiscordMessagePlan:
     embeds: tuple[DiscordEmbedPlan, ...]
     allowed_mentions: tuple[str, ...]
     seen_target: bool
+    reaction_emoji: str | None
 
     @property
     def embed_character_count(self) -> int:

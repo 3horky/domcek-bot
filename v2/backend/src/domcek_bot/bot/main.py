@@ -672,7 +672,9 @@ class CarloClient(discord.Client):
                 model=settings.intro_generator_model,
                 timeout_seconds=settings.intro_generator_timeout_seconds,
             )
-        draft_service = PublicationDraftService(unit_of_work)
+        draft_service = PublicationDraftService(
+            unit_of_work, default_seen_emoji=settings.publication_seen_emoji
+        )
         alert_transport = DiscordPyModeratorAlertTransport(self, settings.frontend_base_url)
         publication_alerts = ConfiguredModeratorAlerts(
             unit_of_work, alert_transport, AlertCategory.PUBLICATION

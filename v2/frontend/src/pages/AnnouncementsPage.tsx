@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   CalendarDays,
   CalendarPlus,
@@ -25,6 +25,8 @@ import { useAuth } from '../auth/context'
 import { ConfirmDialog } from '../components/ContentDrawer'
 import { DiscordPreview } from '../components/DiscordPreview'
 import { EventEditorPanel } from '../components/EventEditorPanel'
+import { LoadErrorState, LoadingState } from '../components/AsyncState'
+import { Button } from '../components/ui/button'
 import { useApiList } from '../hooks/useApiList'
 import { usePublicationDraft } from '../hooks/usePublicationDraft'
 import { InfoEditor } from './InfoAnnouncementsPage'
@@ -38,6 +40,7 @@ interface WorkspaceEntry {
   title: string
   description: string | null
   schedule: string
+  sortKey: string
   included: boolean
   calendar?: DraftItem
   manual?: ManualEventRecord
@@ -74,6 +77,7 @@ export function AnnouncementsPage() {
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [savedNotice, setSavedNotice] = useState(false)
+  const deleteInFlight = useRef(false)
 
   const activeManual = useMemo(
     () => manual.items.filter((item) => !item.deleted_at),
@@ -90,27 +94,32 @@ export function AnnouncementsPage() {
         activeInfo.find((record) => record.id === item.source_id),
       ),
     )
-    if (filter === 'publication') return publication
-    if (filter === 'calendar') return draft.editor_events.map((item) => entryFromDraft(item))
+    if (filter === 'publication') return sortEntries(publication)
+    if (filter === 'calendar')
+      return sortEntries(draft.editor_events.map((item) => entryFromDraft(item)))
     if (filter === 'excluded') {
-      return draft.editor_events
-        .filter((item) => !item.included)
-        .map((item) => entryFromDraft(item))
+      return sortEntries(
+        draft.editor_events.filter((item) => !item.included).map((item) => entryFromDraft(item)),
+      )
     }
     if (filter === 'manual') {
-      return activeManual.map((record) =>
-        entryFromManual(
-          record,
-          draft.public_items.find(
-            (item) => item.kind === 'manual_event' && item.source_id === record.id,
+      return sortEntries(
+        activeManual.map((record) =>
+          entryFromManual(
+            record,
+            draft.public_items.find(
+              (item) => item.kind === 'manual_event' && item.source_id === record.id,
+            ),
           ),
         ),
       )
     }
-    return activeInfo.map((record) =>
-      entryFromInfo(
-        record,
-        draft.public_items.find((item) => item.kind === 'info' && item.source_id === record.id),
+    return sortEntries(
+      activeInfo.map((record) =>
+        entryFromInfo(
+          record,
+          draft.public_items.find((item) => item.kind === 'info' && item.source_id === record.id),
+        ),
       ),
     )
   }, [activeInfo, activeManual, draft, filter])
@@ -129,7 +138,8 @@ export function AnnouncementsPage() {
   }
 
   async function remove() {
-    if (!deleting) return
+    if (!deleting || deleteInFlight.current) return
+    deleteInFlight.current = true
     setDeleteBusy(true)
     setDeleteError(null)
     try {
@@ -145,21 +155,34 @@ export function AnnouncementsPage() {
         caught instanceof ApiError ? caught.message : 'Položku sa nepodarilo odstrániť.',
       )
     } finally {
+      deleteInFlight.current = false
       setDeleteBusy(false)
     }
   }
 
-  if (loading) return <EditorState title="Carlo pripravuje redakčný pult…" />
+  if (loading) return <LoadingState label="Carlo pripravuje redakčný pult…" />
   if (error) {
-    return <EditorState title="Obsah sa nepodarilo načítať" detail={error.message} retry={reload} />
+    return (
+      <LoadErrorState title="Obsah sa nepodarilo načítať" detail={error.message} onRetry={reload} />
+    )
   }
-  if (!draft) return <EditorState title="Najbližší prehľad zatiaľ nie je dostupný" retry={reload} />
+  if (!draft)
+    return (
+      <LoadErrorState
+        title="Najbližší prehľad zatiaľ nie je dostupný"
+        detail="Carlo ešte nemá z čoho zostaviť pracovný náhľad."
+        onRetry={reload}
+      />
+    )
+
+  const ownContentUnavailable =
+    canEdit && (manual.loading || info.loading || Boolean(manual.error) || Boolean(info.error))
 
   const excludedCount = draft.editor_events.filter((item) => !item.included).length
   const filterItems: Array<{
     key: DeskFilter
     label: string
-    count: number
+    count: number | null
     icon: typeof Layers3
   }> = [
     {
@@ -174,8 +197,18 @@ export function AnnouncementsPage() {
       count: draft.editor_events.length,
       icon: CalendarDays,
     },
-    { key: 'manual', label: 'Manuálne', count: activeManual.length, icon: PenLine },
-    { key: 'info', label: 'INFO', count: activeInfo.length, icon: Info },
+    {
+      key: 'manual',
+      label: 'Manuálne',
+      count: ownContentUnavailable ? null : activeManual.length,
+      icon: PenLine,
+    },
+    {
+      key: 'info',
+      label: 'INFO',
+      count: ownContentUnavailable ? null : activeInfo.length,
+      icon: Info,
+    },
     { key: 'excluded', label: 'Nezverejnia sa', count: excludedCount, icon: CircleSlash2 },
   ]
 
@@ -201,7 +234,13 @@ export function AnnouncementsPage() {
 
       {(manual.error || info.error) && canEdit && (
         <div className="desk-warning" role="alert">
-          Vlastný obsah sa nepodarilo úplne načítať. Skús načítať aktuálne údaje znova.
+          <div>
+            <strong>Vlastný obsah nie je úplne načítaný</strong>
+            <p>Počty manuálnych udalostí a INFO oznamov preto zostávajú neznáme.</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => void reloadAll()}>
+            Skúsiť znova
+          </Button>
         </div>
       )}
 
@@ -219,7 +258,9 @@ export function AnnouncementsPage() {
               >
                 <item.icon aria-hidden="true" />
                 <span>{item.label}</span>
-                <strong>{item.count}</strong>
+                <strong aria-label={item.count === null ? 'Počet nie je známy' : undefined}>
+                  {item.count ?? '—'}
+                </strong>
               </button>
             ))}
           </div>
@@ -245,7 +286,9 @@ export function AnnouncementsPage() {
               <h2 id="desk-list-title">{filterTitle(filter).title}</h2>
             </div>
             <span>
-              {entries.length} {entries.length === 1 ? 'položka' : 'položiek'}
+              {ownContentUnavailable && ['publication', 'manual', 'info'].includes(filter)
+                ? 'Neúplné údaje'
+                : `${entries.length} ${entries.length === 1 ? 'položka' : 'položiek'}`}
             </span>
           </header>
           <div className="desk-entry-list">
@@ -300,10 +343,6 @@ export function AnnouncementsPage() {
           canForceInclusion={canForceInclusion}
           onClose={() => setSelectedCalendar(null)}
           onSaved={handleSaved}
-          onConflictReload={async () => {
-            await reloadAll()
-            setSelectedCalendar(null)
-          }}
         />
       )}
       {editingManual && (
@@ -331,6 +370,7 @@ export function AnnouncementsPage() {
             setDeleting(null)
           }}
           onConfirm={() => void remove()}
+          confirmLabel="Odstrániť položku"
         />
       )}
       {savedNotice && (
@@ -472,6 +512,7 @@ function entryFromDraft(
     description: item.description,
     schedule:
       item.display_time ?? (item.kind === 'info' ? 'Platný INFO oznam' : 'Bez uvedeného času'),
+    sortKey: itemSortKey(item),
     included: item.included,
     calendar: item.kind === 'external_event' ? item : undefined,
     manual,
@@ -486,6 +527,7 @@ function entryFromManual(record: ManualEventRecord, draftItem?: DraftItem): Work
     title: record.title,
     description: record.description,
     schedule: manualSchedule(record),
+    sortKey: record.starts_on ?? record.starts_at ?? '9999-12-31',
     included: Boolean(draftItem),
     manual: record,
   }
@@ -498,6 +540,7 @@ function entryFromInfo(record: InfoAnnouncementRecord, draftItem?: DraftItem): W
     title: record.title,
     description: record.description,
     schedule: `Platí ${formatDate(record.valid_from)} – ${formatDate(record.valid_until)}`,
+    sortKey: record.valid_from,
     included: Boolean(draftItem),
     info: record,
   }
@@ -544,20 +587,14 @@ function filterTitle(filter: DeskFilter) {
   return values[filter]
 }
 
-function EditorState({
-  title,
-  detail,
-  retry,
-}: {
-  title: string
-  detail?: string
-  retry?: () => void
-}) {
-  return (
-    <section className="content-state" aria-live="polite">
-      <h1>{title}</h1>
-      {detail && <p>{detail}</p>}
-      {retry && <button onClick={retry}>Skúsiť znova</button>}
-    </section>
+function sortEntries(entries: WorkspaceEntry[]) {
+  return [...entries].sort(
+    (left, right) =>
+      left.sortKey.localeCompare(right.sortKey, 'sk') ||
+      left.title.localeCompare(right.title, 'sk'),
   )
+}
+
+function itemSortKey(item: DraftItem) {
+  return item.starts_on ?? item.starts_at ?? (item.kind === 'info' ? '0000-00-00' : '9999-12-31')
 }

@@ -118,7 +118,9 @@ async def serve() -> None:
         if intro_key is not None
         else None
     )
-    draft_service = PublicationDraftService(unit_of_work)
+    draft_service = PublicationDraftService(
+        unit_of_work, default_seen_emoji=settings.publication_seen_emoji
+    )
     shadow_publications = ShadowPublicationService(unit_of_work, draft_service)
     runtime_operations = RuntimeOperationsService(unit_of_work)
     runtime_instance_id = uuid.uuid4()

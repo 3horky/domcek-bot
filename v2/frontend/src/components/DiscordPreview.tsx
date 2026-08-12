@@ -77,12 +77,12 @@ export function DiscordPreview({ draft }: { draft: PublicationDraft }) {
                   </div>
                 )
               })}
-              {message.seen_target && (
+              {message.seen_target && message.reaction_emoji && (
                 <div
                   className="discord-reactions"
                   aria-label="Na túto správu Carlo pridá seen reakciu"
                 >
-                  <span aria-hidden="true">✓</span>
+                  <ReactionEmoji value={message.reaction_emoji} />
                   <strong>1</strong>
                 </div>
               )}
@@ -94,6 +94,18 @@ export function DiscordPreview({ draft }: { draft: PublicationDraft }) {
         Správa pre #oznamy
       </div>
     </div>
+  )
+}
+
+function ReactionEmoji({ value }: { value: string }) {
+  const custom = value.match(/^([^:]*):(\d+)$/)
+  if (!custom) return <span aria-hidden="true">{value}</span>
+  return (
+    <img
+      className="discord-reaction-emoji"
+      src={`https://cdn.discordapp.com/emojis/${custom[2]}.webp?size=32`}
+      alt=""
+    />
   )
 }
 

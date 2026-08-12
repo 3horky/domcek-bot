@@ -375,7 +375,7 @@ class PublicationEngine:
             sent_ids.append(discord_message_id)
 
         seen_target = next((message for message in reversed(messages) if message.seen_target), None)
-        seen_emoji = await self._configured_seen_emoji(run.guild_id)
+        seen_emoji = seen_target.reaction_emoji if seen_target is not None else None
         if seen_target is not None and sent_ids and seen_emoji is not None:
             try:
                 target_id = next(
@@ -423,20 +423,6 @@ class PublicationEngine:
                 },
             )
         return PublicationResult(run.id, completed_state, tuple(sent_ids), tuple(warnings))
-
-    async def _configured_seen_emoji(self, guild_id: int) -> str | None:
-        async with self._unit_of_work.transaction() as repositories:
-            reaction_configs = getattr(repositories, "reaction_configs", None)
-            if reaction_configs is None:
-                return self._seen_emoji
-            config = await reaction_configs.get(guild_id)
-        if config is None:
-            return self._seen_emoji
-        if not config.seen_enabled:
-            return None
-        if config.seen_emoji_id is not None:
-            return f"_:{config.seen_emoji_id}"
-        return config.seen_emoji_unicode or self._seen_emoji
 
     async def recover(
         self, *, stale_before: datetime, correlation_id: str
@@ -605,6 +591,7 @@ def _snapshot_records(
             embeds=tuple(_embed_payload(embed) for embed in message.embeds),
             allowed_mentions=message.allowed_mentions,
             seen_target=message.seen_target,
+            reaction_emoji=message.reaction_emoji,
         )
         for message in draft.messages
     )
